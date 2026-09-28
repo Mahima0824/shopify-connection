@@ -3,7 +3,7 @@ class ScanError(Exception):
         super().__init__(message)
         self.code = code; self.message = message; self.status = status
 
-def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=None, override: bool = False, reason: str | None = None) -> dict:
+def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=None, override: bool = False, reason: str | None = None, client_scan_id: str | None = None) -> dict:
     from sqlalchemy import select
     from app.models.parcel import Parcel
     from app.models.order import Order
@@ -12,6 +12,14 @@ def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=
     u = db.query(User).filter_by(id=user_id).first()
     if u is None or not u.is_active:
         raise ScanError("USER_NOT_AUTHORIZED", "User is inactive or unknown.", 403)
+    if client_scan_id:
+        prior = db.query(ScanEvent).filter_by(business_id=business_id, client_scan_id=client_scan_id).first()
+        if prior is not None:
+            p0 = db.query(Parcel).filter_by(id=prior.parcel_id).first()
+            o0 = db.query(Order).filter_by(id=prior.order_id).first()
+            return {"parcel": {"id": p0.id, "barcode_value": p0.barcode_value, "status": p0.status},
+                    "order": {"id": o0.id, "shopify_order_name": o0.shopify_order_name,
+                              "operational_status": o0.operational_status}, "deduped": True}
     with db.begin_nested():
         p = db.execute(select(Parcel).where(Parcel.business_id == business_id, Parcel.barcode_value == barcode).with_for_update()).scalar_one_or_none()
         if p is None:
@@ -32,6 +40,7 @@ def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=
                       {"financial_status": o.financial_status}, {"reason": reason})
         db.add(ScanEvent(business_id=business_id, parcel_id=p.id, order_id=o.id,
                          event_type="DISPATCHED", performed_by=user_id, device_id=device_id,
+                         client_scan_id=client_scan_id,
                          event_metadata={"override": bool(override), "reason": reason} if override else None))
         p.status = "DISPATCHED"
         o.operational_status = "DISPATCHED"

@@ -5,6 +5,7 @@ from app.models.business import Business  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.order import Order, OrderItem  # noqa: F401
 from app.models.parcel import Parcel  # noqa: F401
+from app.models.parcel_item import ParcelItem  # noqa: F401
 from app.models.scan_event import ScanEvent  # noqa: F401
 from app.models.return_record import ReturnRecord, ReturnItem  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401

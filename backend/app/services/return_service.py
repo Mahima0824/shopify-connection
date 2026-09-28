@@ -6,7 +6,7 @@ VALID_CONDITIONS = ("GOOD", "DAMAGED", "USED", "WRONG_PRODUCT", "MISSING_ITEM")
 
 def record_return(db, business_id: str, barcode: str, user_id: str, return_type: str,
                   condition: str | None, reason: str | None = None, device_id=None,
-                  items: list[dict] | None = None) -> dict:
+                  items: list[dict] | None = None, client_scan_id: str | None = None) -> dict:
     from sqlalchemy import select
     from app.models.parcel import Parcel
     from app.models.order import Order, OrderItem
@@ -21,6 +21,22 @@ def record_return(db, business_id: str, barcode: str, user_id: str, return_type:
     u = db.query(User).filter_by(id=user_id).first()
     if u is None or not u.is_active:
         raise ReturnError("USER_NOT_AUTHORIZED", "User is inactive or unknown.", 403)
+    if client_scan_id:
+        prior = db.query(ScanEvent).filter_by(business_id=business_id, client_scan_id=client_scan_id).first()
+        if prior is not None:
+            p0 = db.query(Parcel).filter_by(id=prior.parcel_id).first()
+            o0 = db.query(Order).filter_by(id=prior.order_id).first()
+            ret0 = db.query(ReturnRecord).filter_by(parcel_id=prior.parcel_id).order_by(ReturnRecord.created_at.desc()).first()
+            rows0 = ([{"order_item_id": ri.order_item_id, "quantity": ri.quantity}
+                      for ri in db.query(ReturnItem).filter_by(return_id=ret0.id).all()]
+                     if ret0 is not None else [])
+            return {"return": {"id": ret0.id if ret0 else None,
+                               "return_type": ret0.return_type if ret0 else None,
+                               "status": ret0.status if ret0 else None},
+                    "items": rows0,
+                    "parcel": {"id": p0.id, "barcode_value": p0.barcode_value, "status": p0.status},
+                    "order": {"id": o0.id, "shopify_order_name": o0.shopify_order_name,
+                              "operational_status": o0.operational_status}, "deduped": True}
     with db.begin_nested():
         p = db.execute(select(Parcel).where(
             Parcel.business_id == business_id,
@@ -57,7 +73,8 @@ def record_return(db, business_id: str, barcode: str, user_id: str, return_type:
             rows.append({"order_item_id": ri.order_item_id, "quantity": ri.quantity})
         ev = "RTO_RECEIVED" if return_type == "RTO" else "RETURN_RECEIVED"
         db.add(ScanEvent(business_id=business_id, parcel_id=p.id, order_id=o.id,
-                         event_type=ev, performed_by=user_id, device_id=device_id))
+                         event_type=ev, performed_by=user_id, device_id=device_id,
+                         client_scan_id=client_scan_id))
         p.status = "RETURN_RECEIVED"
         o.operational_status = "RTO" if return_type == "RTO" else "RETURN_RECEIVED"
         log_audit(db, business_id, user_id, "parcel", p.id, "RETURN_RECORDED",

@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api";
 import ScanBanner from "../../../components/ScanBanner";
+import BarcodeScanner from "../../../components/scanner/BarcodeScanner";
+import ManualBarcodeInput from "../../../components/scanner/ManualBarcodeInput";
 
 type Last = { barcode: string; order: string; total: number; status: string } | null;
 
@@ -11,6 +13,7 @@ export default function DispatchPage() {
   const [msg, setMsg] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
   const [last, setLast] = useState<Last>(null);
   const [hist, setHist] = useState<string[]>([]);
+  const [camOn, setCamOn] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => { ref.current?.focus(); }, []);
@@ -26,16 +29,15 @@ export default function DispatchPage() {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const barcode = code.trim();
+  async function submitBarcode(barcode: string) {
     if (!barcode) return;
     const token = localStorage.getItem("token") ?? undefined;
+    const client_scan_id = `dispatch:${crypto.randomUUID()}`;
     try {
       await api<{ parcel: any; order: any }>(`/api/v1/parcels/${barcode}`, {}, token);
       const out = await api<{ parcel: any; order: any }>(`/api/v1/scan/dispatch`, {
         method: "POST",
-        body: JSON.stringify({ barcode })
+        body: JSON.stringify({ barcode, client_scan_id })
       }, token);
 
       setLast({
@@ -49,9 +51,16 @@ export default function DispatchPage() {
     } catch (err: any) {
       setMsg({ kind: "error", text: err?.message ?? "Dispatch scan failed" });
     } finally {
-      setCode("");
       ref.current?.focus();
     }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const barcode = code.trim();
+    if (!barcode) return;
+    setCode("");
+    await submitBarcode(barcode);
   }
 
   return (
@@ -100,6 +109,24 @@ export default function DispatchPage() {
             <ScanBanner kind={msg.kind} text={msg.text} />
           </div>
         )}
+      </div>
+
+      {/* Camera + manual entry */}
+      <div className="content-card">
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
+          <button type="button" className="btn-secondary" onClick={() => setCamOn((v) => !v)}>
+            {camOn ? "Stop camera" : "Use camera"}
+          </button>
+          <span style={{ fontSize: "13px", color: "var(--muted)" }}>Phone camera scanning via ZXing (Code128).</span>
+        </div>
+        <BarcodeScanner
+          active={camOn}
+          onDetected={(v) => submitBarcode(v.trim())}
+          onError={(code, message) => setMsg({ kind: "error", text: message })}
+        />
+        <div style={{ marginTop: "12px" }}>
+          <ManualBarcodeInput onSubmit={(v) => submitBarcode(v)} />
+        </div>
       </div>
 
       {/* Grid: Last Scanned Card & History */}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, API } from "../../../lib/api";
 import { IconAlert } from "../../../components/icons";
+import ParcelBarcode from "../../../components/barcode/ParcelBarcode";
 
 type ParcelData = {
   parcel: { id: string; parcel_code: string; barcode_value: string; status: string };
@@ -52,6 +53,9 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
         )}
         {data.customer && <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "8px" }}>Customer: {data.customer.name ?? data.customer.email}</p>}
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "8px" }}>Items: {data.item_count}</p>
+        <div style={{ background: "#fff", padding: "16px", marginTop: "16px", maxWidth: "380px" }}>
+          <ParcelBarcode value={data.parcel.barcode_value} />
+        </div>
         <a href={`${API}/api/v1/parcels/${data.parcel.id}/label`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-block", marginTop: "16px", textDecoration: "none" }}>
           Print label
         </a>

@@ -107,6 +107,23 @@ def test_parcel_lookup_and_backfill(client_auth):
     assert p.barcode_value in r4.text
 
 
+def test_parcels_list_route(client_auth):
+    lr = client_auth.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    headers = {"Authorization": f"Bearer {lr.json()['data']['token']}"}
+    client_auth.post("/api/v1/parcels/backfill", headers=headers)
+    r = client_auth.get("/api/v1/parcels", headers=headers)
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["total"] >= 1 and len(data["items"]) >= 1
+    row = data["items"][0]
+    for k in ("id", "parcel_code", "barcode_value", "status", "order_id", "order_name"):
+        assert k in row, row
+    assert "courier" in row and "awb" in row
+    r2 = client_auth.get("/api/v1/parcels?status=CREATED", headers=headers)
+    assert r2.status_code == 200, r2.text
+    assert all(i["status"] == "CREATED" for i in r2.json()["data"]["items"])
+
+
 def test_backfill_requires_auth(client_auth):
     r = client_auth.post("/api/v1/parcels/backfill")
     assert r.status_code == 401, r.text

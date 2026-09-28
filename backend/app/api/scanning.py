@@ -13,6 +13,7 @@ class DispatchIn(BaseModel):
     reason: str | None = None
     carrier_code: str | None = None
     awb_number: str | None = None
+    client_scan_id: str | None = None
 
 class ReturnIn(BaseModel):
     barcode: str
@@ -21,6 +22,14 @@ class ReturnIn(BaseModel):
     reason: str | None = None
     device_id: str | None = None
     items: list[dict] | None = None
+    client_scan_id: str | None = None
+
+class RtoIn(BaseModel):
+    barcode: str
+    condition: str | None = None
+    reason: str | None = None
+    device_id: str | None = None
+    client_scan_id: str | None = None
 
 @router.post("/dispatch")
 def scan_dispatch(body: DispatchIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
@@ -29,7 +38,7 @@ def scan_dispatch(body: DispatchIn, db: Session = Depends(get_db), u: dict = Dep
         raise HTTPException(403, "Warehouse role required")
     try:
         out = dispatch_parcel(db, u.get("business_id"), body.barcode.strip(), u.get("user_id"),
-                              body.device_id, body.override, body.reason)
+                              body.device_id, body.override, body.reason, body.client_scan_id)
     except ScanError as e:
         raise HTTPException(e.status, e.message, headers={"X-Error-Code": e.code})
     if body.carrier_code and body.awb_number:
@@ -66,7 +75,22 @@ def scan_return(body: ReturnIn, db: Session = Depends(get_db), u: dict = Depends
         raise HTTPException(403, "Warehouse role required")
     try:
         out = record_return(db, u.get("business_id"), body.barcode.strip(), u.get("user_id"),
-                            body.return_type, body.condition, body.reason, body.device_id, body.items)
+                            body.return_type, body.condition, body.reason, body.device_id, body.items,
+                            body.client_scan_id)
+    except ScanError as e:
+        raise HTTPException(e.status, e.message, headers={"X-Error-Code": e.code})
+    return {"success": True, "data": out}
+
+@router.post("/rto")
+def scan_rto(body: RtoIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.services.return_service import record_return
+    from app.services.scanning_service import ScanError
+    if u.get("role") not in ("ADMIN", "WAREHOUSE"):
+        raise HTTPException(403, "Warehouse role required")
+    try:
+        out = record_return(db, u.get("business_id"), body.barcode.strip(), u.get("user_id"),
+                            "RTO", body.condition, body.reason, body.device_id, None,
+                            body.client_scan_id)
     except ScanError as e:
         raise HTTPException(e.status, e.message, headers={"X-Error-Code": e.code})
     return {"success": True, "data": out}

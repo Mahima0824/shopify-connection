@@ -15,6 +15,7 @@ class Parcel(Base):
     order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
     parcel_code: Mapped[str] = mapped_column(String(32))
     barcode_value: Mapped[str] = mapped_column(String(32))
+    barcode_format: Mapped[str] = mapped_column(String(16), default="CODE128")
     status: Mapped[str] = mapped_column(String(32), default="CREATED")
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

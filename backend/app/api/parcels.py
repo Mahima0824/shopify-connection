@@ -23,6 +23,23 @@ def barcode_png(parcel_id: str, db: Session = Depends(get_db), u: dict = Depends
     return Response(content=buf.getvalue(), media_type="image/png",
                     headers={"Content-Disposition": f'attachment; filename="{p.barcode_value}.png"'})
 
+@router.post("/{parcel_id}/reprint")
+def reprint(parcel_id: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.models.parcel import Parcel
+    from app.services.audit_service import log_audit
+    if u.get("role") not in ("ADMIN", "WAREHOUSE"):
+        raise HTTPException(403, "Warehouse role required")
+    bid = u.get("business_id")
+    p = db.query(Parcel).filter_by(id=parcel_id, business_id=bid).first()
+    if p is None:
+        p = db.query(Parcel).filter_by(barcode_value=parcel_id, business_id=bid).first()
+    if p is None:
+        raise HTTPException(404, "Parcel not found")
+    log_audit(db, bid, u.get("user_id"), "parcel", p.id, "LABEL_REPRINTED",
+              {"barcode": p.barcode_value}, {"barcode": p.barcode_value, "reprint": True})
+    db.commit()
+    return {"success": True, "data": {"label_url": f"/api/v1/parcels/{p.id}/label", "reprint": True}}
+
 def _pdict(p) -> dict:
     return {"id": p.id, "business_id": p.business_id, "order_id": p.order_id,
             "parcel_code": p.parcel_code, "barcode_value": p.barcode_value, "status": p.status}
@@ -38,6 +55,29 @@ def backfill(db: Session = Depends(get_db), u: dict = Depends(get_current_user))
         if db.query(Parcel).filter_by(order_id=o.id).first() is None:
             ensure_parcel_for_order(db, o.id); n += 1
     return {"success": True, "data": {"created": n}}
+
+@router.get("")
+def list_parcels(status: str | None = None, page: int = 1, page_size: int = 50,
+                 db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.models.parcel import Parcel
+    from app.models.order import Order
+    from app.models.shipment import Shipment
+    bid = u.get("business_id")
+    q = db.query(Parcel).filter_by(business_id=bid)
+    if status:
+        q = q.filter_by(status=status)
+    total = q.count()
+    rows = q.order_by(Parcel.created_at.desc()).offset((max(page, 1) - 1) * page_size).limit(page_size).all()
+    items = []
+    for p in rows:
+        o = db.query(Order).filter_by(id=p.order_id).first()
+        s = db.query(Shipment).filter_by(parcel_id=p.id).order_by(Shipment.created_at.asc()).first()
+        items.append({"id": p.id, "parcel_code": p.parcel_code, "barcode_value": p.barcode_value,
+                      "status": p.status, "order_id": p.order_id,
+                      "order_name": o.shopify_order_name if o else None,
+                      "courier": s.carrier_code if s else None, "awb": s.awb_number if s else None,
+                      "created_at": p.created_at.isoformat() if p.created_at else None})
+    return {"success": True, "data": {"items": items, "total": total, "page": page}}
 
 @router.get("/{barcode}")
 def lookup(barcode: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
