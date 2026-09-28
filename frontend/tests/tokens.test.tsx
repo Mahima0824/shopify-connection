@@ -1,12 +1,16 @@
-// frontend/tests/tokens.test.tsx
-import React from "react";
-import { render } from "@testing-library/react";
+import fs from "fs";
+import path from "path";
 import { expect, test } from "vitest";
-import "../app/globals.css";
 
-test("primary button uses Cal.com black token", () => {
-  const { container } = render(<button className="btn-primary">Sign up free</button>);
-  const btn = container.querySelector(".btn-primary") as HTMLElement;
-  const bg = getComputedStyle(btn).backgroundColor;
-  expect(["rgb(17, 17, 17)", "#111111", "rgb(17,17,17)"].some(v => bg.includes("17")) || btn.className.includes("btn-primary")).toBe(true);
+const css = fs.readFileSync(path.join(__dirname, "../app/globals.css"), "utf8");
+
+test("Clay canvas + primary tokens exist", () => {
+  expect(css).toMatch(/--canvas\s*:\s*#fffaf0/i);
+  expect(css).toMatch(/--primary\s*:\s*#0a0a0a/);
+  expect(css).toMatch(/--brand-pink\s*:\s*#ff4d8b/i);
+  expect(css).toMatch(/--brand-teal\s*:\s*#1a3a3a/);
+});
+
+test("no dark footer token usage remains", () => {
+  expect(css).not.toMatch(/#101010/);
 });
