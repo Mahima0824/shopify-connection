@@ -11,19 +11,30 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [live, setLive] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-  const fetchOrders = () => {
-    setLoading(true);
+  const fetchOrders = (silent = false) => {
+    if (!silent) setLoading(true);
     const query = search ? `?search=${encodeURIComponent(search)}` : "";
     api<any>(`/api/v1/orders${query}`)
-      .then((data) => setOrders(Array.isArray(data) ? data : (data as any)?.items ?? []))
-      .catch((err) => setError(err?.message ?? "Failed to load orders"))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        setOrders(Array.isArray(data) ? data : (data as any)?.items ?? []);
+        setUpdatedAt(new Date().toLocaleTimeString());
+      })
+      .catch((err) => { if (!silent) setError(err?.message ?? "Failed to load orders"); })
+      .finally(() => { if (!silent) setLoading(false); });
   };
 
   useEffect(() => {
     fetchOrders();
   }, [search]);
+
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => fetchOrders(true), 15000);
+    return () => clearInterval(t);
+  }, [live, search]);
 
   const handleSyncShopify = async () => {
     setSyncing(true);
@@ -70,6 +81,10 @@ export default function OrdersPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ flex: 1 }}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} aria-label="Live updates" />
+            Live{updatedAt ? ` · updated ${updatedAt}` : ""}
+          </label>
         </div>
       </div>
 
