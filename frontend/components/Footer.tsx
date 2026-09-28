@@ -33,7 +33,7 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
 export default function Footer() {
   return (
     <footer style={{ background: "#101010", padding: "64px 0" }}>
-      <div className="container" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 32 }}>
+      <div className="container footer-grid" style={{ display: "grid", gap: 32 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#fff", fontWeight: 600 }}>
             <span

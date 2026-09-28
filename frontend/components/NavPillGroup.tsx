@@ -18,6 +18,8 @@ export default function NavPillGroup({
         padding: 6,
         display: "inline-flex",
         gap: 4,
+        maxWidth: "100%",
+        overflowX: "auto",
       }}
     >
       {items.map((i) => (
@@ -33,6 +35,8 @@ export default function NavPillGroup({
             color: active === i.href ? "#111" : "#6b7280",
             background: active === i.href ? "#fff" : "transparent",
             boxShadow: active === i.href ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
           {i.label}

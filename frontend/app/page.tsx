@@ -44,7 +44,7 @@ export default function Home() {
               </Reveal>
               <Reveal delay={280}>
                 <div style={{ display: "flex", gap: 12, marginTop: 16, alignItems: "center" }}>
-                  <span className="btn-primary">Confirm</span>
+                  <button type="button" className="btn-primary">Confirm</button>
                   <span className="badge-pill">Tally badge</span>
                 </div>
               </Reveal>

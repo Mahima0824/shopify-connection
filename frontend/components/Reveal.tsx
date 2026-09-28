@@ -33,7 +33,7 @@ export default function Reveal({
     return () => io.disconnect();
   }, []);
   return (
-    <div ref={ref} className="reveal" style={{ transitionDelay: `${delay}ms` }}>
+    <div ref={ref} className="reveal" style={{ animationDelay: `${delay}ms` }}>
       {children}
     </div>
   );
