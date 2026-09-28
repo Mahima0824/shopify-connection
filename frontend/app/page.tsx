@@ -206,7 +206,7 @@ export default function Home() {
                   }
                 >
                   <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>{p.name}</div>
-                  <p style={{ fontSize: 14, color: p.featured ? "var(--on-primary)" : "var(--muted)" }}>{p.blurb}</p>
+                  <p style={p.featured ? { ...whiteChip, fontSize: 14 } : { fontSize: 14, color: "var(--muted)" }}>{p.blurb}</p>
                   <ul style={{ listStyle: "none", padding: 0, margin: "16px 0 0", display: "grid", gap: 8 }}>
                     {p.features.map((f) => (
                       <li
