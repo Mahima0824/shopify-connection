@@ -3,9 +3,15 @@ import React from "react";
 export type TNode = { at: string | null; kind: string; label: string; detail: string | null };
 
 const KIND_DOTS: Record<string, string> = {
+  CREATED: "var(--brand-lavender)",
+  PAYMENT: "var(--brand-mint)",
+  PACKED: "var(--brand-lavender)",
   DISPATCHED: "var(--brand-mint)",
   RETURN: "var(--brand-peach)",
   REFUND: "var(--brand-coral)",
+  CANCELLED: "var(--brand-coral)",
+  PAYMENT_PENDING: "var(--muted)",
+  AUDIT: "var(--muted)",
 };
 
 export default function Timeline({ items }: { items: TNode[] }) {
