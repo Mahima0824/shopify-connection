@@ -3,9 +3,9 @@ import React from "react";
 export type TNode = { at: string | null; kind: string; label: string; detail: string | null };
 
 const KIND_DOTS: Record<string, string> = {
-  DISPATCHED: "#34d399",
-  RETURN: "#fb923c",
-  REFUND: "#ef4444",
+  DISPATCHED: "var(--brand-mint)",
+  RETURN: "var(--brand-peach)",
+  REFUND: "var(--brand-coral)",
 };
 
 export default function Timeline({ items }: { items: TNode[] }) {
@@ -22,13 +22,13 @@ export default function Timeline({ items }: { items: TNode[] }) {
           left: "5px",
           top: "8px",
           bottom: "8px",
-          width: "1px",
-          background: "var(--hairline)",
+          width: "2px",
+          background: "var(--card)",
         }}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {items.map((n, ix) => {
-          const dot = KIND_DOTS[n.kind] || "#8b5cf6";
+          const dot = KIND_DOTS[n.kind] || "var(--brand-lavender)";
           return (
             <div key={ix} style={{ display: "flex", gap: "16px", alignItems: "flex-start", position: "relative" }}>
               <div
@@ -43,7 +43,7 @@ export default function Timeline({ items }: { items: TNode[] }) {
                   flexShrink: 0,
                 }}
               />
-              <div style={{ flex: 1, background: "var(--canvas)", padding: "12px 16px", borderRadius: "8px", border: "1px solid var(--hairline)" }}>
+              <div className="content-card" style={{ flex: 1, padding: "12px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14px" }}>{n.label}</span>
                   {n.at && <span style={{ fontSize: "12px", color: "var(--muted)" }}>{n.at}</span>}

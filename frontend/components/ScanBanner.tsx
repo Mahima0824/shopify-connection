@@ -1,19 +1,15 @@
 import React from "react";
+import { IconAlert, IconSpark } from "./icons";
 
 export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "warn"; text: string }) {
-  const icon = kind === "ok" ? "✅" : kind === "warn" ? "⚠️" : "❌";
-  const statusColor = kind === "ok" ? "#10b981" : kind === "warn" ? "#f59e0b" : "#ef4444";
+  const statusColor = kind === "ok" ? "var(--brand-teal)" : kind === "warn" ? "var(--brand-ochre)" : "var(--brand-coral)";
 
   return (
     <div
       role={kind === "error" ? "alert" : "status"}
+      className="content-card"
       style={{
-        background: "var(--canvas)",
-        border: "1px solid var(--hairline)",
         borderLeft: `4px solid ${statusColor}`,
-        color: "var(--ink)",
-        padding: "16px 20px",
-        borderRadius: "10px",
         display: "flex",
         alignItems: "center",
         gap: "12px",
@@ -21,7 +17,9 @@ export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "war
         fontWeight: 600,
       }}
     >
-      <span style={{ fontSize: "20px" }}>{icon}</span>
+      <span style={{ display: "inline-flex", color: "var(--ink)" }}>
+        {kind === "ok" ? <IconSpark /> : <IconAlert />}
+      </span>
       <span>{text}</span>
     </div>
   );

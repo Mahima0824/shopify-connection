@@ -11,7 +11,7 @@ export default function MetricCard({
   title: string;
   value: string | number;
   subtitle?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   trend?: string;
   points?: number[];
 }) {
@@ -42,7 +42,7 @@ export default function MetricCard({
       : null;
 
   return (
-    <div style={{ background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px", padding: "20px" }}>
+    <div className="content-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
         <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           {title}
@@ -51,18 +51,19 @@ export default function MetricCard({
           <div style={{
             width: "36px",
             height: "36px",
-            borderRadius: "8px",
-            background: "var(--card)",
+            borderRadius: "50%",
+            background: "var(--soft)",
+            border: "1px solid var(--hairline)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "18px"
+            color: "var(--ink)"
           }}>
             {icon}
           </div>
         )}
       </div>
-      <div style={{ fontSize: "28px", fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.02em" }}>
+      <div className="display" style={{ fontSize: "28px", lineHeight: 1.1 }}>
         {value}
       </div>
       {(subtitle || trend) && (

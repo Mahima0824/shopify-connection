@@ -2,16 +2,16 @@ import React from "react";
 import Link from "next/link";
 
 const FINANCIAL_DOTS: Record<string, string> = {
-  PAID: "#34d399",
-  PENDING: "#fb923c",
-  REFUNDED: "#ef4444",
+  PAID: "var(--brand-mint)",
+  PENDING: "var(--brand-ochre)",
+  REFUNDED: "var(--brand-coral)",
 };
 
 const OPERATIONAL_DOTS: Record<string, string> = {
-  DISPATCHED: "#34d399",
-  PACKED: "#8b5cf6",
-  RETURN_RECEIVED: "#fb923c",
-  RTO: "#ef4444",
+  DISPATCHED: "var(--brand-mint)",
+  PACKED: "var(--brand-lavender)",
+  RETURN_RECEIVED: "var(--brand-peach)",
+  RTO: "var(--brand-coral)",
 };
 
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
@@ -37,16 +37,16 @@ export default function OrderTable({ orders }: { orders: any[] }) {
   }
 
   return (
-    <div style={{ overflowX: "auto", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+    <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
       <table className="modern-table" style={{ border: "none" }}>
         <thead>
           <tr>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Order Name</th>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Financial Status</th>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Fulfillment / Op Status</th>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Total Amount</th>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Date</th>
-            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase", textAlign: "right" }}>Action</th>
+            <th>Order Name</th>
+            <th>Financial Status</th>
+            <th>Fulfillment / Op Status</th>
+            <th>Total Amount</th>
+            <th>Date</th>
+            <th style={{ textAlign: "right" }}>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -71,7 +71,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
               </td>
               <td style={{ textAlign: "right", borderBottom: "1px solid var(--hairline)" }}>
                 <Link href={`/orders/${o.id}`} className="btn-secondary" style={{ padding: "6px 14px", fontSize: "12px" }}>
-                  View Timeline →
+                  View Timeline
                 </Link>
               </td>
             </tr>

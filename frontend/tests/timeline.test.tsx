@@ -12,3 +12,7 @@ test("timeline light cards have no dark rgba background", () => {
   );
   expect(container.innerHTML).not.toMatch(/15, 23, 42/);
 });
+test("timeline uses cream fragment cards", () => {
+  const { container } = render(<Timeline items={[{at:"now",kind:"DISPATCHED",label:"Dispatched",detail:"ok"}]} />);
+  expect(container.innerHTML).toMatch(/f5f0e0|ffaf|content-card|#fffaf0/i);
+});

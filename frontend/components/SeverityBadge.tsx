@@ -1,10 +1,10 @@
 import React from "react";
 
 const DOT_COLORS: Record<string, string> = {
-  CRITICAL: "#ef4444",
-  HIGH: "#fb923c",
-  MEDIUM: "#8b5cf6",
-  LOW: "#34d399",
+  CRITICAL: "var(--brand-coral)",
+  HIGH: "var(--brand-ochre)",
+  MEDIUM: "var(--brand-lavender)",
+  LOW: "var(--brand-teal)",
 };
 
 export default function SeverityBadge({ severity }: { severity: string }) {
