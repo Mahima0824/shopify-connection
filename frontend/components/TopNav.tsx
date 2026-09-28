@@ -55,7 +55,7 @@ export default function TopNav() {
         </Link>
         <nav
           className="topnav-links"
-          style={{ display: "flex", gap: 20, fontSize: 14, fontWeight: 500 }}
+          style={{ gap: 20, fontSize: 14, fontWeight: 500 }}
         >
           <Link href="/#product" style={{ color: "#374151" }}>
             Product
@@ -79,7 +79,7 @@ export default function TopNav() {
             onClick={() => setOpen(!open)}
             aria-label="menu"
             aria-expanded={open}
-            style={{ display: "none", background: "none", border: "none", fontSize: 20, cursor: "pointer" }}
+            style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}
           >
             ☰
           </button>

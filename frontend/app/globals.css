@@ -40,3 +40,14 @@ body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-syste
 .app-container{display:flex;min-height:100vh;background:var(--canvas);}
 .sidebar{width:260px;background:var(--canvas);border-right:1px solid var(--hairline);display:flex;flex-direction:column;padding:24px 16px;}
 .main-content{flex:1;padding:32px;overflow-y:auto;background:var(--canvas);}
+
+/* Grid + topnav base hooks (Task 6: class-driven so breakpoints apply). */
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);}
+.hero-grid{display:grid;}
+.topnav-links{display:flex;gap:20px;font-size:14px;font-weight:500;}
+.topnav-menu-btn{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink);}
+
+/* Responsive breakpoints (Task 6). !important beats page-level inline grid styles. */
+@media (max-width: 1024px){.grid-3{grid-template-columns:repeat(2,1fr) !important;}.grid-4{grid-template-columns:repeat(2,1fr) !important;}}
+@media (max-width: 768px){.hero-grid{grid-template-columns:1fr !important;}.display-xl{font-size:32px !important;}.grid-3,.grid-4{grid-template-columns:1fr !important;}.topnav-links{display:none !important;}.topnav-menu-btn{display:block !important;}}
