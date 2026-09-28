@@ -50,4 +50,5 @@ def export(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
 @router.get("/batches")
 def list_batches(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     batches = db.query(ExportBatch).filter_by(business_id=u.get("business_id")).order_by(ExportBatch.created_at.desc()).all()
-    return {"success": True, "data": batches}
+    return {"success": True, "data": [{"id": b.id, "batch_reference": b.batch_reference, "record_count": b.record_count,
+                                       "status": b.status, "created_at": b.created_at.isoformat() if b.created_at else None} for b in batches]}
