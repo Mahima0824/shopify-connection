@@ -30,22 +30,43 @@ export default function ShipmentDetailPage({ params }: { params: { id: string } 
       { method: "POST", body: JSON.stringify({ awb_number: awb, reason }) }, token);
     setAwb(""); setReason(""); load();
   }
-  if (error) return <p role="alert">{error}</p>;
-  if (!ship) return <p>Loading…</p>;
+  if (error) return <div className="container"><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
+  if (!ship) return <div className="container"><p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading shipment…</p></div>;
   return (
-    <main>
-      <h1>{ship.carrier_code} · {ship.awb_number}</h1>
-      <p>Status: {ship.tracking_status} · Location: {ship.current_location ?? "-"}</p>
-      <h2>Record checkpoint</h2>
-      <input value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Carrier status text" aria-label="Status text" />
-      <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Message (optional)" aria-label="Message" />
-      <button onClick={checkpoint}>Add checkpoint</button>
-      <h2>Correct AWB (admin, audited)</h2>
-      <input value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="New AWB" aria-label="New AWB" />
-      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" aria-label="Reason" />
-      <button onClick={correct} disabled={!awb.trim() || !reason.trim()}>Correct</button>
-      <h2>Events</h2>
-      <ol>{events.map((e) => <li key={e.id}>{e.normalized_status} — {e.message ?? e.carrier_status_raw}</li>)}</ol>
-    </main>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+      <div>
+        <h1 className="display" style={{ fontSize: "32px" }}>{ship.carrier_code} · {ship.awb_number}</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+          <span className="badge-pill">{ship.tracking_status}</span>
+          <span style={{ marginLeft: "12px" }}>{ship.current_location ?? "No location yet"}</span>
+        </p>
+      </div>
+      <div className="content-card">
+        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Record checkpoint</h2>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <input className="input-control" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Carrier status text (e.g. Arrived at hub)" aria-label="Status text" style={{ flex: 1 }} />
+          <input className="input-control" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Message (optional)" aria-label="Message" style={{ flex: 1 }} />
+          <button onClick={checkpoint} disabled={!raw.trim()} className="btn-primary">Add checkpoint</button>
+        </div>
+      </div>
+      <div className="content-card">
+        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Correct AWB (admin, audited)</h2>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <input className="input-control" value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="New AWB" aria-label="New AWB" style={{ flex: 1 }} />
+          <input className="input-control" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" aria-label="Reason" style={{ flex: 1 }} />
+          <button onClick={correct} disabled={!awb.trim() || !reason.trim()} className="btn-secondary">Correct</button>
+        </div>
+      </div>
+      <div className="content-card">
+        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Tracking events</h2>
+        {events.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontSize: "14px" }}>No checkpoints yet — record the first one above.</p>
+        ) : (
+          <ol style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {events.map((e) => <li key={e.id} style={{ fontSize: "14px" }}><strong>{e.normalized_status}</strong> — {e.message ?? e.carrier_status_raw}</li>)}
+          </ol>
+        )}
+      </div>
+    </div>
   );
 }

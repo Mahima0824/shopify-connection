@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { expect, test } from "vitest";
-import { slaTone } from "../app/shipments/page";
+import { slaTone } from "../lib/sla";
 
 test("sla bands map to tones", () => {
   expect(slaTone("BREACHED")).toBe("critical");

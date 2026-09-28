@@ -6,12 +6,6 @@ import { api } from "../../lib/api";
 
 type Ship = { id: string; order_id: string; order_name?: string | null; carrier_code: string; awb_number: string; tracking_status: string; location?: string | null };
 
-export function slaTone(status: string): "ok" | "warn" | "critical" {
-  if (status === "BREACHED") return "critical";
-  if (status === "APPROACHING") return "warn";
-  return "ok";
-}
-
 export default function ShipmentsPage() {
   const [items, setItems] = useState<Ship[]>([]);
   const [status, setStatus] = useState("");
@@ -26,28 +20,47 @@ export default function ShipmentsPage() {
   }, [status]);
   const shown = q ? items.filter((s) => s.awb_number.includes(q) || (s.order_name ?? "").includes(q)) : items;
   return (
-    <main>
-      <h1>Shipments</h1>
-      <div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search AWB or order" aria-label="Search" />
-        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <h1 className="display" style={{ fontSize: "32px" }}>Shipments</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+            Every parcel linked to a courier AWB with live tracking state
+          </p>
+        </div>
+        <Link href="/shipments/outstanding" className="btn-secondary" style={{ textDecoration: "none" }}>
+          Outstanding board
+        </Link>
+      </div>
+      <div className="content-card" style={{ padding: "16px 24px", display: "flex", gap: "16px", alignItems: "center" }}>
+        <input className="input-control" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search AWB or order…" aria-label="Search" style={{ flex: 1 }} />
+        <select className="input-control" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ width: "200px" }}>
           <option value="">All statuses</option>
           {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "RTO_INITIATED", "RETURNED"].map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
-        <Link href="/shipments/outstanding">Outstanding</Link>
       </div>
-      {error && <p role="alert">{error}</p>}
-      <table>
-        <thead><tr><th>AWB</th><th>Carrier</th><th>Status</th><th>Location</th><th></th></tr></thead>
-        <tbody>
-          {shown.map((s) => (
-            <tr key={s.id}><td>{s.awb_number}</td><td>{s.carrier_code}</td><td>{s.tracking_status}</td>
-              <td>{s.location ?? "-"}</td><td><Link href={`/shipments/${s.id}`}>Open</Link></td></tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
+      {error && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+        {shown.length === 0 ? (
+          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+            No shipments yet. Dispatch a parcel with a courier + AWB and it appears here.
+          </p>
+        ) : (
+          <table className="modern-table" style={{ border: "none" }}>
+            <thead><tr><th>AWB</th><th>Carrier</th><th>Status</th><th>Location</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+            <tbody>
+              {shown.map((s) => (
+                <tr key={s.id}><td style={{ fontWeight: 600 }}>{s.awb_number}</td><td>{s.carrier_code}</td>
+                  <td><span className="badge-pill">{s.tracking_status}</span></td>
+                  <td>{s.location ?? "-"}</td>
+                  <td style={{ textAlign: "right" }}><Link href={`/shipments/${s.id}`} className="btn-secondary">Open</Link></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }

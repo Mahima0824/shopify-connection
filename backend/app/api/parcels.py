@@ -1,10 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
 
 router = APIRouter(prefix="/api/v1/parcels", tags=["parcels"])
+
+
+@router.get("/{parcel_id}/barcode.png")
+def barcode_png(parcel_id: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    import io
+    import barcode
+    from barcode.writer import ImageWriter
+    from app.models.parcel import Parcel
+    p = db.query(Parcel).filter_by(id=parcel_id, business_id=u.get("business_id")).first()
+    if p is None:
+        p = db.query(Parcel).filter_by(barcode_value=parcel_id, business_id=u.get("business_id")).first()
+    if p is None:
+        raise HTTPException(404, "Parcel not found")
+    buf = io.BytesIO()
+    barcode.Code128(p.barcode_value, writer=ImageWriter()).write(buf)
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Content-Disposition": f'attachment; filename="{p.barcode_value}.png"'})
 
 def _pdict(p) -> dict:
     return {"id": p.id, "business_id": p.business_id, "order_id": p.order_id,

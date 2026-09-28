@@ -15,6 +15,22 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
   const [data, setData] = useState<ParcelData | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  async function downloadPng() {
+    if (!data) return;
+    const token = localStorage.getItem("token") ?? "";
+    const r = await fetch(`${API}/api/v1/parcels/${data.parcel.id}/barcode.png`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) throw new Error("Barcode download failed");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.parcel.barcode_value}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(() => {
     const token = localStorage.getItem("token") ?? undefined;
     api<ParcelData>(`/api/v1/parcels/${params.barcode}`, {}, token)
@@ -39,6 +55,12 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
         <a href={`${API}/api/v1/parcels/${data.parcel.id}/label`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-block", marginTop: "16px", textDecoration: "none" }}>
           Print label
         </a>
+        <button onClick={downloadPng} className="btn-secondary" style={{ marginTop: "16px", marginLeft: "12px" }}>
+          Download barcode PNG
+        </button>
+        <p style={{ color: "var(--muted)", fontSize: "13px", marginTop: "12px" }}>
+          Scan this barcode with any USB scanner straight into the dispatch or return pages — no app or pairing needed.
+        </p>
       </div>
     </main>
   );
