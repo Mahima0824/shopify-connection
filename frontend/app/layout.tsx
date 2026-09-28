@@ -1,6 +1,6 @@
 import React from "react";
 import "./globals.css";
-import Navbar from "../components/Navbar";
+import TopNav from "../components/TopNav";
 
 export const metadata = {
   title: "ReconHub — Shopify Order & Accounting Reconciliation",
@@ -11,12 +11,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <div className="app-container">
-          <Navbar />
-          <main className="main-content">
-            {children}
-          </main>
-        </div>
+        <TopNav />
+        <main>{children}</main>
       </body>
     </html>
   );
