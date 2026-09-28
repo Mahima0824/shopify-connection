@@ -3,8 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import MetricCard from "../../components/MetricCard";
-import NavPillGroup from "../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../lib/app-nav";
 import {
   IconAlert,
   IconBox,
@@ -62,7 +60,7 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
-        <NavPillGroup items={APP_NAV_ITEMS} active="/dashboard" />
+       
         <div className="feature-card-peach">
           <h1 className="display" style={{ fontSize: "32px" }}>Executive Dashboard</h1>
           <p style={{ color: "var(--ink)", fontSize: "14px", marginTop: "4px" }}>
@@ -82,7 +80,7 @@ export default function DashboardPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "32px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/dashboard" />
+     
 
       {/* Peach signature band */}
       <div className="feature-card-peach" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>

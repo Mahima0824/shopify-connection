@@ -2,18 +2,18 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { APP_NAV_ITEMS } from "../lib/app-nav";
 
-const centerLinks = [
-  { label: "Product", href: "/#product" },
-  { label: "Solutions", href: "/#solutions" },
-  { label: "Resources", href: "/#resources" },
-  { label: "Pricing", href: "/#pricing" },
-  { label: "Customers", href: "/#customers" },
-];
+function isActive(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  return pathname === href || pathname.startsWith(href + "/");
+}
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   return (
     <header
       style={{
@@ -37,51 +37,46 @@ export default function TopNav() {
         <Link
           href="/"
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
             color: "var(--ink)",
             fontWeight: 600,
+            fontSize: 18,
           }}
         >
-          <span
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: "50%",
-              background: "var(--brand-ochre)",
-              color: "var(--ink)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 14,
-            }}
-          >
-            R
-          </span>
           ReconHub
         </Link>
         <nav
           className="topnav-links"
+          aria-label="Primary"
           style={{
-            gap: 20,
+            gap: 4,
             fontFamily: "Inter, sans-serif",
             fontSize: 14,
             fontWeight: 500,
           }}
         >
-          {centerLinks.map((l) => (
-            <Link key={l.label} href={l.href} style={{ color: "var(--body)" }}>
-              {l.label}
-            </Link>
-          ))}
+          {APP_NAV_ITEMS.map((l) => {
+            const active = isActive(pathname, l.href);
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                aria-current={active ? "page" : undefined}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 9999,
+                  color: active ? "var(--ink)" : "var(--muted)",
+                  background: active ? "var(--card)" : "transparent",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <Link href="/login" style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
             Sign in
-          </Link>
-          <Link href="/dashboard" className="btn-primary">
-            Try free
           </Link>
           <button
             className="topnav-menu-btn"
@@ -97,22 +92,38 @@ export default function TopNav() {
       {open && (
         <nav
           className="topnav-sheet"
+          aria-label="Mobile"
           style={{
             padding: 16,
             background: "var(--canvas)",
             borderBottom: "1px solid var(--hairline)",
           }}
         >
-          {centerLinks.map((l) => (
-            <Link
-              key={l.label}
-              href={l.href}
-              style={{ display: "block", padding: "8px 0", color: "var(--body)" }}
-            >
-              {l.label}
-            </Link>
-          ))}
-          <Link href="/login" style={{ display: "block", padding: "8px 0", color: "var(--ink)" }}>
+          {APP_NAV_ITEMS.map((l) => {
+            const active = isActive(pathname, l.href);
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setOpen(false)}
+                style={{
+                  display: "block",
+                  padding: "8px 16px",
+                  borderRadius: 9999,
+                  color: active ? "var(--ink)" : "var(--body)",
+                  background: active ? "var(--card)" : "transparent",
+                }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
+          <Link
+            href="/login"
+            onClick={() => setOpen(false)}
+            style={{ display: "block", padding: "8px 16px", color: "var(--ink)" }}
+          >
             Sign in
           </Link>
         </nav>

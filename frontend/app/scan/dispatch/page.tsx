@@ -3,8 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api";
 import ScanBanner from "../../../components/ScanBanner";
-import NavPillGroup from "../../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 
 type Last = { barcode: string; order: string; total: number; status: string } | null;
 
@@ -59,7 +57,7 @@ export default function DispatchPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/scan/dispatch" />
+     
 
       {/* Header */}
       <div>

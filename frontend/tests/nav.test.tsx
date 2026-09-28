@@ -1,28 +1,30 @@
 // frontend/tests/nav.test.tsx
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }));
+
 import TopNav from "../components/TopNav";
-import NavPillGroup from "../components/NavPillGroup";
 import Reveal from "../components/Reveal";
 
-test("topnav renders wordmark and signup", () => {
+test("topnav renders wordmark without R dot and sign in", () => {
   render(<TopNav />);
   expect(screen.getByText(/ReconHub/i)).toBeTruthy();
-  expect(screen.getByText(/Try free/i)).toBeTruthy();
+  expect(screen.queryByText("R")).toBeNull();
+  expect(screen.getByText(/Sign in/i)).toBeTruthy();
+  expect(screen.queryByText(/Try free/i)).toBeNull();
 });
 
-test("pill group marks active segment", () => {
-  const { container } = render(
-    <NavPillGroup
-      items={[
-        { label: "Dashboard", href: "/dashboard" },
-        { label: "Orders", href: "/orders" },
-      ]}
-      active="/orders"
-    />
-  );
-  expect(container.querySelector(".pill-active")?.textContent).toMatch(/Orders/);
+test("topnav centers app sections with active effect and no underline", () => {
+  const { container } = render(<TopNav />);
+  const nav = container.querySelector('nav[aria-label="Primary"]') as HTMLElement;
+  for (const label of ["Dashboard", "Orders", "Dispatch", "Returns", "Exceptions", "Tally"]) {
+    expect(nav.textContent).toMatch(label);
+  }
+  const active = container.querySelector('[aria-current="page"]');
+  expect(active?.textContent).toMatch(/Dashboard/);
+  expect(active?.getAttribute("style") ?? "").toMatch(/9999/);
 });
 
 test("topnav uses cream background", () => {

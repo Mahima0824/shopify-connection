@@ -5,8 +5,6 @@ import Link from "next/link";
 import { api } from "../../../lib/api";
 import SeverityBadge from "../../../components/SeverityBadge";
 import Timeline, { TNode } from "../../../components/Timeline";
-import NavPillGroup from "../../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 import { IconAlert, IconSpark } from "../../../components/icons";
 
 type ReconIssue = { code: string; severity: string; message: string };
@@ -53,7 +51,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/orders" />
+     
 
       {/* Back Link & Header */}
       <div>

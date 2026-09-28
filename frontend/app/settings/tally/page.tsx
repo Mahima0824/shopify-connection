@@ -2,8 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
-import NavPillGroup from "../../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 import { IconBox, IconReceipt, IconSpark } from "../../../components/icons";
 
 export default function TallySettingsPage() {
@@ -76,7 +74,7 @@ export default function TallySettingsPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/settings/tally" />
+     
 
       {/* Teal signature band */}
       <div className="feature-card-teal">

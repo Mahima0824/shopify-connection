@@ -2,8 +2,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, API } from "../../../lib/api";
-import NavPillGroup from "../../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 import { IconAlert } from "../../../components/icons";
 
 type ParcelData = {
@@ -24,11 +22,11 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
       .catch((e: Error) => setErr(e.message));
   }, [params.barcode]);
 
-  if (err) return <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--canvas)" }}><NavPillGroup items={APP_NAV_ITEMS} active="/orders" /><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
+  if (err) return <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--canvas)" }}><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
   if (!data) return <main className="container" style={{ background: "var(--canvas)" }}><p style={{ color: "var(--muted)" }}>Loading…</p></main>;
   return (
     <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
-      <NavPillGroup items={APP_NAV_ITEMS} active="/orders" />
+      
       <Link href="/orders" style={{ color: "var(--muted)", fontSize: "14px" }}>← Back to Orders Directory</Link>
       <div className="content-card">
         <h1 className="display" style={{ fontSize: "28px", marginBottom: "8px" }}>Parcel {data.parcel.barcode_value}</h1>

@@ -4,8 +4,6 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
 import SeverityBadge from "../../components/SeverityBadge";
-import NavPillGroup from "../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../lib/app-nav";
 import { IconAlert } from "../../components/icons";
 
 type Issue = {
@@ -67,7 +65,7 @@ export default function ExceptionsPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/exceptions" />
+     
 
       {/* Pink-tint signature band */}
       <div className="feature-card-pink">

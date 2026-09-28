@@ -3,8 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import OrderTable from "../../components/OrderTable";
-import NavPillGroup from "../../components/NavPillGroup";
-import { APP_NAV_ITEMS } from "../../lib/app-nav";
 import { IconAlert, IconRefund } from "../../components/icons";
 
 export default function OrdersPage() {
@@ -42,7 +40,7 @@ export default function OrdersPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
 
-      <NavPillGroup items={APP_NAV_ITEMS} active="/orders" />
+     
 
       {/* Ochre sync signature band */}
       <div className="feature-card-ochre" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
