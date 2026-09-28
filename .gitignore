@@ -27,3 +27,6 @@ tsconfig.tsbuildinfo
 Thumbs.db
 .vscode/
 .idea/
+
+# Agent scratch (SDD workspaces, briefs, reports)
+.superpowers/
