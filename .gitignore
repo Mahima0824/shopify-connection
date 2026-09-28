@@ -30,3 +30,7 @@ Thumbs.db
 
 # Agent scratch (SDD workspaces, briefs, reports)
 .superpowers/
+
+# Shopify orders-export samples (root copies stay untracked; fixture under backend/tests/fixtures/ is the committed one)
+orders_export_*.csv
+!backend/tests/fixtures/orders_export_*.csv

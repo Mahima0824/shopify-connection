@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "../../lib/api";
 import OrderTable from "../../components/OrderTable";
 import { IconAlert, IconRefund } from "../../components/icons";
@@ -61,6 +62,7 @@ export default function OrdersPage() {
             View and search all synchronized commerce orders
           </p>
         </div>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
         <button
           onClick={handleSyncShopify}
           disabled={syncing}
@@ -69,6 +71,8 @@ export default function OrdersPage() {
           <span style={{ display: "inline-flex", marginRight: "8px" }}><IconRefund size={16} /></span>
           {syncing ? "Syncing Shopify..." : "Sync Shopify Orders"}
         </button>
+        <Link href="/import">Import CSV</Link>
+        </div>
       </div>
 
       {/* Filter & Search Controls */}

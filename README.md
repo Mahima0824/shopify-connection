@@ -83,3 +83,8 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 - **Sprint 3 — Returns**: Customer Returns, RTO, partial quantities, vertical order timeline, audit logs.
 - **Sprint 4 — Webhooks & Reconciliation**: HMAC-verified Shopify webhooks, 8-rule auto-reconciliation engine (R001–R008), Exceptions queue.
 - **Sprint 5 — Dashboard, Reports, Excel & Tally**: Executive Dashboard, Excel export generator, Tally ERP/Prime ledger mappings, validation, idempotent Tally export batching.
+
+## CSV import (no-connection onboarding)
+- Export: Shopify admin → Orders → Export → CSV.
+- Upload: `/import` page or `POST /api/v1/imports/shopify-csv` (multipart `file`, ADMIN/ACCOUNTANT, `?dry_run=true` for validation-only).
+- Identity: real Shopify `Id` reused (`gid://shopify/Order/<Id>`), so later webhooks/sync upsert instead of duplicating. Caps: 5MB / 5,000 rows. Refunded Amount > 0 creates a refund row.

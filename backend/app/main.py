@@ -16,6 +16,7 @@ from app.api.reconciliation import router as reconciliation_router
 from app.api.dashboard import router as dashboard_router
 from app.api.export import router as export_router
 from app.api.tally import router as tally_router
+from app.api.imports import router as imports_router
 
 
 def seed_initial_data():
@@ -74,6 +75,7 @@ app.include_router(reconciliation_router)
 app.include_router(dashboard_router)
 app.include_router(export_router)
 app.include_router(tally_router)
+app.include_router(imports_router)
 
 
 @app.get("/health")
