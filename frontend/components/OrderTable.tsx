@@ -1,72 +1,75 @@
 import React from "react";
 import Link from "next/link";
 
+const FINANCIAL_DOTS: Record<string, string> = {
+  PAID: "#34d399",
+  PENDING: "#fb923c",
+  REFUNDED: "#ef4444",
+};
+
+const OPERATIONAL_DOTS: Record<string, string> = {
+  DISPATCHED: "#34d399",
+  PACKED: "#8b5cf6",
+  RETURN_RECEIVED: "#fb923c",
+  RTO: "#ef4444",
+};
+
+function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
+  const dot = dotMap[status?.toUpperCase()] ?? "var(--muted)";
+  return (
+    <span className="badge-pill">
+      <span
+        aria-hidden="true"
+        style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}
+      />
+      <span>{status}</span>
+    </span>
+  );
+}
+
 export default function OrderTable({ orders }: { orders: any[] }) {
   if (!orders || orders.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+      <div style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
         No orders found. Click "Sync Shopify Orders" to import data.
       </div>
     );
   }
 
-  const getFinancialBadgeClass = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case "PAID": return "badge-success";
-      case "PENDING": return "badge-warning";
-      case "REFUNDED": return "badge-danger";
-      default: return "badge-neutral";
-    }
-  };
-
-  const getOperationalBadgeClass = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case "DISPATCHED": return "badge-success";
-      case "PACKED": return "badge-info";
-      case "RETURN_RECEIVED":
-      case "RTO": return "badge-danger";
-      default: return "badge-neutral";
-    }
-  };
-
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="modern-table">
+    <div style={{ overflowX: "auto", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <table className="modern-table" style={{ border: "none" }}>
         <thead>
           <tr>
-            <th>Order Name</th>
-            <th>Financial Status</th>
-            <th>Fulfillment / Op Status</th>
-            <th>Total Amount</th>
-            <th>Date</th>
-            <th style={{ textAlign: "right" }}>Action</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Order Name</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Financial Status</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Fulfillment / Op Status</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Total Amount</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase" }}>Date</th>
+            <th style={{ background: "var(--soft)", color: "var(--muted)", fontSize: "12px", textTransform: "uppercase", textAlign: "right" }}>Action</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((o) => (
             <tr key={o.id}>
-              <td style={{ fontWeight: 600, color: "#ffffff" }}>
+              <td style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
                 <Link href={`/orders/${o.id}`}>
                   {o.shopify_order_name || o.internal_order_number || o.id}
                 </Link>
               </td>
-              <td>
-                <span className={`badge ${getFinancialBadgeClass(o.financial_status)}`}>
-                  {o.financial_status || "PENDING"}
-                </span>
+              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
+                <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
               </td>
-              <td>
-                <span className={`badge ${getOperationalBadgeClass(o.operational_status)}`}>
-                  {o.operational_status || "NEW"}
-                </span>
+              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
+                <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
               </td>
-              <td style={{ fontWeight: 600, color: "#f8fafc" }}>
+              <td style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
                 ₹{Number(o.total_amount || 0).toLocaleString()}
               </td>
-              <td style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+              <td style={{ color: "var(--muted)", fontSize: "13px", borderBottom: "1px solid var(--hairline)" }}>
                 {o.created_at ? new Date(o.created_at).toLocaleDateString() : "-"}
               </td>
-              <td style={{ textAlign: "right" }}>
+              <td style={{ textAlign: "right", borderBottom: "1px solid var(--hairline)" }}>
                 <Link href={`/orders/${o.id}`} className="btn-secondary" style={{ padding: "6px 14px", fontSize: "12px" }}>
                   View Timeline →
                 </Link>
