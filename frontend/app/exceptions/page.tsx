@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
 import SeverityBadge from "../../components/SeverityBadge";
+import NavPillGroup from "../../components/NavPillGroup";
+import { APP_NAV_ITEMS } from "../../lib/app-nav";
 
 type Issue = {
   id: string;
@@ -62,19 +64,21 @@ export default function ExceptionsPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1280px", margin: "0 auto" }}>
-      
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+      <NavPillGroup items={APP_NAV_ITEMS} active="/exceptions" />
+
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: "32px", fontWeight: 800 }}>Mismatch Exceptions Queue</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="display" style={{ fontSize: "32px" }}>Mismatch Exceptions Queue</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
         </p>
       </div>
 
       {/* Filter Tabs Bar */}
-      <div className="glass-card" style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
-        
+      <div style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+
         {/* Status Filter Tabs */}
         <div style={{ display: "flex", gap: "8px" }}>
           {(["OPEN", "RESOLVED", "ALL"] as const).map((s) => (
@@ -92,7 +96,7 @@ export default function ExceptionsPage() {
 
         {/* Severity Select Dropdown */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <label style={{ fontSize: "13px", color: "var(--text-muted)", fontWeight: 600 }}>SEVERITY:</label>
+          <label style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 600 }}>SEVERITY:</label>
           <select
             className="input-control"
             value={severity}
@@ -112,19 +116,19 @@ export default function ExceptionsPage() {
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#f87171", padding: "12px 16px", borderRadius: "8px" }}>
+        <div role="alert" style={{ background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.25)", color: "#b91c1c", padding: "12px 16px", borderRadius: "8px" }}>
           ⚠️ {error}
         </div>
       )}
 
       {/* Main Issues Table */}
-      <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             Loading exception queue...
           </div>
         ) : items.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             No exception issues found matching selected filters.
           </div>
         ) : (
@@ -147,11 +151,11 @@ export default function ExceptionsPage() {
                       {i.order_name || i.order_id}
                     </Link>
                   </td>
-                  <td style={{ fontWeight: 600, color: "#ffffff" }}>{i.issue_code}</td>
+                  <td style={{ fontWeight: 600, color: "var(--ink)" }}>{i.issue_code}</td>
                   <td>
                     <SeverityBadge severity={i.severity} />
                   </td>
-                  <td style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+                  <td style={{ color: "var(--muted)", fontSize: "13px" }}>
                     {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
                   </td>
                   <td>
@@ -165,7 +169,7 @@ export default function ExceptionsPage() {
                         Resolve Discrepancy
                       </button>
                     ) : (
-                      <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Resolved</span>
+                      <span style={{ fontSize: "12px", color: "var(--muted)" }}>Resolved</span>
                     )}
                   </td>
                 </tr>
@@ -183,8 +187,7 @@ export default function ExceptionsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(8px)",
+            background: "rgba(17, 17, 17, 0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -192,18 +195,18 @@ export default function ExceptionsPage() {
             padding: "20px"
           }}
         >
-          <div className="glass-card" style={{ width: "100%", maxWidth: "540px", padding: "32px", border: "1px solid var(--accent-primary)" }}>
-            <h2 style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "14px", marginBottom: "20px" }}>
-              {resolving.order_name || resolving.order_id}: <strong style={{ color: "#ffffff" }}>{resolving.issue_code}</strong>
+          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+            <h2 className="display" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
+            <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "20px" }}>
+              {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--ink)" }}>{resolving.issue_code}</strong>
             </p>
 
-            <div style={{ background: "#0f172a", padding: "16px", borderRadius: "8px", marginBottom: "20px", fontSize: "14px", border: "1px solid #1e293b" }}>
+            <div style={{ background: "var(--soft)", padding: "16px", borderRadius: "8px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--hairline)", color: "var(--body)" }}>
               {resolving.issue_message}
             </div>
 
             <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "6px" }}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>
                 AUDITED RESOLUTION REASON (MANDATORY)
               </label>
               <textarea

@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import MetricCard from "../../components/MetricCard";
+import NavPillGroup from "../../components/NavPillGroup";
+import { APP_NAV_ITEMS } from "../../lib/app-nav";
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -40,17 +42,20 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
-        <p style={{ color: "var(--text-muted)", fontSize: "16px" }}>Loading Executive Dashboard...</p>
+      <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
+        <p style={{ color: "var(--muted)", fontSize: "16px" }}>Loading Executive Dashboard...</p>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="glass-card" style={{ textAlign: "center", padding: "48px" }}>
-        <h3>Dashboard Unavailable</h3>
-        <p style={{ color: "var(--text-muted)", marginTop: "8px" }}>Please log in or sync Shopify orders to populate metrics.</p>
+      <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <NavPillGroup items={APP_NAV_ITEMS} active="/dashboard" />
+        <div style={{ textAlign: "center", padding: "48px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <h3 className="display" style={{ fontSize: "20px" }}>Dashboard Unavailable</h3>
+          <p style={{ color: "var(--muted)", marginTop: "8px" }}>Please log in or sync Shopify orders to populate metrics.</p>
+        </div>
       </div>
     );
   }
@@ -58,13 +63,15 @@ export default function DashboardPage() {
   const { kpis, financials } = data;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "32px", maxWidth: "1280px", margin: "0 auto" }}>
-      
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
+
+      <NavPillGroup items={APP_NAV_ITEMS} active="/dashboard" />
+
       {/* Top Header Banner */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "32px", fontWeight: 800 }}>Executive Dashboard</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="display" style={{ fontSize: "32px" }}>Executive Dashboard</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time Operational Ledger & Financial Reconciliation Metrics
           </p>
         </div>
@@ -79,7 +86,7 @@ export default function DashboardPage() {
 
       {/* Operational KPI Grid */}
       <div>
-        <h2 style={{ fontSize: "18px", marginBottom: "16px", color: "#e2e8f0" }}>Operational Health</h2>
+        <h2 className="display" style={{ fontSize: "18px", marginBottom: "16px" }}>Operational Health</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
           <MetricCard title="Total Orders" value={kpis.orders_total} icon="📦" subtitle={`${kpis.paid_orders} Paid`} />
           <MetricCard title="Dispatched Scans" value={kpis.dispatched_orders} icon="🏷️" subtitle={`${kpis.packed_orders} Packed`} />
@@ -90,7 +97,7 @@ export default function DashboardPage() {
 
       {/* Financial Breakdown Grid */}
       <div>
-        <h2 style={{ fontSize: "18px", marginBottom: "16px", color: "#e2e8f0" }}>Financial Summary</h2>
+        <h2 className="display" style={{ fontSize: "18px", marginBottom: "16px" }}>Financial Summary</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
           <MetricCard title="Gross Sales" value={`₹${financials.gross_sales.toLocaleString()}`} icon="💰" />
           <MetricCard title="Total Tax" value={`₹${financials.total_tax.toLocaleString()}`} icon="🧾" />

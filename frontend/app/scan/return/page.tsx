@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api";
 import ScanBanner from "../../../components/ScanBanner";
+import NavPillGroup from "../../../components/NavPillGroup";
+import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 
 import { CONDITIONS, RETURN_TYPES } from "../../../lib/return-options";
 
@@ -58,20 +60,22 @@ export default function ReturnPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", margin: "0 auto" }}>
-      
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
+
+      <NavPillGroup items={APP_NAV_ITEMS} active="/scan/return" />
+
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: "32px", fontWeight: 800 }}>Returns & RTO Station</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="display" style={{ fontSize: "32px" }}>Returns & RTO Station</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan returned packages to log customer returns, inspect item condition, and auto-flag refunds
         </p>
       </div>
 
       {/* Main Barcode Lookup Box */}
-      <div className="glass-card" style={{ padding: "32px" }}>
+      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         <form onSubmit={lookup} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>
+          <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--muted)" }}>
             SCAN RETURNED BARCODE
           </label>
           <div style={{ display: "flex", gap: "12px" }}>
@@ -100,19 +104,19 @@ export default function ReturnPage() {
 
       {/* Inspection & Confirmation Workspace */}
       {info && (
-        <div className="glass-card" style={{ border: "2px solid var(--accent-primary)", padding: "32px" }}>
-          <h2 style={{ fontSize: "22px", marginBottom: "16px" }}>
-            Order Inspection: <span style={{ color: "var(--accent-primary)" }}>{info.order?.shopify_order_name || "Order"}</span>
+        <div style={{ border: "1px solid var(--hairline)", background: "var(--canvas)", borderRadius: "12px", padding: "32px" }}>
+          <h2 className="display" style={{ fontSize: "22px", marginBottom: "16px" }}>
+            Order Inspection: <span style={{ color: "var(--ink)" }}>{info.order?.shopify_order_name || "Order"}</span>
           </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px", padding: "16px", background: "#0f172a", borderRadius: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "8px" }}>
             <div>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Total Order Value</span>
-              <div style={{ fontSize: "20px", fontWeight: 700, color: "#ffffff" }}>₹{info.order?.total_amount}</div>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>Total Order Value</span>
+              <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--ink)" }}>₹{info.order?.total_amount}</div>
             </div>
             <div>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Customer Name</span>
-              <div style={{ fontSize: "18px", fontWeight: 600, color: "#ffffff" }}>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>Customer Name</span>
+              <div style={{ fontSize: "18px", fontWeight: 600, color: "var(--ink)" }}>
                 {info.customer ? `${info.customer.first_name ?? ""} ${info.customer.last_name ?? ""}`.trim() || "-" : "-"}
               </div>
             </div>
@@ -120,7 +124,7 @@ export default function ReturnPage() {
 
           {/* Return Type Selectors */}
           <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "8px" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "8px" }}>
               RETURN CLASSIFICATION TYPE
             </label>
             <div style={{ display: "flex", gap: "12px" }}>
@@ -141,7 +145,7 @@ export default function ReturnPage() {
 
           {/* Condition Selectors */}
           <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "8px" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "8px" }}>
               PARCEL ITEM CONDITION
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -162,7 +166,7 @@ export default function ReturnPage() {
 
           {/* Optional Reason Input */}
           <div style={{ marginBottom: "24px" }}>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "6px" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>
               NOTES / REASON (OPTIONAL)
             </label>
             <input

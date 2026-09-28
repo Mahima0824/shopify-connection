@@ -42,39 +42,40 @@ export default function LoginPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0b0f19 75%)",
+      background: "var(--canvas)",
       padding: "20px"
     }}>
-      <div className="glass-card" style={{ width: "100%", maxWidth: "440px", padding: "40px" }}>
-        
+      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <div style={{
             width: "56px",
             height: "56px",
-            borderRadius: "16px",
-            background: "var(--accent-gradient)",
+            borderRadius: "50%",
+            background: "var(--ink)",
+            color: "var(--canvas)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "28px",
-            margin: "0 auto 16px auto",
-            boxShadow: "0 8px 24px rgba(99, 102, 241, 0.4)"
+            fontSize: "24px",
+            fontWeight: 600,
+            margin: "0 auto 16px auto"
           }}>
-            ⚡
+            R
           </div>
-          <h1 style={{ fontSize: "28px", fontWeight: 800, marginBottom: "8px" }}>Welcome Back</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+          <h1 className="display" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px" }}>
             Sign in to access your Shopify Order Reconciliation platform
           </p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div style={{
-            background: "rgba(239, 68, 68, 0.15)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            color: "#f87171",
+          <div role="alert" style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.25)",
+            color: "#b91c1c",
             padding: "12px 16px",
             borderRadius: "8px",
             fontSize: "14px",
@@ -91,7 +92,7 @@ export default function LoginPage() {
         {/* Login Form */}
         <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--text-muted)" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted)" }}>
               Email Address
             </label>
             <input
@@ -105,7 +106,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--text-muted)" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted)" }}>
               Password
             </label>
             <input
@@ -129,8 +130,8 @@ export default function LoginPage() {
         </form>
 
         {/* Demo Credentials Quick Fill */}
-        <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--border-color)", textAlign: "center" }}>
-          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
+        <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--hairline)", textAlign: "center" }}>
+          <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px" }}>
             Testing locally? Click to fill test accounts:
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>

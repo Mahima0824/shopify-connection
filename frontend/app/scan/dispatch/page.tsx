@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api";
 import ScanBanner from "../../../components/ScanBanner";
+import NavPillGroup from "../../../components/NavPillGroup";
+import { APP_NAV_ITEMS } from "../../../lib/app-nav";
 
 type Last = { barcode: string; order: string; total: number; status: string } | null;
 
@@ -37,7 +39,7 @@ export default function DispatchPage() {
         method: "POST",
         body: JSON.stringify({ barcode })
       }, token);
-      
+
       setLast({
         barcode,
         order: out.order?.shopify_order_name || "Order",
@@ -55,21 +57,23 @@ export default function DispatchPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", margin: "0 auto" }}>
-      
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
+
+      <NavPillGroup items={APP_NAV_ITEMS} active="/scan/dispatch" />
+
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: "32px", fontWeight: 800 }}>Warehouse Dispatch Station</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="display" style={{ fontSize: "32px" }}>Warehouse Dispatch Station</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan physical parcel barcodes to record dispatch events and update Shopify order state
         </p>
       </div>
 
       {/* Main Barcode Scanner Box */}
-      <div className="glass-card" style={{ padding: "32px" }}>
+      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>
+            <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--muted)" }}>
               BARCODE INPUT (SCANNER ACTIVE)
             </label>
             <span className="badge badge-neutral" style={{ fontSize: "11px" }}>Press / to focus</span>
@@ -102,38 +106,38 @@ export default function DispatchPage() {
 
       {/* Grid: Last Scanned Card & History */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-        
+
         {/* Last Dispatched Card */}
-        <div className="glass-card">
-          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--text-muted)", textTransform: "uppercase" }}>
+        <div style={{ padding: "24px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Last Dispatched Parcel
           </h2>
           {last ? (
             <div>
-              <div style={{ fontSize: "24px", fontWeight: 800, color: "#ffffff" }}>{last.order}</div>
+              <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--ink)" }}>{last.order}</div>
               <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
                 <span className="badge badge-neutral">{last.barcode}</span>
                 <span className="badge badge-success">{last.status}</span>
               </div>
             </div>
           ) : (
-            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>No scans recorded in this session.</p>
+            <p style={{ color: "var(--muted)", fontSize: "14px" }}>No scans recorded in this session.</p>
           )}
         </div>
 
         {/* Recent Session History */}
-        <div className="glass-card">
-          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--text-muted)", textTransform: "uppercase" }}>
+        <div style={{ padding: "24px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Recent Session Barcodes
           </h2>
           {hist.length === 0 ? (
-            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>History will populate as you scan barcodes.</p>
+            <p style={{ color: "var(--muted)", fontSize: "14px" }}>History will populate as you scan barcodes.</p>
           ) : (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
               {hist.map((h, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "rgba(15,23,42,0.6)", borderRadius: "6px", fontSize: "14px" }}>
-                  <span style={{ fontWeight: 600, color: "#ffffff" }}>{h}</span>
-                  <span style={{ color: "var(--success)", fontSize: "12px" }}>✓ Dispatched</span>
+                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "6px", fontSize: "14px" }}>
+                  <span style={{ fontWeight: 600, color: "var(--ink)" }}>{h}</span>
+                  <span style={{ color: "#047857", fontSize: "12px" }}>✓ Dispatched</span>
                 </li>
               ))}
             </ul>

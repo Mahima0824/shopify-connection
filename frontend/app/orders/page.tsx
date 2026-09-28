@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import OrderTable from "../../components/OrderTable";
+import NavPillGroup from "../../components/NavPillGroup";
+import { APP_NAV_ITEMS } from "../../lib/app-nav";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -37,13 +39,15 @@ export default function OrdersPage() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1280px", margin: "0 auto" }}>
-      
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+      <NavPillGroup items={APP_NAV_ITEMS} active="/orders" />
+
       {/* Header & Quick Action */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "32px", fontWeight: 800 }}>Orders Directory</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="display" style={{ fontSize: "32px" }}>Orders Directory</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             View and search all synchronized commerce orders
           </p>
         </div>
@@ -57,7 +61,7 @@ export default function OrdersPage() {
       </div>
 
       {/* Filter & Search Controls */}
-      <div className="glass-card" style={{ padding: "16px 24px" }}>
+      <div style={{ padding: "16px 24px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
           <input
             className="input-control"
@@ -71,15 +75,15 @@ export default function OrdersPage() {
 
       {/* Error Alert */}
       {error && (
-        <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", padding: "12px 16px", borderRadius: "8px" }}>
+        <div role="alert" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#b91c1c", padding: "12px 16px", borderRadius: "8px" }}>
           ⚠️ {error}
         </div>
       )}
 
       {/* Main Table */}
-      <div className="glass-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             Loading orders directory...
           </div>
         ) : (
