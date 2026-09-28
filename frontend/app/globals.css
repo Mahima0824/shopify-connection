@@ -7,6 +7,9 @@
   --on-primary:#ffffff; --on-dark:#ffffff; --on-dark-soft:#a1a1aa;
   --accent:#3b82f6; --pastel-orange:#fb923c; --pastel-pink:#ec4899; --pastel-violet:#8b5cf6; --pastel-emerald:#34d399;
   --success:#10b981; --warning:#f59e0b; --error:#ef4444;
+  /* Legacy var aliases — same goal as class shims above: old pages keep rendering until Task 5. */
+  --text-muted:#6b7280; --border-color:#e5e7eb; --danger:#ef4444;
+  --accent-primary:#3b82f6; --accent-gradient:#111111;
 }
 body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;}
 .display{font-weight:600;letter-spacing:-0.04em;color:var(--ink);}
