@@ -70,7 +70,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
                 {o.created_at ? new Date(o.created_at).toLocaleDateString() : "-"}
               </td>
               <td style={{ textAlign: "right", borderBottom: "1px solid var(--hairline)" }}>
-                <Link href={`/orders/${o.id}`} className="btn-secondary" style={{ padding: "6px 14px", fontSize: "12px" }}>
+                <Link href={`/orders/${o.id}`} className="btn-secondary">
                   View Timeline
                 </Link>
               </td>

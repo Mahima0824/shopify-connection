@@ -17,6 +17,7 @@ body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-syste
 .btn-on-color{background:var(--on-primary);color:var(--ink);padding:12px 20px;min-height:44px;border-radius:12px;font-size:14px;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
 .input-control{width:100%;background:var(--soft);border:1px solid var(--hairline);color:var(--ink);padding:10px 14px;border-radius:12px;font-size:16px;min-height:44px;}
 .input-control:focus-visible{border-color:var(--ink);outline:2px solid var(--ink);outline-offset:2px;}
+a:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
 .badge-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;font-size:13px;font-weight:500;background:var(--soft);color:var(--ink);}
 .feature-card-pink{background:var(--brand-pink);border:1px solid var(--hairline);border-radius:24px;padding:32px;color:var(--on-primary);}
 .feature-card-pink h1,.feature-card-pink h2,.feature-card-pink h3{color:var(--on-primary);}
@@ -49,7 +50,7 @@ body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-syste
 .hero-grid{display:grid;grid-template-columns:7fr 5fr;gap:32px;align-items:center;}
 .footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:32px;}
 .topnav-links{display:flex;gap:20px;font-size:14px;font-weight:500;}
-.topnav-menu-btn{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink);}
+.topnav-menu-btn{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink);min-width:44px;min-height:44px;}
 
 @keyframes riseScale{from{opacity:0;transform:translateY(12px) scale(0.99);}to{opacity:1;transform:none;}}
 .reveal{opacity:0;}

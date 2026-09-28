@@ -49,7 +49,7 @@ export default function Home() {
       {/* Trust strip hairline divider */}
       <Reveal>
         <div style={{ borderTop: "1px solid var(--hairline)", borderBottom: "1px solid var(--hairline)", background: "var(--canvas)" }}>
-          <div className="container" style={{ display: "flex", gap: 32, paddingTop: 20, paddingBottom: 20, color: "var(--muted)", fontSize: 14 }}>
+          <div className="container" style={{ display: "flex", flexWrap: "wrap", gap: 32, paddingTop: 20, paddingBottom: 20, color: "var(--muted)", fontSize: 14 }}>
             <span>Shopify</span>
             <span>Warehouse scans</span>
             <span>Returns</span>
@@ -67,7 +67,7 @@ export default function Home() {
           <div className="grid-3" style={{ marginTop: 32 }}>
             <Reveal delay={0}>
               <div className="feature-card-pink">
-                <h3 className="display" style={{ fontSize: 18, margin: "0 0 8px" }}>Sync</h3>
+                <h3 className="display" style={{ ...whiteChip, fontSize: 18, margin: "0 0 8px" }}>Sync</h3>
                 <div style={whiteChip}>
                   <span style={{ fontWeight: 600 }}>Order #1042</span> — Tally voucher synced.
                 </div>
@@ -75,7 +75,7 @@ export default function Home() {
             </Reveal>
             <Reveal delay={100}>
               <div className="feature-card-teal">
-                <h3 className="display" style={{ fontSize: 18, margin: "0 0 8px" }}>Scan</h3>
+                <h3 className="display" style={{ ...whiteChip, fontSize: 18, margin: "0 0 8px" }}>Scan</h3>
                 <div style={whiteChip}>
                   <label style={{ fontSize: 13, fontWeight: 500 }}>Scan barcode</label>
                   <input className="input-control" placeholder="Scan or enter barcode" readOnly value="" aria-label="scan input" style={{ marginTop: 8 }} />
@@ -205,7 +205,7 @@ export default function Home() {
                       : { background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: 24, padding: 32, color: "var(--ink)" }
                   }
                 >
-                  <div className="display" style={{ fontSize: 16, fontWeight: 600 }}>{p.name}</div>
+                  <div className="display" style={p.featured ? { ...whiteChip, fontSize: 16, fontWeight: 600 } : { fontSize: 16, fontWeight: 600 }}>{p.name}</div>
                   <p style={p.featured ? { ...whiteChip, fontSize: 14 } : { fontSize: 14, color: "var(--muted)" }}>{p.blurb}</p>
                   <ul style={{ listStyle: "none", padding: 0, margin: "16px 0 0", display: "grid", gap: 8 }}>
                     {p.features.map((f) => (
