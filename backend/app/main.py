@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 import app.models  # Register all models
+from app.config import settings
 from app.database import Base, engine, SessionLocal
 from app.api.auth import router as auth_router
 from app.api.orders import router as orders_router
@@ -17,6 +18,12 @@ from app.api.dashboard import router as dashboard_router
 from app.api.export import router as export_router
 from app.api.tally import router as tally_router
 from app.api.imports import router as imports_router
+from app.api.shipments import router as shipments_router
+from app.api.carrier_webhooks import router as carrier_webhooks_router
+from app.api.sla import router as sla_router
+from app.api.statements import router as statements_router
+from app.api.reports import router as reports_router
+from app.api.carriers import router as carriers_router
 
 
 def seed_initial_data():
@@ -48,16 +55,18 @@ def seed_initial_data():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    seed_initial_data()
+    if settings.app_env == "dev":
+        seed_initial_data()
     yield
 
 
 app = FastAPI(title="Recon MVP", lifespan=lifespan)
 
 # Configure CORS Middleware so cross-origin requests from frontend (localhost:3000) succeed without CORS errors
+# Prod-safe: wildcard origins only in dev; otherwise explicit frontend origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"] if settings.app_env == "dev" else [settings.frontend_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,6 +85,12 @@ app.include_router(dashboard_router)
 app.include_router(export_router)
 app.include_router(tally_router)
 app.include_router(imports_router)
+app.include_router(shipments_router)
+app.include_router(carrier_webhooks_router)
+app.include_router(sla_router)
+app.include_router(statements_router)
+app.include_router(reports_router)
+app.include_router(carriers_router)
 
 
 @app.get("/health")

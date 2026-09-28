@@ -16,3 +16,7 @@ from app.models.webhook_event import ShopifyWebhookEvent  # noqa: F401
 from app.models.refund import Refund  # noqa: F401
 from app.models.reconciliation import Reconciliation  # noqa: F401
 from app.models.tally import TallyMapping, ExportBatch  # noqa: F401
+from app.models.shipment import Shipment, ShipmentEvent, CarrierConnection  # noqa: F401
+from app.models.sla import SLARule, ShipmentCase, ShipmentFinancial  # noqa: F401
+from app.models.statement import StatementUpload, StatementRow  # noqa: F401
+from app.models.cost import ProductCostHistory, CostRule  # noqa: F401

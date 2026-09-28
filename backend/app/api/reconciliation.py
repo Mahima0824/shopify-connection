@@ -16,15 +16,19 @@ def _j(r, order_name=None) -> dict:
 
 @router.get("/issues")
 def issues(status: str = "OPEN", severity: str | None = None, issue_code: str | None = None,
+           category: str | None = None,
            page: int = 1, page_size: int = 20,
            db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     from app.models.reconciliation import Reconciliation
     from app.models.order import Order
+    from app.services.reconciliation_service import CATEGORY
     q = db.query(Reconciliation).filter_by(business_id=u.get("business_id"))
     if status == "OPEN": q = q.filter_by(resolved=False)
     elif status == "RESOLVED": q = q.filter_by(resolved=True)
     if severity: q = q.filter_by(severity=severity)
     if issue_code: q = q.filter_by(issue_code=issue_code)
+    if category and category.lower() in CATEGORY:
+        q = q.filter(Reconciliation.issue_code.in_(CATEGORY[category.lower()]))
     total = q.count()
     rows = q.order_by(Reconciliation.created_at.desc()).offset(
         (max(int(page or 1), 1) - 1) * int(page_size or 20)).limit(int(page_size or 20)).all()

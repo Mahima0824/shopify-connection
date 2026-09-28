@@ -15,6 +15,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TNode[]>([]);
   const [recon, setRecon] = useState<ReconState>(null);
+  const [shipments, setShipments] = useState<any[]>([]);
 
   useEffect(() => {
     api<any>(`/api/v1/orders/${params.id}`)
@@ -27,6 +28,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     api<ReconState>(`/api/v1/reconciliation/order/${params.id}`, { method: "POST" }, token)
       .then((data) => setRecon(data))
       .catch(() => setRecon(null));
+    api<{ items: any[] }>(`/api/v1/shipments?order_id=${params.id}`, {}, token)
+      .then((data) => setShipments(data.items ?? []))
+      .catch(() => setShipments([]));
   }, [params.id]);
 
   if (error) {
@@ -113,6 +117,25 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         <h2 className="display" style={{ fontSize: "20px", marginBottom: "20px" }}>Order Lifecycle Timeline</h2>
         <Timeline items={timeline} />
       </div>
+
+      {/* Courier & Money Section */}
+      {shipments.length > 0 && (
+        <div className="content-card">
+          <h2 className="display" style={{ fontSize: "20px", marginBottom: "20px" }}>Courier & Money</h2>
+          {shipments.map((s) => (
+            <div key={s.id} style={{ marginBottom: "12px", fontSize: "14px" }}>
+              <Link href={`/shipments/${s.id}`} style={{ fontWeight: 700 }}>
+                {s.carrier_code} · {s.awb_number}
+              </Link>
+              <div style={{ color: "var(--muted)", marginTop: "4px" }}>
+                Tracking: {s.tracking_status}
+                {s.current_location ? ` · ${s.current_location}` : ""}
+                {s.last_checkpoint_at ? ` · updated ${s.last_checkpoint_at}` : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );

@@ -21,6 +21,7 @@ export default function ExceptionsPage() {
   const [items, setItems] = useState<Issue[]>([]);
   const [status, setStatus] = useState("OPEN");
   const [severity, setSeverity] = useState("");
+  const [category, setCategory] = useState("");
   const [resolving, setResolving] = useState<Issue | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export default function ExceptionsPage() {
     setError(null);
     try {
       const token = localStorage.getItem("token") ?? undefined;
-      const q = new URLSearchParams({ status, ...(severity ? { severity } : {}) });
+      const q = new URLSearchParams({ status, ...(severity ? { severity } : {}), ...(category ? { category } : {}) });
       const data = await api<{ items: Issue[] }>(`/api/v1/reconciliation/issues?${q}`, {}, token);
       setItems(data.items ?? []);
     } catch (e: any) {
@@ -43,7 +44,7 @@ export default function ExceptionsPage() {
 
   useEffect(() => {
     load();
-  }, [status, severity]);
+  }, [status, severity, category]);
 
   async function doResolve() {
     if (!reason.trim()) return;
@@ -108,6 +109,24 @@ export default function ExceptionsPage() {
             <option value="HIGH">HIGH</option>
             <option value="MEDIUM">MEDIUM</option>
             <option value="LOW">LOW</option>
+          </select>
+        </div>
+
+        {/* Category Select Dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <label style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 600 }}>CATEGORY:</label>
+          <select
+            className="input-control"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            aria-label="Category"
+            style={{ width: "160px", padding: "8px 12px" }}
+          >
+            <option value="">All Categories</option>
+            <option value="COURIER">Courier</option>
+            <option value="MONEY">Money</option>
+            <option value="RETURNS">Returns</option>
+            <option value="SLA">SLA</option>
           </select>
         </div>
 
