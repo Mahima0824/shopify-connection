@@ -5,6 +5,7 @@ import { api } from "../../../lib/api";
 import ScanBanner from "../../../components/ScanBanner";
 import NavPillGroup from "../../../components/NavPillGroup";
 import { APP_NAV_ITEMS } from "../../../lib/app-nav";
+import { IconBox, IconTruck } from "../../../components/icons";
 
 import { CONDITIONS, RETURN_TYPES } from "../../../lib/return-options";
 
@@ -60,7 +61,7 @@ export default function ReturnPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
 
       <NavPillGroup items={APP_NAV_ITEMS} active="/scan/return" />
 
@@ -72,10 +73,10 @@ export default function ReturnPage() {
         </p>
       </div>
 
-      {/* Main Barcode Lookup Box */}
-      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      {/* Lavender lookup signature card */}
+      <div className="feature-card-lavender">
         <form onSubmit={lookup} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--muted)" }}>
+          <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
             SCAN RETURNED BARCODE
           </label>
           <div style={{ display: "flex", gap: "12px" }}>
@@ -104,12 +105,12 @@ export default function ReturnPage() {
 
       {/* Inspection & Confirmation Workspace */}
       {info && (
-        <div style={{ border: "1px solid var(--hairline)", background: "var(--canvas)", borderRadius: "12px", padding: "32px" }}>
+        <div className="content-card">
           <h2 className="display" style={{ fontSize: "22px", marginBottom: "16px" }}>
             Order Inspection: <span style={{ color: "var(--ink)" }}>{info.order?.shopify_order_name || "Order"}</span>
           </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
             <div>
               <span style={{ fontSize: "12px", color: "var(--muted)" }}>Total Order Value</span>
               <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--ink)" }}>₹{info.order?.total_amount}</div>
@@ -137,7 +138,8 @@ export default function ReturnPage() {
                   className={rtype === t ? "btn-primary" : "btn-secondary"}
                   style={{ flex: 1, padding: "12px", justifyContent: "center" }}
                 >
-                  {t === "CUSTOMER_RETURN" ? "📦 Customer Return" : "🚚 Courier RTO"}
+                  <span style={{ display: "inline-flex", marginRight: "8px" }}>{t === "CUSTOMER_RETURN" ? <IconBox size={16} /> : <IconTruck size={16} />}</span>
+                  {t === "CUSTOMER_RETURN" ? "Customer Return" : "Courier RTO"}
                 </button>
               ))}
             </div>

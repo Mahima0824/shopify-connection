@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api, API } from "../../../lib/api";
 import NavPillGroup from "../../../components/NavPillGroup";
 import { APP_NAV_ITEMS } from "../../../lib/app-nav";
+import { IconAlert } from "../../../components/icons";
 
 type ParcelData = {
   parcel: { id: string; parcel_code: string; barcode_value: string; status: string };
@@ -23,13 +24,13 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
       .catch((e: Error) => setErr(e.message));
   }, [params.barcode]);
 
-  if (err) return <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}><NavPillGroup items={APP_NAV_ITEMS} active="/orders" /><p role="alert" style={{ color: "#b91c1c" }}>{err}</p></main>;
-  if (!data) return <main className="container"><p style={{ color: "var(--muted)" }}>Loading…</p></main>;
+  if (err) return <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--canvas)" }}><NavPillGroup items={APP_NAV_ITEMS} active="/orders" /><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
+  if (!data) return <main className="container" style={{ background: "var(--canvas)" }}><p style={{ color: "var(--muted)" }}>Loading…</p></main>;
   return (
-    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <NavPillGroup items={APP_NAV_ITEMS} active="/orders" />
       <Link href="/orders" style={{ color: "var(--muted)", fontSize: "14px" }}>← Back to Orders Directory</Link>
-      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div className="content-card">
         <h1 className="display" style={{ fontSize: "28px", marginBottom: "8px" }}>Parcel {data.parcel.barcode_value}</h1>
         <p style={{ color: "var(--body)", fontSize: "14px" }}>Status: <span className="badge badge-neutral">{data.parcel.status}</span></p>
         {data.order && (

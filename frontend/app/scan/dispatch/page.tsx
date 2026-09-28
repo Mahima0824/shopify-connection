@@ -57,7 +57,7 @@ export default function DispatchPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
 
       <NavPillGroup items={APP_NAV_ITEMS} active="/scan/dispatch" />
 
@@ -69,14 +69,14 @@ export default function DispatchPage() {
         </p>
       </div>
 
-      {/* Main Barcode Scanner Box */}
-      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      {/* Ochre scanner signature card */}
+      <div className="feature-card-ochre">
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--muted)" }}>
+            <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
               BARCODE INPUT (SCANNER ACTIVE)
             </label>
-            <span className="badge badge-neutral" style={{ fontSize: "11px" }}>Press / to focus</span>
+            <span className="badge-pill" style={{ fontSize: "11px" }}>Press / to focus</span>
           </div>
 
           <div style={{ display: "flex", gap: "12px" }}>
@@ -108,7 +108,7 @@ export default function DispatchPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
 
         {/* Last Dispatched Card */}
-        <div style={{ padding: "24px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+        <div className="content-card">
           <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Last Dispatched Parcel
           </h2>
@@ -126,7 +126,7 @@ export default function DispatchPage() {
         </div>
 
         {/* Recent Session History */}
-        <div style={{ padding: "24px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+        <div className="content-card">
           <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Recent Session Barcodes
           </h2>
@@ -135,9 +135,9 @@ export default function DispatchPage() {
           ) : (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
               {hist.map((h, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "6px", fontSize: "14px" }}>
+                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px", fontSize: "14px" }}>
                   <span style={{ fontWeight: 600, color: "var(--ink)" }}>{h}</span>
-                  <span style={{ color: "#047857", fontSize: "12px" }}>✓ Dispatched</span>
+                  <span style={{ color: "var(--brand-teal)", fontSize: "12px", fontWeight: 600 }}>Dispatched</span>
                 </li>
               ))}
             </ul>

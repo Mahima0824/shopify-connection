@@ -6,6 +6,7 @@ import { api } from "../../lib/api";
 import SeverityBadge from "../../components/SeverityBadge";
 import NavPillGroup from "../../components/NavPillGroup";
 import { APP_NAV_ITEMS } from "../../lib/app-nav";
+import { IconAlert } from "../../components/icons";
 
 type Issue = {
   id: string;
@@ -64,20 +65,20 @@ export default function ExceptionsPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
 
       <NavPillGroup items={APP_NAV_ITEMS} active="/exceptions" />
 
-      {/* Header */}
-      <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Mismatch Exceptions Queue</h1>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+      {/* Pink-tint signature band */}
+      <div className="feature-card-pink">
+        <h1 className="display" style={{ fontSize: "32px", color: "var(--on-primary)" }}>Mismatch Exceptions Queue</h1>
+        <p style={{ background: "var(--on-primary)", color: "var(--ink)", fontSize: "14px", marginTop: "12px", borderRadius: "12px", padding: "8px 12px", display: "inline-block" }}>
           Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
         </p>
       </div>
 
       {/* Filter Tabs Bar */}
-      <div style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div className="content-card" style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
 
         {/* Status Filter Tabs */}
         <div style={{ display: "flex", gap: "8px" }}>
@@ -116,13 +117,13 @@ export default function ExceptionsPage() {
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" style={{ background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.25)", color: "#b91c1c", padding: "12px 16px", borderRadius: "8px" }}>
-          ⚠️ {error}
+        <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <IconAlert size={16} /> {error}
         </div>
       )}
 
       {/* Main Issues Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             Loading exception queue...
@@ -187,7 +188,7 @@ export default function ExceptionsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(17, 17, 17, 0.45)",
+            background: "rgba(250,245,232,.85)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -195,13 +196,13 @@ export default function ExceptionsPage() {
             padding: "20px"
           }}
         >
-          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "24px" }}>
             <h2 className="display" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
             <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "20px" }}>
               {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--ink)" }}>{resolving.issue_code}</strong>
             </p>
 
-            <div style={{ background: "var(--soft)", padding: "16px", borderRadius: "8px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--hairline)", color: "var(--body)" }}>
+            <div style={{ background: "var(--soft)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--hairline)", color: "var(--body)" }}>
               {resolving.issue_message}
             </div>
 

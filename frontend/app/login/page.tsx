@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
+import { IconAlert } from "../../components/icons";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function LoginPage() {
       background: "var(--canvas)",
       padding: "20px"
     }}>
-      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "24px" }}>
 
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
@@ -53,8 +54,8 @@ export default function LoginPage() {
             width: "56px",
             height: "56px",
             borderRadius: "50%",
-            background: "var(--ink)",
-            color: "var(--canvas)",
+            background: "var(--brand-ochre)",
+            color: "var(--ink)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -72,19 +73,16 @@ export default function LoginPage() {
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" style={{
-            background: "rgba(239, 68, 68, 0.08)",
-            border: "1px solid rgba(239, 68, 68, 0.25)",
-            color: "#b91c1c",
+          <div role="alert" className="badge-danger" style={{
             padding: "12px 16px",
-            borderRadius: "8px",
+            borderRadius: "12px",
             fontSize: "14px",
             marginBottom: "24px",
             display: "flex",
             alignItems: "center",
             gap: "10px"
           }}>
-            <span>⚠️</span>
+            <IconAlert size={16} />
             <span>{error}</span>
           </div>
         )}
@@ -123,7 +121,7 @@ export default function LoginPage() {
             type="submit"
             className="btn-primary"
             disabled={loading}
-            style={{ marginTop: "8px", padding: "14px" }}
+            style={{ marginTop: "8px", padding: "14px", minHeight: "44px" }}
           >
             {loading ? "Signing in..." : "Sign In to ReconHub"}
           </button>

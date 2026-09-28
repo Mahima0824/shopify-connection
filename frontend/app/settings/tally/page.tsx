@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import NavPillGroup from "../../../components/NavPillGroup";
 import { APP_NAV_ITEMS } from "../../../lib/app-nav";
+import { IconBox, IconReceipt, IconSpark } from "../../../components/icons";
 
 export default function TallySettingsPage() {
   const [mapping, setMapping] = useState<any>({
@@ -73,27 +74,27 @@ export default function TallySettingsPage() {
   };
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px" }}>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--canvas)" }}>
 
       <NavPillGroup items={APP_NAV_ITEMS} active="/settings/tally" />
 
-      {/* Header */}
-      <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Tally ERP / Prime Integration</h1>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+      {/* Teal signature band */}
+      <div className="feature-card-teal">
+        <h1 className="display" style={{ fontSize: "32px", color: "var(--on-primary)" }}>Tally ERP / Prime Integration</h1>
+        <p style={{ background: "var(--on-primary)", color: "var(--ink)", fontSize: "14px", marginTop: "12px", borderRadius: "12px", padding: "8px 12px", display: "inline-block" }}>
           Configure company accounting vouchers, payment gateways, and tax ledgers for idempotent Tally export
         </p>
       </div>
 
       {/* Status Notification */}
       {status && (
-        <div role="status" style={{ padding: "14px 20px", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.35)", color: "#047857", borderRadius: "10px", fontWeight: 600 }}>
-          ✅ {status}
+        <div role="status" style={{ padding: "14px 20px", background: "var(--brand-mint)", border: "1px solid var(--hairline)", color: "var(--ink)", borderRadius: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
+          <IconSpark size={16} /> {status}
         </div>
       )}
 
       {/* Mapping Configuration Card */}
-      <div style={{ padding: "32px", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div className="content-card">
 
         <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Voucher Types Configuration</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "32px" }}>
@@ -154,17 +155,19 @@ export default function TallySettingsPage() {
         {/* Save & Export Action Buttons */}
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", paddingTop: "16px", borderTop: "1px solid var(--hairline)" }}>
           <button onClick={handleSave} className="btn-secondary" style={{ padding: "12px 24px" }}>
-            💾 Save Ledger Mappings
+            <span style={{ display: "inline-flex", marginRight: "8px" }}><IconBox size={16} /></span>
+            Save Ledger Mappings
           </button>
           <button onClick={handleTallyExport} disabled={exporting} className="btn-primary" style={{ padding: "12px 28px" }}>
-            📥 {exporting ? "Generating Batch..." : "Generate & Download Tally Export Batch"}
+            <span style={{ display: "inline-flex", marginRight: "8px" }}><IconReceipt size={16} /></span>
+            {exporting ? "Generating Batch..." : "Generate & Download Tally Export Batch"}
           </button>
         </div>
 
       </div>
 
       {/* Export Batches History */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--canvas)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--hairline)" }}>
           <h2 className="display" style={{ fontSize: "18px", margin: 0 }}>Export Batch History</h2>
         </div>
