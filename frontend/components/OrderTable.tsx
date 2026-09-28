@@ -67,7 +67,9 @@ export default function OrderTable({ orders }: { orders: any[] }) {
                 ₹{Number(o.total_amount || 0).toLocaleString()}
               </td>
               <td style={{ color: "var(--muted)", fontSize: "13px", borderBottom: "1px solid var(--hairline)" }}>
-                {o.created_at ? new Date(o.created_at).toLocaleDateString() : "-"}
+                {(o.order_date ?? o.shopify_created_at ?? o.created_at)
+                  ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
+                  : "-"}
               </td>
               <td style={{ textAlign: "right", borderBottom: "1px solid var(--hairline)" }}>
                 <Link href={`/orders/${o.id}`} className="btn-secondary">
