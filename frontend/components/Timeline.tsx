@@ -14,6 +14,20 @@ const KIND_DOTS: Record<string, string> = {
   AUDIT: "var(--muted)",
 };
 
+function fmtTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export default function Timeline({ items }: { items: TNode[] }) {
   if (!items || items.length === 0) {
     return <div style={{ color: "var(--muted)", fontSize: "14px" }}>No timeline events recorded yet.</div>;
@@ -52,7 +66,7 @@ export default function Timeline({ items }: { items: TNode[] }) {
               <div className="content-card" style={{ flex: 1, padding: "12px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14px" }}>{n.label}</span>
-                  {n.at && <span style={{ fontSize: "12px", color: "var(--muted)" }}>{n.at}</span>}
+                  {fmtTime(n.at) && <span style={{ fontSize: "12px", color: "var(--muted)" }}>{fmtTime(n.at)}</span>}
                 </div>
                 {n.detail && <p style={{ fontSize: "13px", color: "var(--body)", marginTop: "4px" }}>{n.detail}</p>}
               </div>
