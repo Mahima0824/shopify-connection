@@ -13,9 +13,7 @@ export default function NavPillGroup({
   return (
     <div
       style={{
-        background: "#f8f9fa",
-        borderRadius: 9999,
-        padding: 6,
+        background: "transparent",
         display: "inline-flex",
         gap: 4,
         maxWidth: "100%",
@@ -28,13 +26,12 @@ export default function NavPillGroup({
           href={i.href}
           className={active === i.href ? "pill-active" : ""}
           style={{
-            padding: "8px 14px",
-            borderRadius: 8,
+            padding: "8px 16px",
+            borderRadius: 9999,
             fontSize: 14,
             fontWeight: 500,
-            color: active === i.href ? "#111" : "#6b7280",
-            background: active === i.href ? "#fff" : "transparent",
-            boxShadow: active === i.href ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+            color: active === i.href ? "var(--ink)" : "var(--muted)",
+            background: active === i.href ? "var(--card)" : "transparent",
             whiteSpace: "nowrap",
             flexShrink: 0,
           }}

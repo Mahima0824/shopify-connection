@@ -4,14 +4,22 @@ import React from "react";
 import Link from "next/link";
 import { useState } from "react";
 
+const centerLinks = [
+  { label: "Product", href: "/#product" },
+  { label: "Solutions", href: "/#solutions" },
+  { label: "Resources", href: "/#resources" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "Customers", href: "/#customers" },
+];
+
 export default function TopNav() {
   const [open, setOpen] = useState(false);
   return (
     <header
       style={{
         height: 64,
-        background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
+        background: "var(--canvas)",
+        borderBottom: "1px solid var(--hairline)",
         position: "sticky",
         top: 0,
         zIndex: 50,
@@ -32,7 +40,7 @@ export default function TopNav() {
             display: "flex",
             alignItems: "center",
             gap: 10,
-            color: "#111",
+            color: "var(--ink)",
             fontWeight: 600,
           }}
         >
@@ -41,8 +49,8 @@ export default function TopNav() {
               width: 28,
               height: 28,
               borderRadius: "50%",
-              background: "#111",
-              color: "#fff",
+              background: "var(--brand-ochre)",
+              color: "var(--ink)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -55,24 +63,25 @@ export default function TopNav() {
         </Link>
         <nav
           className="topnav-links"
-          style={{ gap: 20, fontSize: 14, fontWeight: 500 }}
+          style={{
+            gap: 20,
+            fontFamily: "Inter, sans-serif",
+            fontSize: 14,
+            fontWeight: 500,
+          }}
         >
-          <Link href="/#product" style={{ color: "#374151" }}>
-            Product
-          </Link>
-          <Link href="/dashboard" style={{ color: "#374151" }}>
-            Dashboard
-          </Link>
-          <Link href="/#pricing" style={{ color: "#374151" }}>
-            Pricing
-          </Link>
+          {centerLinks.map((l) => (
+            <Link key={l.label} href={l.href} style={{ color: "var(--body)" }}>
+              {l.label}
+            </Link>
+          ))}
         </nav>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <Link href="/login" style={{ fontSize: 14, fontWeight: 500, color: "#111" }}>
+          <Link href="/login" style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
             Sign in
           </Link>
           <Link href="/dashboard" className="btn-primary">
-            Sign up free
+            Try free
           </Link>
           <button
             className="topnav-menu-btn"
@@ -88,18 +97,22 @@ export default function TopNav() {
       {open && (
         <nav
           className="topnav-sheet"
-          style={{ padding: 16, background: "#fff", borderBottom: "1px solid #e5e7eb" }}
+          style={{
+            padding: 16,
+            background: "var(--canvas)",
+            borderBottom: "1px solid var(--hairline)",
+          }}
         >
-          <Link href="/#product" style={{ display: "block", padding: "8px 0", color: "#374151" }}>
-            Product
-          </Link>
-          <Link href="/dashboard" style={{ display: "block", padding: "8px 0", color: "#374151" }}>
-            Dashboard
-          </Link>
-          <Link href="/#pricing" style={{ display: "block", padding: "8px 0", color: "#374151" }}>
-            Pricing
-          </Link>
-          <Link href="/login" style={{ display: "block", padding: "8px 0", color: "#111" }}>
+          {centerLinks.map((l) => (
+            <Link
+              key={l.label}
+              href={l.href}
+              style={{ display: "block", padding: "8px 0", color: "var(--body)" }}
+            >
+              {l.label}
+            </Link>
+          ))}
+          <Link href="/login" style={{ display: "block", padding: "8px 0", color: "var(--ink)" }}>
             Sign in
           </Link>
         </nav>

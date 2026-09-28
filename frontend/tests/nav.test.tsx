@@ -9,7 +9,7 @@ import Reveal from "../components/Reveal";
 test("topnav renders wordmark and signup", () => {
   render(<TopNav />);
   expect(screen.getByText(/ReconHub/i)).toBeTruthy();
-  expect(screen.getByText(/Sign up free/i)).toBeTruthy();
+  expect(screen.getByText(/Try free/i)).toBeTruthy();
 });
 
 test("pill group marks active segment", () => {
@@ -23,6 +23,12 @@ test("pill group marks active segment", () => {
     />
   );
   expect(container.querySelector(".pill-active")?.textContent).toMatch(/Orders/);
+});
+
+test("topnav uses cream background", () => {
+  const { container } = render(<TopNav />);
+  const header = container.querySelector("header") as HTMLElement;
+  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/#fffaf0|cream|var\(--canvas\)/i);
 });
 
 test("reveal renders children and never hides content without an observer", () => {
