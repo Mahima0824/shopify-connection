@@ -42,7 +42,7 @@ export default function StatementsPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Settlement statements</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Settlement statements</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Upload courier / bank / gateway statements to match money against orders and shipments
         </p>
@@ -58,7 +58,7 @@ export default function StatementsPage() {
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>
-      {msg && <p role="status" style={{ color: "var(--brand-teal)", fontWeight: 600 }}>{msg}</p>}
+      {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
       {error && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
       <div className="content-card">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Uploads</h2>
@@ -67,7 +67,7 @@ export default function StatementsPage() {
         ) : (
           <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
             {items.map((u) => (
-              <li key={u.id} style={{ padding: "12px 16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+              <li key={u.id} style={{ padding: "12px 16px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
                 <Link href={`/statements/${u.id}`} style={{ fontWeight: 600 }}>
                   {u.provider || u.statement_type} · {u.row_count} rows · {u.status}
                 </Link>

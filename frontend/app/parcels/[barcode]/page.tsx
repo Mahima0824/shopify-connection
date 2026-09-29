@@ -78,14 +78,14 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
       
       <Link href="/orders" style={{ color: "var(--muted)", fontSize: "14px" }}>← Back to Orders Directory</Link>
       <div className="content-card">
-        <h1 className="display" style={{ fontSize: "28px", marginBottom: "8px" }}>Parcel {data.parcel.barcode_value}</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700, marginBottom: "8px" }}>Parcel {data.parcel.barcode_value}</h1>
         <p style={{ color: "var(--body)", fontSize: "14px" }}>Status: <span className="badge badge-neutral">{data.parcel.status}</span></p>
         {data.order && (
           <p style={{ color: "var(--body)", fontSize: "14px", marginTop: "8px" }}>Order: {data.order.shopify_order_name} — ₹{data.order.total_amount}</p>
         )}
         {data.customer && <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "8px" }}>Customer: {data.customer.name ?? data.customer.email}</p>}
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "8px" }}>Items: {data.item_count}</p>
-        <div style={{ background: "#fff", padding: "16px", marginTop: "16px", maxWidth: "380px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px", padding: "16px", marginTop: "16px", maxWidth: "380px" }}>
           <ParcelBarcode value={data.parcel.barcode_value} />
         </div>
         <button onClick={openLabel} className="btn-secondary" style={{ marginTop: "16px" }}>
@@ -116,7 +116,7 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
           ))}
         </div>
       )}
-      {msg && <p role="status" style={{ color: "var(--brand-teal)", fontWeight: 600 }}>{msg}</p>}
+      {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
     </main>
   );
 }

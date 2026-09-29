@@ -9,9 +9,9 @@ const stations = [
 
 export default function ScanHubPage() {
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
+    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Scan Hub</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Scan Hub</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Choose a warehouse scanning station. All stations support handheld scanners, phone cameras, and manual entry.
         </p>

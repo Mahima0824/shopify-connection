@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
+import EmptyState from "../../components/EmptyState";
 
 type Ship = { id: string; order_id: string; order_name?: string | null; carrier_code: string; awb_number: string; tracking_status: string; location?: string | null };
 
@@ -23,7 +24,7 @@ export default function ShipmentsPage() {
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "32px" }}>Shipments</h1>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Shipments</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Every parcel linked to a courier AWB with live tracking state
           </p>
@@ -42,11 +43,16 @@ export default function ShipmentsPage() {
         </select>
       </div>
       {error && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
-      <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {shown.length === 0 ? (
-          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
-            No shipments yet. Dispatch a parcel with a courier + AWB and it appears here.
-          </p>
+          <div style={{ padding: "24px" }}>
+            <EmptyState
+              title="No shipments yet"
+              body="Dispatch a parcel with a courier + AWB and it appears here."
+              primary={{ label: "Dispatch a parcel", href: "/scan/dispatch" }}
+              secondary={{ label: "Outstanding board", href: "/shipments/outstanding" }}
+            />
+          </div>
         ) : (
           <table className="modern-table" style={{ border: "none" }}>
             <thead><tr><th>AWB</th><th>Carrier</th><th>Status</th><th>Location</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>

@@ -70,14 +70,14 @@ export default function DispatchPage() {
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Warehouse Dispatch Station</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Warehouse Dispatch Station</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan physical parcel barcodes to record dispatch events and update Shopify order state
         </p>
       </div>
 
-      {/* Ochre scanner signature card */}
-      <div className="feature-card-ochre">
+      {/* Scanner card */}
+      <div className="content-card">
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
@@ -160,9 +160,9 @@ export default function DispatchPage() {
           ) : (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
               {hist.map((h, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px", fontSize: "14px" }}>
+                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "12px", fontSize: "14px" }}>
                   <span style={{ fontWeight: 600, color: "var(--ink)" }}>{h}</span>
-                  <span style={{ color: "var(--brand-teal)", fontSize: "12px", fontWeight: 600 }}>Dispatched</span>
+                  <span style={{ color: "var(--success)", fontSize: "12px", fontWeight: 600 }}>Dispatched</span>
                 </li>
               ))}
             </ul>

@@ -8,7 +8,7 @@ export default function TestSheetPage() {
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Barcode Test Sheet</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Barcode Test Sheet</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Print this sheet to verify handheld and phone-camera scanning before going live.
         </p>

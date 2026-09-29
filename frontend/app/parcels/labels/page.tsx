@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import EmptyState from "../../../components/EmptyState";
 import LabelPreview from "../../../components/barcode/LabelPreview";
 
 type ParcelRow = {
@@ -44,16 +45,30 @@ export default function LabelsPage() {
   const chosen = filtered.filter((p) => selected[p.id]);
 
   return (
-    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <style>{`@media print { .no-print { display: none !important; } .label { break-inside: avoid; page-break-inside: avoid; } }`}</style>
       <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <h1 className="display" style={{ fontSize: "28px" }}>Labels manager</h1>
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search barcode, parcel, order" aria-label="Search parcels" />
-      {err && <p role="alert">{err}</p>}
-      <button className="btn-secondary" onClick={() => window.print()} disabled={chosen.length === 0}>
-        Print Selected ({chosen.length})
-      </button>
-      <table>
+      <div>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Labels manager</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Select parcels, print labels, and audit reprints.</p>
+      </div>
+      <div className="content-card" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search barcode, parcel, order" aria-label="Search parcels" className="input-control" style={{ flex: 1 }} />
+        <button className="btn-primary" onClick={() => window.print()} disabled={chosen.length === 0}>
+          Print Selected ({chosen.length})
+        </button>
+      </div>
+      {err && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="No parcels to label"
+          body="Sync orders or import a CSV — parcels appear here automatically."
+          primary={{ label: "Sync orders", href: "/orders" }}
+          secondary={{ label: "Import CSV", href: "/import" }}
+        />
+      ) : (
+      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <table className="modern-table" style={{ border: "none" }}>
         <thead>
           <tr><th>Select</th><th>Parcel</th><th>Barcode</th><th>Status</th><th>Actions</th></tr>
         </thead>
@@ -61,14 +76,16 @@ export default function LabelsPage() {
           {filtered.map((p) => (
             <tr key={p.id}>
               <td><input type="checkbox" checked={!!selected[p.id]} onChange={() => toggle(p.id)} aria-label={`Select ${p.barcode_value}`} /></td>
-              <td>{p.parcel_code}</td>
+              <td style={{ fontWeight: 600 }}>{p.parcel_code}</td>
               <td>{p.barcode_value}</td>
-              <td>{p.status}</td>
-              <td><button onClick={() => reprint(p)}>Reprint</button></td>
+              <td><span className="badge-pill">{p.status}</span></td>
+              <td><button onClick={() => reprint(p)} className="btn-secondary">Reprint</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
+      )}
       </div>
       <div className="print-container">
         {chosen.map((p) => (

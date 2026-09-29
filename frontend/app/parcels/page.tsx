@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { API, api } from "../../lib/api";
+import EmptyState from "../../components/EmptyState";
 
 type ParcelRow = {
   id: string; parcel_code: string; barcode_value: string; status: string;
@@ -63,7 +64,7 @@ export default function ParcelsPage() {
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "32px" }}>Parcels</h1>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Parcels</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Every order's physical identity — one barcode per parcel, stable for life
           </p>
@@ -80,12 +81,17 @@ export default function ParcelsPage() {
         <span style={{ fontSize: "13px", color: "var(--muted)" }}>{items.length} parcel{items.length === 1 ? "" : "s"}</span>
       </div>
       {err && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
-      {notice && <p role="status" style={{ color: "var(--brand-teal)", fontWeight: 600 }}>{notice}</p>}
-      <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      {notice && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{notice}</p>}
+      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {items.length === 0 ? (
-          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
-            No parcels yet. Sync orders or import a CSV — parcels are created automatically.
-          </p>
+          <div style={{ padding: "24px" }}>
+            <EmptyState
+              title="No parcels yet"
+              body="Sync orders or import a CSV — parcels are created automatically."
+              primary={{ label: "Sync orders", href: "/orders" }}
+              secondary={{ label: "Import CSV", href: "/import" }}
+            />
+          </div>
         ) : (
           <table className="modern-table" style={{ border: "none" }}>
             <thead>

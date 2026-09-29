@@ -62,11 +62,11 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         <Link href="/orders" style={{ color: "var(--muted)", fontSize: "14px", display: "inline-block", marginBottom: "8px" }}>
           ← Back to Orders Directory
         </Link>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h1 className="display" style={{ fontSize: "32px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>
             Order {order.shopify_order_name || order.internal_order_number || order.id}
           </h1>
-          <span style={{ fontSize: "24px", fontWeight: 800, color: "var(--ink)" }}>
+          <span className="tnum" style={{ fontSize: "24px", fontWeight: 800, color: "var(--ink)" }}>
             ₹{Number(order.total_amount || 0).toLocaleString()}
           </span>
         </div>
@@ -90,16 +90,16 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
       {/* Reconciliation Engine Alert Block */}
       {recon && (
-        <div className="content-card" style={{ borderLeft: recon.status === "RECONCILED" ? "4px solid var(--brand-mint)" : "4px solid var(--brand-coral)" }}>
+        <div className="content-card" style={{ borderLeft: recon.status === "RECONCILED" ? "4px solid var(--success)" : "4px solid var(--error)" }}>
           <h2 className="display" style={{ fontSize: "18px", marginBottom: "12px" }}>Reconciliation Engine Status</h2>
           {recon.status === "RECONCILED" ? (
-            <div style={{ color: "var(--brand-teal)", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ color: "var(--success)", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
               <IconSpark size={16} /> <span>Fully Reconciled — Operational state agrees across Shopify, physical scans, payments, and returns.</span>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {(recon.issues ?? []).map((issue) => (
-                <div key={issue.code} style={{ background: "var(--soft)", padding: "12px", borderRadius: "12px", border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: "12px" }}>
+                <div key={issue.code} style={{ background: "var(--surface)", padding: "12px", borderRadius: "12px", border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: "12px" }}>
                   <SeverityBadge severity={issue.severity} />
                   <div>
                     <span style={{ fontWeight: 600, color: "var(--ink)" }}>{issue.code}</span>

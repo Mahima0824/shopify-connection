@@ -74,14 +74,14 @@ export default function ReturnPage() {
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>Returns & RTO Station</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Returns & RTO Station</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan returned packages to log customer returns, inspect item condition, and auto-flag refunds
         </p>
       </div>
 
-      {/* Lavender lookup signature card */}
-      <div className="feature-card-lavender">
+      {/* Lookup card */}
+      <div className="content-card">
         <form onSubmit={lookup} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
             SCAN RETURNED BARCODE
@@ -135,7 +135,7 @@ export default function ReturnPage() {
             Order Inspection: <span style={{ color: "var(--ink)" }}>{info.order?.shopify_order_name || "Order"}</span>
           </h2>
 
-          <div className="cols-2" style={{ marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <div className="cols-2" style={{ marginBottom: "24px", padding: "16px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
             <div>
               <span style={{ fontSize: "12px", color: "var(--muted)" }}>Total Order Value</span>
               <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--ink)" }}>₹{info.order?.total_amount}</div>

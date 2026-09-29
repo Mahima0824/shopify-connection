@@ -45,16 +45,17 @@ export default function LoginPage() {
       background: "var(--canvas)",
       padding: "20px"
     }}>
-      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "24px" }}>
+      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
 
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <div style={{
-            width: "56px",
-            height: "56px",
-            borderRadius: "50%",
-            background: "var(--brand-ochre)",
-            color: "var(--ink)",
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            background: "var(--neutral-bg)",
+            border: "1px solid var(--hairline)",
+            color: "var(--muted)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

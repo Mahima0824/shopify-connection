@@ -35,7 +35,7 @@ export default function ShipmentDetailPage({ params }: { params: { id: string } 
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>{ship.carrier_code} · {ship.awb_number}</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>{ship.carrier_code} · {ship.awb_number}</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           <span className="badge-pill">{ship.tracking_status}</span>
           <span style={{ marginLeft: "12px" }}>{ship.current_location ?? "No location yet"}</span>

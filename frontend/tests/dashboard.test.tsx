@@ -13,9 +13,9 @@ test("MetricCard renders title and value correctly", () => {
   expect(screen.getByText("₹10,000")).toBeDefined();
 });
 
-test("dashboard uses Clay peach signature band without dark surfaces", async () => {
+test("dashboard empty state offers sign-in and sync actions", async () => {
   const { container } = render(<DashboardPage />);
-  await waitFor(() => screen.getByText(/Dashboard Unavailable/i));
-  expect(container.querySelector(".feature-card-peach")).toBeTruthy();
-  expect(container.innerHTML).not.toMatch(/#101010|#0f172a/);
+  await waitFor(() => screen.getByText(/Dashboard unavailable/i));
+  expect(container.querySelector('a[href="/login"]')?.textContent).toMatch(/Sign in/i);
+  expect(container.querySelector('a[href="/orders"]')?.textContent).toMatch(/Sync/i);
 });

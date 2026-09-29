@@ -68,14 +68,14 @@ export default function RtoPage() {
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "32px" }}>RTO Station</h1>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>RTO Station</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan courier-returned parcels to record RTO events and update order state
         </p>
       </div>
 
       {/* Lookup card */}
-      <div className="feature-card-lavender">
+      <div className="content-card">
         <form onSubmit={lookup} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
             SCAN RTO BARCODE

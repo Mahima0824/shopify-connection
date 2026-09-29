@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
 import OrderTable from "../../components/OrderTable";
+import EmptyState from "../../components/EmptyState";
 import { IconAlert, IconRefund } from "../../components/icons";
 
 export default function OrdersPage() {
@@ -54,11 +55,10 @@ export default function OrdersPage() {
 
      
 
-      {/* Ochre sync signature band */}
-      <div className="feature-card-ochre" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "32px" }}>Orders Directory</h1>
-          <p style={{ color: "var(--ink)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Orders Directory</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             View and search all synchronized commerce orders
           </p>
         </div>
@@ -100,10 +100,19 @@ export default function OrdersPage() {
       )}
 
       {/* Main Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             Loading orders directory...
+          </div>
+        ) : orders.length === 0 ? (
+          <div style={{ padding: "24px" }}>
+            <EmptyState
+              title="No orders yet"
+              body="Sync Shopify orders or import a CSV to populate the directory."
+              primary={{ label: "Import CSV", href: "/import" }}
+              secondary={{ label: "Scan parcels", href: "/scan/dispatch" }}
+            />
           </div>
         ) : (
           <OrderTable orders={orders} />

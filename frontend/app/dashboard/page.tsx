@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import MetricCard from "../../components/MetricCard";
+import EmptyState from "../../components/EmptyState";
 import {
   IconAlert,
   IconBox,
@@ -61,16 +62,19 @@ export default function DashboardPage() {
     return (
       <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
        
-        <div className="feature-card-peach">
-          <h1 className="display" style={{ fontSize: "32px" }}>Executive Dashboard</h1>
-          <p style={{ color: "var(--ink)", fontSize: "14px", marginTop: "4px" }}>
+        <div>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time Operational Ledger & Financial Reconciliation Metrics
           </p>
         </div>
-        <div className="content-card" style={{ textAlign: "center", padding: "48px" }}>
-          <h3 className="display" style={{ fontSize: "20px" }}>Dashboard Unavailable</h3>
-          <p style={{ color: "var(--muted)", marginTop: "8px" }}>Please log in or sync Shopify orders to populate metrics.</p>
-        </div>
+        <EmptyState
+          icon={<IconAlert size={24} />}
+          title="Dashboard unavailable"
+          body="Please sign in or sync Shopify orders to populate metrics."
+          primary={{ label: "Sign in", href: "/login" }}
+          secondary={{ label: "Sync orders", href: "/orders" }}
+        />
       </div>
     );
   }
@@ -82,11 +86,10 @@ export default function DashboardPage() {
 
      
 
-      {/* Peach signature band */}
-      <div className="feature-card-peach" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "32px" }}>Executive Dashboard</h1>
-          <p style={{ color: "var(--ink)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time Operational Ledger & Financial Reconciliation Metrics
           </p>
         </div>

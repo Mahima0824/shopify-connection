@@ -29,14 +29,20 @@ export default function ImportPage() {
     }
   }
   return (
-    <main>
-      <h1>Import Shopify orders CSV</h1>
-      <p>Shopify admin → Orders → Export → upload the .csv here. No store connection needed.</p>
-      <input type="file" accept=".csv" aria-label="CSV file"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      <button onClick={upload} disabled={!file || busy}>{busy ? "Importing…" : "Upload & import"}</button>
-      {error && <p role="alert">{error}</p>}
-      {summary && (<><ImportResult summary={summary} /><Link href="/orders">View orders</Link></>)}
+    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+      <div>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Import Shopify orders CSV</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Shopify admin → Orders → Export → upload the .csv here. No store connection needed.</p>
+      </div>
+      <div className="content-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <input type="file" accept=".csv" aria-label="CSV file"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <div>
+          <button onClick={upload} disabled={!file || busy} className="btn-primary">{busy ? "Importing…" : "Upload & import"}</button>
+        </div>
+        {error && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+        {summary && (<><ImportResult summary={summary} /><Link href="/orders">View orders</Link></>)}
+      </div>
     </main>
   );
 }

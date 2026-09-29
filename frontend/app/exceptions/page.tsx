@@ -68,10 +68,10 @@ export default function ExceptionsPage() {
 
      
 
-      {/* Pink-tint signature band */}
-      <div className="feature-card-pink">
-        <h1 className="display" style={{ fontSize: "32px", color: "var(--on-primary)" }}>Mismatch Exceptions Queue</h1>
-        <p style={{ background: "var(--on-primary)", color: "var(--ink)", fontSize: "14px", marginTop: "12px", borderRadius: "12px", padding: "8px 12px", display: "inline-block" }}>
+      {/* Header */}
+      <div>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Mismatch Exceptions Queue</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
         </p>
       </div>
@@ -140,7 +140,7 @@ export default function ExceptionsPage() {
       )}
 
       {/* Main Issues Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
             Loading exception queue...
@@ -205,7 +205,7 @@ export default function ExceptionsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(250,245,232,.85)",
+            background: "rgba(15,23,42,0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -213,13 +213,13 @@ export default function ExceptionsPage() {
             padding: "20px"
           }}
         >
-          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "24px" }}>
+          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
             <h2 className="display" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
             <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "20px" }}>
               {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--ink)" }}>{resolving.issue_code}</strong>
             </p>
 
-            <div style={{ background: "var(--soft)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--hairline)", color: "var(--body)" }}>
+            <div style={{ background: "var(--surface)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--hairline)", color: "var(--body)" }}>
               {resolving.issue_message}
             </div>
 

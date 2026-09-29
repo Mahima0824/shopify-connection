@@ -76,17 +76,17 @@ export default function TallySettingsPage() {
 
      
 
-      {/* Teal signature band */}
-      <div className="feature-card-teal">
-        <h1 className="display" style={{ fontSize: "32px", color: "var(--on-primary)" }}>Tally ERP / Prime Integration</h1>
-        <p style={{ background: "var(--on-primary)", color: "var(--ink)", fontSize: "14px", marginTop: "12px", borderRadius: "12px", padding: "8px 12px", display: "inline-block" }}>
+      {/* Header */}
+      <div>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Tally ERP / Prime Integration</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Configure company accounting vouchers, payment gateways, and tax ledgers for idempotent Tally export
         </p>
       </div>
 
       {/* Status Notification */}
       {status && (
-        <div role="status" style={{ padding: "14px 20px", background: "var(--brand-mint)", border: "1px solid var(--hairline)", color: "var(--ink)", borderRadius: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="status" style={{ padding: "14px 20px", background: "var(--success-bg)", border: "1px solid var(--hairline)", color: "var(--ink)", borderRadius: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
           <IconSpark size={16} /> {status}
         </div>
       )}
@@ -193,7 +193,7 @@ export default function TallySettingsPage() {
       </div>
 
       {/* Export Batches History */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--hairline)" }}>
           <h2 className="display" style={{ fontSize: "18px", margin: 0 }}>Export Batch History</h2>
         </div>

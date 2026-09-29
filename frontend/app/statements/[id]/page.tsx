@@ -47,7 +47,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "32px" }}>Statement results</h1>
+          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Statement results</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Dry-run first, then process and clear the unmatched queue</p>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
@@ -64,7 +64,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
           ))}
         </div>
       )}
-      <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {rows.length === 0 ? (
           <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>No rows in this statement.</p>
         ) : (
@@ -72,7 +72,7 @@ export default function StatementDetailPage({ params }: { params: { id: string }
             <thead><tr><th>Row</th><th>AWB</th><th>Net</th><th>Status</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id}><td>{r.row_number}</td><td style={{ fontWeight: 600 }}>{r.awb_number ?? "-"}</td><td>₹{Number(r.net_amount || 0).toLocaleString()}</td>
+                <tr key={r.id}><td>{r.row_number}</td><td style={{ fontWeight: 600 }}>{r.awb_number ?? "-"}</td><td className="tnum">₹{Number(r.net_amount || 0).toLocaleString()}</td>
                   <td><span className="badge-pill">{r.reconciliation_status}</span></td>
                   <td style={{ textAlign: "right" }}>{r.reconciliation_status === "UNMATCHED" && (
                     <span style={{ display: "inline-flex", gap: "8px" }}>

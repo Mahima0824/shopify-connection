@@ -19,14 +19,18 @@ export default function CarriersPage() {
     }
   }
   return (
-    <main>
-      <h1>Carrier connections</h1>
-      <p>Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.</p>
-      <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Carrier">
-        {KNOWN.map((c) => <option key={c}>{c}</option>)}
-      </select>
-      <button onClick={connect}>Connect</button>
-      {msg && <p role="status">{msg}</p>}
+    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
+      <div>
+        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Carrier connections</h1>
+        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.</p>
+      </div>
+      <div className="content-card" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Carrier" className="input-control" style={{ width: "240px" }}>
+          {KNOWN.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        <button onClick={connect} className="btn-primary">Connect</button>
+      </div>
+      {msg && <p role="status" className="content-card" style={{ fontSize: "14px" }}>{msg}</p>}
     </main>
   );
 }
