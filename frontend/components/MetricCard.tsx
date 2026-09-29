@@ -33,7 +33,7 @@ export default function MetricCard({
               <polyline
                 points={coords.join(" ")}
                 fill="none"
-                stroke="var(--ink)"
+                stroke="var(--accent)"
                 strokeWidth="1.5"
               />
             </svg>
@@ -52,7 +52,7 @@ export default function MetricCard({
             width: "36px",
             height: "36px",
             borderRadius: "50%",
-            background: "var(--soft)",
+            background: "var(--neutral-bg)",
             border: "1px solid var(--hairline)",
             display: "flex",
             alignItems: "center",
@@ -63,7 +63,7 @@ export default function MetricCard({
           </div>
         )}
       </div>
-      <div className="display" style={{ fontSize: "28px", lineHeight: 1.1 }}>
+      <div className="display tnum" style={{ fontSize: "28px", fontWeight: 600, lineHeight: 1.1 }}>
         {value}
       </div>
       {(subtitle || trend) && (

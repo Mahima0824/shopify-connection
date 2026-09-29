@@ -43,6 +43,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 .modern-table{width:100%;border-collapse:separate;border-spacing:0;}
 .modern-table thead th{position:sticky;top:64px;background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:14px 16px;text-align:left;border-bottom:1px solid var(--hairline);}
 .modern-table td{padding:16px;border-bottom:1px solid var(--hairline);font-size:14px;color:var(--ink);}
+.modern-table tbody tr:hover{background:var(--surface);}
 .app-container{display:flex;min-height:100vh;background:var(--canvas);}
 .sidebar{width:260px;background:var(--canvas);border-right:1px solid var(--hairline);display:flex;flex-direction:column;padding:24px 16px;}
 .main-content{flex:1;padding:32px;overflow-y:auto;background:var(--canvas);}

@@ -3,13 +3,13 @@ import React from "react";
 export type TNode = { at: string | null; kind: string; label: string; detail: string | null };
 
 const KIND_DOTS: Record<string, string> = {
-  CREATED: "var(--brand-lavender)",
-  PAYMENT: "var(--brand-mint)",
-  PACKED: "var(--brand-lavender)",
-  DISPATCHED: "var(--brand-mint)",
-  RETURN: "var(--brand-peach)",
-  REFUND: "var(--brand-coral)",
-  CANCELLED: "var(--brand-coral)",
+  CREATED: "var(--accent)",
+  PAYMENT: "var(--success)",
+  PACKED: "var(--accent)",
+  DISPATCHED: "var(--success)",
+  RETURN: "var(--warning)",
+  REFUND: "var(--error)",
+  CANCELLED: "var(--error)",
   PAYMENT_PENDING: "var(--muted)",
   AUDIT: "var(--muted)",
 };
@@ -43,12 +43,12 @@ export default function Timeline({ items }: { items: TNode[] }) {
           top: "8px",
           bottom: "8px",
           width: "2px",
-          background: "var(--card)",
+          background: "var(--hairline)",
         }}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {items.map((n, ix) => {
-          const dot = KIND_DOTS[n.kind] || "var(--brand-lavender)";
+          const dot = KIND_DOTS[n.kind] || "var(--accent)";
           return (
             <div key={ix} style={{ display: "flex", gap: "16px", alignItems: "flex-start", position: "relative" }}>
               <div

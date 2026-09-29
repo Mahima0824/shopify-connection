@@ -2,7 +2,7 @@ import React from "react";
 import { IconAlert, IconSpark } from "./icons";
 
 export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "warn"; text: string }) {
-  const statusColor = kind === "ok" ? "var(--brand-teal)" : kind === "warn" ? "var(--brand-ochre)" : "var(--brand-coral)";
+  const statusColor = kind === "ok" ? "var(--success)" : kind === "warn" ? "var(--warning)" : "var(--error)";
 
   return (
     <div

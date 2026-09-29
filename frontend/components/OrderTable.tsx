@@ -2,16 +2,16 @@ import React from "react";
 import Link from "next/link";
 
 const FINANCIAL_DOTS: Record<string, string> = {
-  PAID: "var(--brand-mint)",
-  PENDING: "var(--brand-ochre)",
-  REFUNDED: "var(--brand-coral)",
+  PAID: "var(--success)",
+  PENDING: "var(--warning)",
+  REFUNDED: "var(--error)",
 };
 
 const OPERATIONAL_DOTS: Record<string, string> = {
-  DISPATCHED: "var(--brand-mint)",
-  PACKED: "var(--brand-lavender)",
-  RETURN_RECEIVED: "var(--brand-peach)",
-  RTO: "var(--brand-coral)",
+  DISPATCHED: "var(--success)",
+  PACKED: "var(--accent)",
+  RETURN_RECEIVED: "var(--warning)",
+  RTO: "var(--error)",
 };
 
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
@@ -37,7 +37,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
   }
 
   return (
-    <div style={{ overflowX: "auto", background: "var(--on-primary)", border: "1px solid var(--hairline)", borderRadius: "16px" }}>
+    <div style={{ overflowX: "auto", background: "#ffffff", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
       <table className="modern-table" style={{ border: "none" }}>
         <thead>
           <tr>
@@ -63,7 +63,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
               <td style={{ borderBottom: "1px solid var(--hairline)" }}>
                 <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
               </td>
-              <td style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
+              <td className="tnum" style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
                 ₹{Number(o.total_amount || 0).toLocaleString()}
               </td>
               <td style={{ color: "var(--muted)", fontSize: "13px", borderBottom: "1px solid var(--hairline)" }}>
