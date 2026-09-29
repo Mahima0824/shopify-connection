@@ -43,6 +43,8 @@ def record_return(db, business_id: str, barcode: str, user_id: str, return_type:
             Parcel.barcode_value == barcode).with_for_update()).scalar_one_or_none()
         if p is None:
             raise ReturnError("INVALID_BARCODE", f"No parcel found for barcode {barcode}.", 404)
+        if (p.status or "") == "CLOSED":
+            raise ReturnError("PARCEL_CLOSED", "Parcel lifecycle is closed; no further returns accepted.", 400)
         o = db.query(Order).filter_by(id=p.order_id).first()
         if o is None:
             raise ReturnError("INVALID_BARCODE", "Parcel has no order.", 404)

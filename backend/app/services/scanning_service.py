@@ -29,6 +29,8 @@ def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=
             raise ScanError("INVALID_BARCODE", "Parcel has no order.", 404)
         if o.cancelled_at is not None:
             raise ScanError("ORDER_CANCELLED", f"Order {o.shopify_order_name} is cancelled. Do not dispatch.", 400)
+        if (p.status or "CREATED") in ("CLOSED", "RETURN_RECEIVED", "RTO", "DELIVERED"):
+            raise ScanError("PARCEL_CLOSED", f"Parcel is {p.status}; closed or returned parcels cannot be dispatched.", 400)
         prior = db.query(ScanEvent).filter_by(parcel_id=p.id, event_type="DISPATCHED").count()
         if prior > 0:
             raise ScanError("PARCEL_ALREADY_DISPATCHED", "This parcel was already dispatched.", 400)

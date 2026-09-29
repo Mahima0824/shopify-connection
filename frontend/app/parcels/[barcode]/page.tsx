@@ -15,6 +15,8 @@ type ParcelData = {
 export default function ParcelPage({ params }: { params: { barcode: string } }) {
   const [data, setData] = useState<ParcelData | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function openLabel() {
     if (!data) return;
@@ -45,9 +47,29 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
   useEffect(() => {
     const token = localStorage.getItem("token") ?? undefined;
     api<ParcelData>(`/api/v1/parcels/${params.barcode}`, {}, token)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        return api<{ items: any[] }>(`/api/v1/returns?order_id=${d.order?.id ?? ""}`, {}, token)
+          .then((r) => ({ items: (r.items ?? []).filter((x: any) => x.parcel_id === d.parcel.id) }))
+          .catch(() => ({ items: [] as any[] }));
+      })
+      .then((r) => setReturns(r.items))
       .catch((e: Error) => setErr(e.message));
   }, [params.barcode]);
+
+  async function inspectReturn(rid: string) {
+    const token = localStorage.getItem("token") ?? undefined;
+    await api(`/api/v1/returns/${rid}/inspect`, { method: "POST", body: JSON.stringify({}) }, token);
+    window.location.reload();
+  }
+
+  async function closeParcel() {
+    const reason = window.prompt("Close reason (required):");
+    if (!reason || !reason.trim() || !data) return;
+    const token = localStorage.getItem("token") ?? undefined;
+    await api(`/api/v1/parcels/${data.parcel.id}/close`, { method: "POST", body: JSON.stringify({ reason }) }, token);
+    window.location.reload();
+  }
 
   if (err) return <main className="container" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--canvas)" }}><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
   if (!data) return <main className="container" style={{ background: "var(--canvas)" }}><p style={{ color: "var(--muted)" }}>Loading…</p></main>;
@@ -75,7 +97,26 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
         <p style={{ color: "var(--muted)", fontSize: "13px", marginTop: "12px" }}>
           Scan this barcode with any USB scanner straight into the dispatch or return pages — no app or pairing needed.
         </p>
+        {data.parcel.status !== "CLOSED" && (
+          <button onClick={closeParcel} className="btn-secondary" style={{ marginTop: "12px" }}>
+            Close parcel lifecycle
+          </button>
+        )}
       </div>
+      {returns.length > 0 && (
+        <div className="content-card">
+          <h2 className="display" style={{ fontSize: "20px", marginBottom: "12px" }}>Returns on this parcel</h2>
+          {returns.map((r: any) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+              <span style={{ fontSize: "14px" }}>{r.return_type} · {r.status}</span>
+              {r.status === "RECEIVED" && (
+                <button onClick={() => inspectReturn(r.id)} className="btn-secondary">Mark inspected</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <p role="status" style={{ color: "var(--brand-teal)", fontWeight: 600 }}>{msg}</p>}
     </main>
   );
 }

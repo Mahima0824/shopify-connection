@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
@@ -39,6 +40,34 @@ def reprint(parcel_id: str, db: Session = Depends(get_db), u: dict = Depends(get
               {"barcode": p.barcode_value}, {"barcode": p.barcode_value, "reprint": True})
     db.commit()
     return {"success": True, "data": {"label_url": f"/api/v1/parcels/{p.id}/label", "reprint": True}}
+
+
+class CloseIn(BaseModel):
+    reason: str
+
+
+@router.post("/{parcel_id}/close")
+def close_parcel(parcel_id: str, body: CloseIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.models.parcel import Parcel
+    from app.services.audit_service import log_audit
+    if u.get("role") != "ADMIN":
+        raise HTTPException(403, "Admin role required")
+    if not (body.reason or "").strip():
+        raise HTTPException(400, "Reason is required")
+    bid = u.get("business_id")
+    p = db.query(Parcel).filter_by(id=parcel_id, business_id=bid).first()
+    if p is None:
+        p = db.query(Parcel).filter_by(barcode_value=parcel_id, business_id=bid).first()
+    if p is None:
+        raise HTTPException(404, "Parcel not found")
+    if p.status == "CLOSED":
+        raise HTTPException(400, "Parcel already closed")
+    old = p.status
+    p.status = "CLOSED"
+    log_audit(db, bid, u.get("user_id"), "parcel", p.id, "PARCEL_CLOSED",
+              {"status": old}, {"status": "CLOSED", "reason": body.reason.strip()})
+    db.commit()
+    return {"success": True, "data": {"id": p.id, "status": "CLOSED"}}
 
 def _pdict(p) -> dict:
     return {"id": p.id, "business_id": p.business_id, "order_id": p.order_id,
