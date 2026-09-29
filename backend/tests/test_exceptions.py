@@ -116,7 +116,7 @@ def test_resolve_requires_reason_and_role(clients):
     assert r.status_code == 200, r.text
     items = r.json()["data"]["items"]
     assert len(items) >= 1
-    issue = next(x for x in items if x["order_id"] == order_id)
+    issue = next(x for x in items if x["order_id"] == order_id and x["issue_code"] == "CANCELLED_BUT_DISPATCHED")
     assert issue["issue_code"] == "CANCELLED_BUT_DISPATCHED"
     issue_id = issue["id"]
 
