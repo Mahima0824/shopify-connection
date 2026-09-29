@@ -37,6 +37,18 @@ export default function ParcelsPage() {
 
   useEffect(() => { load(""); }, []);
 
+  async function openLabel(id: string) {
+    const token = localStorage.getItem("token") ?? "";
+    const r = await fetch(`${API}/api/v1/parcels/${id}/label`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      setErr("Label failed to load — please log in again.");
+      return;
+    }
+    window.open(URL.createObjectURL(await r.blob()), "_blank", "noopener");
+  }
+
   async function reprint(id: string, code: string) {
     try {
       await api(`/api/v1/parcels/${id}/reprint`, { method: "POST" }, localStorage.getItem("token") ?? undefined);
@@ -91,7 +103,7 @@ export default function ParcelsPage() {
                   <td style={{ fontSize: "13px", color: "var(--muted)" }}>{fmtDate(p.created_at)}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <Link href={`/parcels/${p.barcode_value}`} className="btn-secondary">View</Link>{" "}
-                    <a href={`${API}/api/v1/parcels/${p.id}/label`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ textDecoration: "none" }}>Print</a>{" "}
+                    <button onClick={() => openLabel(p.id)} className="btn-secondary">Print</button>{" "}
                     <button onClick={() => reprint(p.id, p.parcel_code)} className="btn-secondary">Reprint</button>
                   </td>
                 </tr>
