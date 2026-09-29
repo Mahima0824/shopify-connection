@@ -14,7 +14,7 @@ export default function ParcelBarcode({ value, scale = 3 }: { value: string; sca
     setErr(null);
     try {
       if (ref.current) {
-        bwipjs.toCanvas(ref.current, { bcid: "code128", text: value, scale, height: 12, includetext: true, textxalign: "center" });
+        bwipjs.toCanvas(ref.current, { bcid: "code128", text: value, scale, height: 14, includetext: false });
       }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Render failed");
