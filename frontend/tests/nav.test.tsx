@@ -53,3 +53,21 @@ test("reveal renders children and never hides content without an observer", () =
     expect(el?.classList.contains("is-visible")).toBe(true);
   }
 });
+
+test("reveal force-shows content even if observer never fires", async () => {
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  try {
+    const { container } = render(<Reveal delay={120}>hello</Reveal>);
+    await new Promise((r) => setTimeout(r, 1300));
+    expect(container.querySelector(".reveal")?.classList.contains("is-visible")).toBe(true);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

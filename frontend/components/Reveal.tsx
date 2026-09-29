@@ -19,18 +19,27 @@ export default function Reveal({
       el.classList.add("is-visible");
       return;
     }
+    let fallback: ReturnType<typeof setTimeout>;
     const io = new IntersectionObserver(
       (es) =>
         es.forEach((e) => {
           if (e.isIntersecting) {
             el.classList.add("is-visible");
+            clearTimeout(fallback);
             io.disconnect();
           }
         }),
       { threshold: 0.15 }
     );
     io.observe(el);
-    return () => io.disconnect();
+    fallback = setTimeout(() => {
+      el.classList.add("is-visible");
+      io.disconnect();
+    }, 1200);
+    return () => {
+      clearTimeout(fallback);
+      io.disconnect();
+    };
   }, []);
   return (
     <div ref={ref} className="reveal" style={{ animationDelay: `${delay}ms` }}>
