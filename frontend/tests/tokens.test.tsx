@@ -1,16 +1,15 @@
 import fs from "fs";
 import path from "path";
 import { expect, test } from "vitest";
-
 const css = fs.readFileSync(path.join(__dirname, "../app/globals.css"), "utf8");
-
-test("Clay canvas + primary tokens exist", () => {
-  expect(css).toMatch(/--canvas\s*:\s*#fffaf0/i);
-  expect(css).toMatch(/--primary\s*:\s*#0a0a0a/);
-  expect(css).toMatch(/--brand-pink\s*:\s*#ff4d8b/i);
-  expect(css).toMatch(/--brand-teal\s*:\s*#1a3a3a/);
+test("enterprise canvas + ink + accent tokens exist", () => {
+  expect(css).toMatch(/--canvas\s*:\s*#ffffff/i);
+  expect(css).toMatch(/--ink\s*:\s*#0f172a/i);
+  expect(css).toMatch(/--accent\s*:\s*#0f7665/i);
 });
-
-test("no dark footer token usage remains", () => {
-  expect(css).not.toMatch(/#101010/);
+test("no Clay palette or dark footer remnants", () => {
+  expect(css).not.toMatch(/#fffaf0|#ff4d8b|#1a3a3a|#101010/i);
+});
+test("tabular numerals utility exists", () => {
+  expect(css).toMatch(/\.tnum/);
 });
