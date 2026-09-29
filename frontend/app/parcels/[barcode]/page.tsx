@@ -16,6 +16,16 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
   const [data, setData] = useState<ParcelData | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  async function openLabel() {
+    if (!data) return;
+    const token = localStorage.getItem("token") ?? "";
+    const r = await fetch(`${API}/api/v1/parcels/${data.parcel.id}/label`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) throw new Error("Label failed to load");
+    const blob = await r.blob();
+    window.open(URL.createObjectURL(blob), "_blank", "noopener");
+  }
   async function downloadPng() {
     if (!data) return;
     const token = localStorage.getItem("token") ?? "";
@@ -56,9 +66,9 @@ export default function ParcelPage({ params }: { params: { barcode: string } }) 
         <div style={{ background: "#fff", padding: "16px", marginTop: "16px", maxWidth: "380px" }}>
           <ParcelBarcode value={data.parcel.barcode_value} />
         </div>
-        <a href={`${API}/api/v1/parcels/${data.parcel.id}/label`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-block", marginTop: "16px", textDecoration: "none" }}>
+        <button onClick={openLabel} className="btn-secondary" style={{ marginTop: "16px" }}>
           Print label
-        </a>
+        </button>
         <button onClick={downloadPng} className="btn-secondary" style={{ marginTop: "16px", marginLeft: "12px" }}>
           Download barcode PNG
         </button>
