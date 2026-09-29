@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-import ClayScene from "./ClayScene";
 
 const cols: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -22,6 +21,14 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
     ],
   },
   {
+    title: "Finance",
+    links: [
+      { label: "Statements", href: "/statements" },
+      { label: "Reports", href: "/reports/monthly" },
+      { label: "Tally settings", href: "/settings/tally" },
+    ],
+  },
+  {
     title: "Company",
     links: [
       { label: "Pricing", href: "/#pricing" },
@@ -33,25 +40,10 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
 
 export default function Footer() {
   return (
-    <footer style={{ background: "var(--soft)", padding: "80px 0 0" }}>
-      <div className="container footer-grid" style={{ display: "grid", gap: 32 }}>
+    <footer style={{ background: "var(--card)", borderTop: "1px solid var(--hairline)", padding: "64px 0 0" }}>
+      <div className="container footer-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 32 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)", fontWeight: 600 }}>
-            <span
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                background: "var(--brand-ochre)",
-                color: "var(--ink)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-              }}
-            >
-              R
-            </span>
             ReconHub
           </div>
           <p style={{ color: "var(--body)", fontSize: 14, marginTop: 12, maxWidth: 280 }}>
@@ -69,8 +61,9 @@ export default function Footer() {
           </div>
         ))}
       </div>
-      <div className="container" style={{ marginTop: 48 }}>
-        <ClayScene variant="horizon" />
+      <div className="container" style={{ marginTop: 48, borderTop: "1px solid var(--hairline)", paddingTop: 20, paddingBottom: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <span style={{ color: "var(--muted)", fontSize: 13 }}>© 2026 ReconHub. All rights reserved.</span>
+        <span style={{ color: "var(--muted)", fontSize: 13 }}>Enterprise reconciliation for Shopify ops.</span>
       </div>
     </footer>
   );
