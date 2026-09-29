@@ -7,6 +7,11 @@ export const metadata = {
   description: "Operational reconciliation engine connecting Shopify, warehouse scans, returns, and Tally ERP/Prime.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">

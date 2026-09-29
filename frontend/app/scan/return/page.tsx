@@ -135,7 +135,7 @@ export default function ReturnPage() {
             Order Inspection: <span style={{ color: "var(--ink)" }}>{info.order?.shopify_order_name || "Order"}</span>
           </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+          <div className="cols-2" style={{ marginBottom: "24px", padding: "16px", background: "var(--soft)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
             <div>
               <span style={{ fontSize: "12px", color: "var(--muted)" }}>Total Order Value</span>
               <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--ink)" }}>₹{info.order?.total_amount}</div>

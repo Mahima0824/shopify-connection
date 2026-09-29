@@ -130,7 +130,7 @@ export default function DispatchPage() {
       </div>
 
       {/* Grid: Last Scanned Card & History */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+      <div className="cols-2" style={{ gap: "24px" }}>
 
         {/* Last Dispatched Card */}
         <div className="content-card">

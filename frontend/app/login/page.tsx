@@ -37,8 +37,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: "100vh",
+    <div className="fullscreen-center" style={{
       width: "100%",
       display: "flex",
       alignItems: "center",

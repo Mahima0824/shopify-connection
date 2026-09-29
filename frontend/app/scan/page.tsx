@@ -16,7 +16,7 @@ export default function ScanHubPage() {
           Choose a warehouse scanning station. All stations support handheld scanners, phone cameras, and manual entry.
         </p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+      <div className="cols-3">
         {stations.map((s) => (
           <Link key={s.href} href={s.href} style={{ textDecoration: "none" }}>
             <div className="content-card" style={{ padding: "32px 24px", textAlign: "center" }}>
