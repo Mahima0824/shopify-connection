@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { API, api } from "../../../lib/api";
 import { IconBox, IconReceipt, IconSpark } from "../../../components/icons";
 
 export default function TallySettingsPage() {
@@ -43,7 +43,7 @@ export default function TallySettingsPage() {
     setExporting(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/v1/tally/export", {
+      const res = await fetch(`${API}/api/v1/tally/export`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -95,8 +95,8 @@ export default function TallySettingsPage() {
       <div className="content-card">
 
         <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Voucher Types Configuration</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "32px" }}>
-          <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Voucher Name</label>
             <input
               className="input-control"
@@ -104,7 +104,7 @@ export default function TallySettingsPage() {
               onChange={(e) => setMapping({ ...mapping, voucher_sales: e.target.value })}
             />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Return Voucher Name</label>
             <input
               className="input-control"
@@ -112,7 +112,7 @@ export default function TallySettingsPage() {
               onChange={(e) => setMapping({ ...mapping, voucher_sales_return: e.target.value })}
             />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Credit Note Voucher Name</label>
             <input
               className="input-control"
@@ -123,8 +123,8 @@ export default function TallySettingsPage() {
         </div>
 
         <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Ledger Mappings</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "32px" }}>
-          <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Account Ledger</label>
             <input
               className="input-control"
@@ -132,7 +132,7 @@ export default function TallySettingsPage() {
               onChange={(e) => setMapping({ ...mapping, ledger_sales: e.target.value })}
             />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Razorpay Settlement Ledger</label>
             <input
               className="input-control"
@@ -140,12 +140,40 @@ export default function TallySettingsPage() {
               onChange={(e) => setMapping({ ...mapping, ledger_razorpay: e.target.value })}
             />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>COD Receivable Ledger</label>
             <input
               className="input-control"
               value={mapping.ledger_cod || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_cod: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Tax Ledgers (GST)</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
+          <div style={{ minWidth: 0 }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output CGST Ledger</label>
+            <input
+              className="input-control"
+              value={mapping.ledger_cgst || ""}
+              onChange={(e) => setMapping({ ...mapping, ledger_cgst: e.target.value })}
+            />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output SGST Ledger</label>
+            <input
+              className="input-control"
+              value={mapping.ledger_sgst || ""}
+              onChange={(e) => setMapping({ ...mapping, ledger_sgst: e.target.value })}
+            />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output IGST Ledger</label>
+            <input
+              className="input-control"
+              value={mapping.ledger_igst || ""}
+              onChange={(e) => setMapping({ ...mapping, ledger_igst: e.target.value })}
             />
           </div>
         </div>
