@@ -1,6 +1,9 @@
 export const APP_NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Orders", href: "/orders" },
+  { label: "Parcels", href: "/parcels" },
+  { label: "Scan", href: "/scan" },
+  { label: "Dispatch", href: "/scan/dispatch" },
   { label: "Dispatch", href: "/scan/dispatch" },
   { label: "Returns", href: "/scan/return" },
   { label: "Shipments", href: "/shipments" },
