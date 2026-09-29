@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { NotFoundException } from "@zxing/library";
 import { shouldSuppress, LastScan } from "../../lib/scan-debounce";
+import { playScanBeep } from "../../lib/scan-sound";
 
 export type ScanErrorCode = "CAMERA_PERMISSION_DENIED" | "CAMERA_NOT_FOUND" | "CAMERA_NOT_READABLE" | "DECODER_ERROR" | "SCAN_TIMEOUT";
 
@@ -61,6 +62,7 @@ export default function BarcodeScanner({ onDetected, onError, active = true }: P
             const now = Date.now();
             if (shouldSuppress(lastRef.current, v, now)) return;
             lastRef.current = { value: v, at: now };
+            playScanBeep();
             onDetectedRef.current(v);
           } else if (err && !(err instanceof NotFoundException)) {
             fail("DECODER_ERROR", String(err?.message ?? err));
