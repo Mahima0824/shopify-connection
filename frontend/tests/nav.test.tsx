@@ -33,6 +33,15 @@ test("topnav uses cream background", () => {
   expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/#fffaf0|cream|var\(--canvas\)/i);
 });
 
+test("topnav groups routes with active trail", () => {
+  const { container } = render(<TopNav />);
+  const nav = container.querySelector('nav[aria-label="Primary"]') as HTMLElement;
+  for (const label of ["Dashboard", "Orders", "Scan", "Exceptions", "Finance", "Import"]) {
+    expect(nav.textContent).toMatch(label);
+  }
+  expect(container.querySelector('[aria-current="page"]')).toBeTruthy();
+});
+
 test("reveal renders children and never hides content without an observer", () => {
   const { container } = render(<Reveal>hello</Reveal>);
   expect(container.textContent).toMatch(/hello/);

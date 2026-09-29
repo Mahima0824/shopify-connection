@@ -1,13 +1,38 @@
-export const APP_NAV_ITEMS = [
+export type NavChild = { label: string; href: string };
+export type NavEntry = { label: string; href?: string; children?: NavChild[] };
+export const APP_NAV_GROUPS: NavEntry[] = [
   { label: "Dashboard", href: "/dashboard" },
-  { label: "Orders", href: "/orders" },
-  { label: "Parcels", href: "/parcels" },
-  { label: "Scan", href: "/scan" },
-  { label: "Dispatch", href: "/scan/dispatch" },
-  { label: "Returns", href: "/scan/return" },
-  { label: "Shipments", href: "/shipments" },
-  { label: "Statements", href: "/statements" },
-  { label: "Reports", href: "/reports/monthly" },
+  {
+    label: "Orders",
+    children: [
+      { label: "Orders", href: "/orders" },
+      { label: "Parcels", href: "/parcels" },
+      { label: "Shipments", href: "/shipments" },
+      { label: "Outstanding", href: "/shipments/outstanding" },
+    ],
+  },
+  {
+    label: "Scan",
+    children: [
+      { label: "Hub", href: "/scan" },
+      { label: "Dispatch", href: "/scan/dispatch" },
+      { label: "Returns", href: "/scan/return" },
+      { label: "RTO", href: "/scan/rto" },
+    ],
+  },
   { label: "Exceptions", href: "/exceptions" },
-  { label: "Tally", href: "/settings/tally" },
+  {
+    label: "Finance",
+    children: [
+      { label: "Statements", href: "/statements" },
+      { label: "Reports", href: "/reports/monthly" },
+      { label: "Tally", href: "/settings/tally" },
+    ],
+  },
+  { label: "Import", href: "/import" },
 ];
+export const APP_NAV_FLAT: NavChild[] = APP_NAV_GROUPS.flatMap((g) =>
+  g.href ? [{ label: g.label, href: g.href }] : (g.children ?? []),
+);
+// Legacy compat (migrated in Task 6 — TopNav owns nav now).
+export const APP_NAV_ITEMS = APP_NAV_FLAT;

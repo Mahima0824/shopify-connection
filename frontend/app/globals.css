@@ -90,3 +90,6 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   .section{padding:48px 0;}
   .btn-primary,.btn-secondary,.btn-on-color{width:100%;}
 }
+.nav-drop{position:relative;}
+.nav-drop-menu{display:none;}
+.nav-drop.open .nav-drop-menu, .nav-drop:hover .nav-drop-menu{display:block;}
