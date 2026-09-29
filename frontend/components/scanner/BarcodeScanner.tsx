@@ -25,6 +25,27 @@ export default function BarcodeScanner({ onDetected, onError, active = true }: P
     const reader = new BrowserMultiFormatReader();
     async function start() {
       try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          fail("CAMERA_NOT_FOUND", "Camera needs a secure (HTTPS) page. Open this site over HTTPS or localhost.");
+          return;
+        }
+        // Request permission FIRST: mobile browsers return an empty device
+        // list (and blank labels) until access is granted, and each tunnel
+        // URL is a fresh origin with no saved permission.
+        try {
+          const warmup = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false,
+          });
+          warmup.getTracks().forEach((t) => t.stop());
+        } catch (permErr: any) {
+          if ((permErr?.name ?? "") === "NotAllowedError") {
+            fail("CAMERA_PERMISSION_DENIED", "Camera access was denied. Allow permission and try again.");
+            return;
+          }
+          throw permErr;
+        }
+        if (dead) return;
         const list = await BrowserMultiFormatReader.listVideoInputDevices();
         if (dead) return;
         setDevices(list);
