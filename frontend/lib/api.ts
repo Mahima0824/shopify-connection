@@ -229,6 +229,87 @@ export function canManualMatch(role?: string | null): boolean {
   return r === "ADMIN" || r === "ACCOUNTANT";
 }
 
+// --- Tally validation + workbook export + batches (FE3) ---
+
+export type TallyValidationIssue = {
+  code: string;
+  message: string;
+  ref?: string | null;
+};
+
+export type TallyValidation = {
+  transactions: number;
+  valid: number;
+  error_count: number;
+  warning_count: number;
+  errors: TallyValidationIssue[];
+  warnings: TallyValidationIssue[];
+  already_exported: number;
+  fresh: number;
+  can_export: boolean;
+};
+
+export type TallyExportBatch = {
+  id: string;
+  batch_reference: string;
+  record_count: number;
+  transaction_count?: number | null;
+  status: string;
+  file_name?: string | null;
+  created_at?: string | null;
+};
+
+export type TallyExportList = { items: TallyExportBatch[] };
+
+export function buildTallyRangeQuery(params: { from?: string; to?: string }): string {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+export function validateTallyExport(
+  params: { from?: string; to?: string },
+  token?: string,
+): Promise<TallyValidation> {
+  return api<TallyValidation>(
+    `/api/v1/tally/validate${buildTallyRangeQuery(params)}`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export function listTallyExports(
+  params: { from?: string; to?: string } = {},
+  token?: string,
+): Promise<TallyExportList> {
+  return api<TallyExportList>(
+    `/api/v1/tally/exports${buildTallyRangeQuery(params)}`,
+    {},
+    token,
+  );
+}
+
+export function markTallyImported(
+  batchId: string,
+  opts: { imported?: boolean; partial?: boolean; failed?: boolean } = { imported: true },
+  token?: string,
+): Promise<{ id: string; status: string }> {
+  return api<{ id: string; status: string }>(
+    `/api/v1/tally/exports/${batchId}/mark-imported`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        imported: opts.imported ?? true,
+        partial: opts.partial ?? false,
+        failed: opts.failed ?? false,
+      }),
+    },
+    token,
+  );
+}
+
 export function getLedgerSummary(
   params: { from: string; to: string },
   token?: string,

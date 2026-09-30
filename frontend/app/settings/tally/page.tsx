@@ -1,8 +1,37 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { API, api } from "../../../lib/api";
+import {
+  TallyValidation,
+  buildTallyRangeQuery,
+  listTallyExports,
+  markTallyImported,
+  validateTallyExport,
+} from "../../../lib/api";
+import MetricCard from "../../../components/MetricCard";
+import SeverityBadge from "../../../components/SeverityBadge";
+import EmptyState from "../../../components/EmptyState";
 import { IconBox, IconReceipt, IconSpark } from "../../../components/icons";
+
+function isoStart(date: string): string {
+  return date ? `${date}T00:00:00` : "";
+}
+
+function defaultRange(): { from: string; to: string } {
+  const to = new Date();
+  const from = new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+function batchSeverity(status: string): string {
+  const s = (status || "").toUpperCase();
+  if (s === "FAILED") return "CRITICAL";
+  if (s === "PARTIALLY_IMPORTED") return "HIGH";
+  if (s === "GENERATED") return "MEDIUM";
+  return "LOW";
+}
 
 export default function TallySettingsPage() {
   const [mapping, setMapping] = useState<any>({
@@ -20,15 +49,147 @@ export default function TallySettingsPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [exporting, setExporting] = useState(false);
 
+  // --- FE3: validation gate + workbook export + batch lifecycle (additive) ---
+  const range = useRef(defaultRange()).current;
+  const [from, setFrom] = useState(range.from);
+  const [to, setTo] = useState(range.to);
+  const [validation, setValidation] = useState<TallyValidation | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [batchesLoading, setBatchesLoading] = useState(true);
+  const [batchesError, setBatchesError] = useState<string | null>(null);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+  const valReq = useRef(0);
+  const batchReq = useRef(0);
+
+  const loadBatches = useCallback(() => {
+    const req = ++batchReq.current;
+    const isCurrent = () => batchReq.current === req;
+    setBatchesLoading(true);
+    setBatchesError(null);
+    const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? undefined) : undefined;
+    listTallyExports({}, token)
+      .then((d) => {
+        if (!isCurrent()) return;
+        setBatches(Array.isArray((d as any)?.items) ? (d as any).items : []);
+      })
+      .catch((e) => {
+        if (!isCurrent()) return;
+        setBatches([]);
+        setBatchesError(e?.message ?? "Failed to load export batches");
+      })
+      .finally(() => {
+        if (isCurrent()) setBatchesLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     api<any>("/api/v1/tally/mapping")
       .then((res) => { if (res) setMapping(res); })
       .catch(() => {});
 
-    api<any[]>("/api/v1/tally/batches")
-      .then((res) => { if (res) setBatches(res); })
-      .catch(() => {});
-  }, []);
+    loadBatches();
+  }, [loadBatches]);
+
+  const handleValidate = useCallback(() => {
+    const req = ++valReq.current;
+    const isCurrent = () => valReq.current === req;
+    setValidating(true);
+    setValidateError(null);
+    setExportError(null);
+    const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? undefined) : undefined;
+    validateTallyExport(
+      { ...(from ? { from: isoStart(from) } : {}), ...(to ? { to: isoStart(to) } : {}) },
+      token,
+    )
+      .then((d) => {
+        if (isCurrent()) setValidation(d);
+      })
+      .catch((e) => {
+        if (!isCurrent()) return;
+        setValidation(null);
+        setValidateError(e?.message ?? "Validation failed");
+      })
+      .finally(() => {
+        if (isCurrent()) setValidating(false);
+      });
+  }, [from, to]);
+
+  const handleWorkbookExport = useCallback(async () => {
+    setExporting(true);
+    setExportMsg(null);
+    setExportError(null);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const q = buildTallyRangeQuery({
+        ...(from ? { from: isoStart(from) } : {}),
+        ...(to ? { to: isoStart(to) } : {}),
+      });
+      const res = await fetch(`${API}/api/v1/tally/export-workbook${q}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const cd = res.headers.get("content-disposition") || "";
+        const filename = cd.includes("filename=")
+          ? cd.split("filename=")[1].replace(/"/g, "")
+          : "tally_export.xlsx";
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setExportMsg(`Workbook ${filename} downloaded - mark it imported after posting to Tally.`);
+        loadBatches();
+        return;
+      }
+      let code = "";
+      let message = "Failed to export workbook";
+      try {
+        const errJson = await res.json();
+        code = errJson?.error?.code ?? errJson?.code ?? "";
+        message = errJson?.error?.message ?? errJson?.detail ?? message;
+      } catch {
+        // keep default message when the body is not JSON
+      }
+      if (res.status === 409 || code === "DUPLICATE_EXPORT" || code === "ALREADY_EXPORTED") {
+        setExportError(
+          `Already exported for this period - nothing new to download. ${message} Adjust the date range or mark the original batch imported.`,
+        );
+      } else if (res.status === 422 || code === "VALIDATION_FAILED") {
+        setExportError(`Export blocked by validation - run Validate and fix the listed errors. ${message}`);
+        handleValidate();
+      } else if (res.status === 404 || code === "NOTHING_TO_EXPORT") {
+        setExportError(`Nothing to export in this period - widen the date range. ${message}`);
+      } else {
+        setExportError(`Export error: ${message}`);
+      }
+    } catch (e: any) {
+      setExportError(`Error: ${e?.message ?? "Failed to export workbook"}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [from, to, loadBatches, handleValidate]);
+
+  const handleMarkImported = useCallback(async (id: string) => {
+    setMarkingId(id);
+    setBatchesError(null);
+    try {
+      const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? undefined) : undefined;
+      await markTallyImported(id, { imported: true }, token);
+      loadBatches();
+    } catch (e: any) {
+      setBatchesError(e?.message ?? "Failed to mark batch imported");
+    } finally {
+      setMarkingId(null);
+    }
+  }, [loadBatches]);
+
+  const blocked = validation !== null && !validation.can_export;
 
   const handleSave = async () => {
     try {
@@ -58,8 +219,12 @@ export default function TallySettingsPage() {
         a.click();
         setStatus("Tally export batch generated and downloaded!");
 
-        // Refresh batches
-        api<any[]>("/api/v1/tally/batches").then((r) => { if (r) setBatches(r); });
+        // Refresh batches (guard: legacy endpoint returns an array, exports returns {items}).
+        api<any>("/api/v1/tally/batches").then((r) => {
+          const rows = Array.isArray(r) ? r : (r as any)?.items;
+          if (Array.isArray(rows)) setBatches(rows);
+          else loadBatches();
+        });
       } else {
         const errJson = await res.json();
         setStatus(`Export error: ${errJson.detail || "Failed to export"}`);
@@ -90,6 +255,95 @@ export default function TallySettingsPage() {
           <IconSpark size={16} /> {status}
         </div>
       )}
+
+      {/* Validation gate + workbook export (FE3, additive: mapping form below untouched) */}
+      <div className="content-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div>
+          <h2 className="display" style={{ fontSize: "20px", margin: 0 }}>Validate &amp; Export</h2>
+          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+            Validate a period first &mdash; errors block export, warnings do not
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
+            From
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="input-control" />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
+            To
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="input-control" />
+          </label>
+          <button onClick={handleValidate} disabled={validating} className="btn-secondary" style={{ minHeight: 44 }}>
+            {validating ? "Validating..." : "Validate"}
+          </button>
+          <button
+            onClick={handleWorkbookExport}
+            disabled={exporting || validating || blocked}
+            className="btn-primary"
+            style={{ minHeight: 44 }}
+            title={blocked ? "Export blocked - fix validation errors first" : "Download validated workbook (.xlsx)"}
+          >
+            {exporting ? "Generating workbook..." : "Generate workbook (.xlsx)"}
+          </button>
+        </div>
+
+        {validateError && (
+          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+            {validateError} <button onClick={handleValidate} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+          </div>
+        )}
+        {exportError && (
+          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+            {exportError}
+          </div>
+        )}
+        {exportMsg && (
+          <p role="status" style={{ color: "var(--success)", fontWeight: 600, margin: 0 }}>{exportMsg}</p>
+        )}
+
+        {validation && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+              <span style={{ fontSize: "13px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+                Validation
+              </span>
+              <span className={validation.can_export ? "badge badge-success" : "badge badge-danger"}>
+                {validation.can_export ? "PASSED" : "BLOCKED"}
+              </span>
+              {!validation.can_export && (
+                <span style={{ fontSize: "13px", color: "var(--muted)" }}>
+                  Export is disabled until the errors below are fixed
+                </span>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+              <MetricCard title="Valid" value={`${validation.valid} valid`} subtitle={`${validation.transactions} transactions`} />
+              <MetricCard title="Errors" value={`${validation.error_count} errors`} subtitle={validation.already_exported ? `${validation.already_exported} already exported` : "blocking must be zero"} />
+              <MetricCard title="Warnings" value={`${validation.warning_count} warnings`} subtitle={`${validation.fresh} fresh to export`} />
+            </div>
+            {validation.errors.length > 0 && (
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: 0, padding: 0 }}>
+                {validation.errors.map((e, i) => (
+                  <li key={`${e.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "10px", fontSize: "13px" }}>
+                    <SeverityBadge severity="HIGH" />
+                    <span><strong>{e.code}</strong>: {e.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {validation.warnings.length > 0 && (
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: "8px 0 0", padding: 0 }}>
+                {validation.warnings.map((w, i) => (
+                  <li key={`${w.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "10px", fontSize: "13px" }}>
+                    <SeverityBadge severity="MEDIUM" />
+                    <span><strong>{w.code}</strong>: {w.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Mapping Configuration Card */}
       <div className="content-card">
@@ -194,39 +448,81 @@ export default function TallySettingsPage() {
 
       {/* Export Batches History */}
       <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--hairline)" }}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <h2 className="display" style={{ fontSize: "18px", margin: 0 }}>Export Batch History</h2>
+          <button onClick={loadBatches} disabled={batchesLoading} className="btn-secondary" style={{ minHeight: 36 }}>
+            {batchesLoading ? "Loading..." : "Refresh"}
+          </button>
         </div>
 
-        {batches.length === 0 ? (
-          <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>
-            No Tally export batches generated yet. Click "Generate & Download Tally Export Batch" above.
+        {batchesError && (
+          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", margin: "16px 24px 0", borderRadius: "12px" }}>
+            {batchesError} <button onClick={loadBatches} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+          </div>
+        )}
+
+        {batchesLoading ? (
+          <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>Loading batches&hellip;</div>
+        ) : batches.length === 0 ? (
+          <div style={{ padding: "24px" }}>
+            <EmptyState
+              title="No export batches yet"
+              body="Validate a period above, then generate your first Tally workbook."
+              primary={{ label: "View ledger", href: "/finance/ledger" }}
+            />
           </div>
         ) : (
-          <table className="modern-table">
-            <thead>
-              <tr>
-                <th>Batch Reference</th>
-                <th>Record Count</th>
-                <th>Status</th>
-                <th>Generated At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((b) => (
-                <tr key={b.id}>
-                  <td style={{ fontWeight: 600, color: "var(--ink)" }}>{b.batch_reference}</td>
-                  <td>{b.record_count} Orders</td>
-                  <td>
-                    <span className="badge badge-success">{b.status}</span>
-                  </td>
-                  <td style={{ color: "var(--muted)", fontSize: "13px" }}>
-                    {b.created_at ? new Date(b.created_at).toLocaleString() : "-"}
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Range</th>
+                  <th style={{ textAlign: "right" }}>Count</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: "right" }}>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {batches.map((b) => {
+                  const sev = batchSeverity(b.status);
+                  const count = b.transaction_count ?? b.record_count;
+                  return (
+                    <tr key={b.id}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: "var(--ink)" }}>{b.file_name || `${b.batch_reference}.xlsx`}</div>
+                        <div style={{ fontSize: "12px", color: "var(--muted)" }}>{b.batch_reference}</div>
+                      </td>
+                      <td style={{ color: "var(--muted)", fontSize: "13px", whiteSpace: "nowrap" }}>
+                        {b.created_at ? new Date(b.created_at).toLocaleString() : "-"}
+                      </td>
+                      <td className="tnum" style={{ textAlign: "right" }}>{count}</td>
+                      <td>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <SeverityBadge severity={sev} />
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>{b.status}</span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {String(b.status || "").toUpperCase() === "IMPORTED" ? (
+                          <span style={{ fontSize: "12px", color: "var(--muted)" }}>Done</span>
+                        ) : (
+                          <button
+                            onClick={() => handleMarkImported(b.id)}
+                            disabled={markingId === b.id}
+                            className="btn-secondary"
+                            aria-label={`Mark imported ${b.id}`}
+                          >
+                            {markingId === b.id ? "Marking..." : "Mark imported"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
