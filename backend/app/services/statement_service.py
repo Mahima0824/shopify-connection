@@ -8,23 +8,34 @@ TYPES = ("COURIER_SETTLEMENT", "BANK_STATEMENT", "PAYMENT_GATEWAY_STATEMENT",
 
 ALIASES = {
     "awb_number": ["awb no", "awb", "awb number", "tracking id", "tracking number"],
-    "external_reference": ["txn ref", "utr", "transaction ref", "reference", "transaction id"],
+    "external_reference": ["txn ref", "transaction ref", "transaction id", "settlement id",
+                           "settlement reference"],
+    "reference_number": ["utr", "utr number", "utr no", "bank reference", "bank ref", "ref no",
+                         "reference", "reference number", "transaction ref"],
+    "description": ["description", "narration", "particulars", "remarks", "details"],
     "order_reference": ["order id", "order", "order name", "order number", "shopify order"],
-    "transaction_date": ["settlement date", "date", "txn date", "value date"],
+    "transaction_date": ["date", "txn date", "transaction date", "posting date", "settlement date"],
+    "value_date": ["value date", "effective date"],
     "gross_amount": ["cod amount", "gross", "amount", "credit"],
     "fee_amount": ["fee", "courier fee", "charges", "commission"],
     "net_amount": ["net remittance", "net", "settled amount", "settlement amount"],
+    "debit": ["debit", "withdrawal", "withdrawals", "dr", "debit amount"],
+    "credit": ["credit", "deposit", "deposits", "cr", "credit amount"],
+    "balance": ["balance", "closing balance", "running balance", "available balance"],
     "transaction_type": ["type", "txn type"],
     "status": ["status", "txn status"],
 }
 
 REQUIRED = {
     "COURIER_SETTLEMENT": ["awb_number"],
-    "BANK_STATEMENT": ["external_reference"],
+    "BANK_STATEMENT": [],
     "PAYMENT_GATEWAY_STATEMENT": ["external_reference"],
     "COURIER_SHIPMENT_REPORT": ["awb_number"],
     "SHOPIFY_ORDER_EXPORT": ["order_reference"],
 }
+
+# Canonical bank columns for the Date/Description/Reference/Debit/Credit/Balance mapping (#34).
+BANK_COLUMNS = ("transaction_date", "description", "reference_number", "debit", "credit", "balance")
 
 
 def file_sha(content: bytes) -> str:
@@ -101,17 +112,47 @@ def _fdate(v):
 
 def row_to_fields(row: dict, mapping: dict) -> dict:
     g = lambda f: (row.get(mapping[f]) or "") if f in mapping else ""
+    debit_v, credit_v = _fnum(g("debit")), _fnum(g("credit"))
+    gross_v, net_v = _fnum(g("gross_amount")), _fnum(g("net_amount"))
+    if "credit" in mapping and "gross_amount" not in mapping and gross_v == 0:
+        gross_v = credit_v
+    if "credit" in mapping and "net_amount" not in mapping and net_v == 0:
+        net_v = credit_v - debit_v
     return {
         "external_reference": (g("external_reference") or "").strip() or None,
         "awb_number": (g("awb_number") or "").strip() or None,
         "order_reference": (g("order_reference") or "").strip() or None,
         "transaction_date": _fdate(g("transaction_date")),
-        "gross_amount": _fnum(g("gross_amount")),
+        "value_date": _fdate(g("value_date")),
+        "gross_amount": gross_v,
         "fee_amount": _fnum(g("fee_amount")),
-        "net_amount": _fnum(g("net_amount")),
+        "net_amount": net_v,
+        "description": (g("description") or "").strip() or None,
+        "reference_number": (g("reference_number") or "").strip() or None,
+        "debit": debit_v,
+        "credit": credit_v,
+        "balance": _fnum(g("balance")),
         "transaction_type": (g("transaction_type") or "").strip() or None,
         "status": (g("status") or "").strip() or None,
     }
+
+
+def import_identity(business_id: str, statement_type: str, bank_account_id: str | None,
+                    fields: dict) -> str:
+    """Stable bank import identity per #71: same external event -> same identity, never twice."""
+    parts = [
+        business_id or "", statement_type or "", bank_account_id or "",
+        (fields.get("reference_number") or "").strip().upper(),
+        (fields.get("external_reference") or "").strip().upper(),
+        (fields.get("awb_number") or "").strip().upper(),
+        (fields.get("order_reference") or "").strip().upper(),
+        str(fields.get("transaction_date") or ""),
+        f"{float(fields.get('debit') or 0):.2f}",
+        f"{float(fields.get('credit') or 0):.2f}",
+        f"{float(fields.get('net_amount') or 0):.2f}",
+        (fields.get("description") or "").strip().lower(),
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
 def match_row(db, business_id: str, row) -> tuple[str, str | None, str | None]:
