@@ -20,11 +20,20 @@ export async function api<T>(p: string, init?: RequestInit, token?: string): Pro
 
     if (!r.ok) {
       const errorMsg = data.detail || data.error?.message || `Request failed with status ${r.status}`;
-      throw new Error(errorMsg);
+      const err: any = new Error(errorMsg);
+      err.status = r.status;
+      err.code = data.error?.code ?? data.code ?? "";
+      if (data.error?.issues !== undefined) err.issues = data.error.issues;
+      else if (data.issues !== undefined) err.issues = data.issues;
+      throw err;
     }
 
     if (data.success === false) {
-      throw new Error(data.error?.message ?? "API Error");
+      const err: any = new Error(data.error?.message ?? "API Error");
+      err.status = 422;
+      err.code = data.error?.code ?? "";
+      if (data.error?.issues !== undefined) err.issues = data.error.issues;
+      throw err;
     }
 
     return (data.data !== undefined ? data.data : data) as T;
@@ -316,4 +325,61 @@ export function getLedgerSummary(
 ): Promise<LedgerSummary> {
   const q = new URLSearchParams({ from: params.from, to: params.to }).toString();
   return api<LedgerSummary>(`/api/v1/ledger/summary?${q}`, {}, token);
+}
+
+// --- Month close (FE4) ---
+
+export type CloseCheckCounts = {
+  unreconciled_payments: number;
+  unreconciled_bank: number;
+  unexported_transactions: number;
+  invalid_gst: number;
+  missing_cogs: number;
+  pending_refunds: number;
+  check_errors: number;
+  [k: string]: number;
+};
+
+export type CloseIssues = {
+  total: number;
+  counts: CloseCheckCounts;
+  checks: Record<string, string[]>;
+  period?: { year: number; month: number };
+  display_timezone?: string;
+};
+
+export type PeriodDetail = { status: string; issues: CloseIssues };
+
+export type CloseResult = { id: string; status: string; closed_at?: string; already_closed?: boolean };
+
+export type ReopenResult = { id: string; status: string };
+
+export function getPeriodDetail(year: number, month: number, token?: string): Promise<PeriodDetail> {
+  return api<PeriodDetail>(`/api/v1/accounting/periods/${year}/${month}`, {}, token);
+}
+
+export function closeMonth(year: number, month: number, token?: string): Promise<CloseResult> {
+  return api<CloseResult>(
+    `/api/v1/accounting/periods/${year}/${month}/close`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export function reopenMonth(year: number, month: number, token?: string): Promise<ReopenResult> {
+  return api<ReopenResult>(
+    `/api/v1/accounting/periods/${year}/${month}/reopen`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export function canCloseMonth(role?: string | null): boolean {
+  const r = (role ?? getStoredRole() ?? "").toUpperCase();
+  return r === "ADMIN" || r === "ACCOUNTANT";
+}
+
+export function canReopenMonth(role?: string | null): boolean {
+  const r = (role ?? getStoredRole() ?? "").toUpperCase();
+  return r === "ADMIN";
 }
