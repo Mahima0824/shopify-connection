@@ -95,30 +95,49 @@ export default function TopNav() {
               );
             }
             const dropOpen = openDrop === g.label;
+            const primaryHref = g.children?.[0]?.href ?? "/";
             return (
               <div
                 key={g.label}
                 className={dropOpen ? "nav-drop open" : "nav-drop"}
-                style={{ position: "relative" }}
+                style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") closeDrop();
                 }}
               >
+                <Link
+                  href={primaryHref}
+                  aria-current={isExact(pathname, primaryHref) ? "page" : undefined}
+                  onClick={closeDrop}
+                  style={{
+                    ...pill(active),
+                    borderTopRightRadius: 0,
+                    borderBottomRightRadius: 0,
+                    paddingRight: 8,
+                  }}
+                >
+                  {g.label}
+                </Link>
                 <button
                   type="button"
                   aria-expanded={dropOpen}
                   aria-haspopup="true"
+                  aria-label={`${g.label} submenu`}
                   onClick={() => setOpenDrop(dropOpen ? null : g.label)}
                   style={{
                     ...pill(active),
+                    borderTopLeftRadius: 0,
+                    borderBottomLeftRadius: 0,
+                    paddingLeft: 4,
+                    paddingRight: 10,
                     border: "none",
                     cursor: "pointer",
                     fontFamily: "Inter, sans-serif",
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: 500,
                   }}
                 >
-                  {g.label}
+                  ▾
                 </button>
                 <div
                   className="nav-drop-menu"
