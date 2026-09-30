@@ -19,5 +19,21 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
 
+    # Courier Integrations Configuration (India Post & DTDC)
+    india_post_enabled: bool = True
+    india_post_api_base_url: str = "https://api.indiapost.gov.in/v1"
+    india_post_client_id: str = ""
+    india_post_client_secret: str = ""
+    india_post_api_key: str = ""
+
+    dtdc_enabled: bool = True
+    dtdc_api_base_url: str = "https://api.dtdc.com/v1"
+    dtdc_client_id: str = ""
+    dtdc_client_secret: str = ""
+    dtdc_api_key: str = ""
+    dtdc_account_code: str = ""
+    dtdc_customer_code: str = ""
+
 
 settings = Settings()
+

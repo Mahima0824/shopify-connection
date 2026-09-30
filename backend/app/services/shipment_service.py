@@ -27,6 +27,12 @@ def ingest_event(db, shipment, raw: str | None, message: str | None = None,
             shipment_id=shipment.id, carrier_event_id=carrier_event_id).first()
         if existing is not None:
             return existing, False
+    if isinstance(event_time, str) and event_time.strip():
+        try:
+            event_time = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+        except ValueError:
+            event_time = _now()
+
     try:
         norm = db_normalize(db, shipment.business_id, shipment.carrier_code, raw or "") or normalize_status(shipment.carrier_code, raw or "")
     except Exception:

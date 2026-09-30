@@ -8,6 +8,7 @@ export const APP_NAV_GROUPS: NavEntry[] = [
       { label: "Orders", href: "/orders" },
       { label: "Parcels", href: "/parcels" },
       { label: "Shipments", href: "/shipments" },
+      { label: "Tracking Center", href: "/tracking" },
       { label: "Outstanding", href: "/shipments/outstanding" },
     ],
   },
@@ -20,6 +21,7 @@ export const APP_NAV_GROUPS: NavEntry[] = [
       { label: "RTO", href: "/scan/rto" },
     ],
   },
+  { label: "Tracking", href: "/tracking" },
   { label: "Exceptions", href: "/exceptions" },
   {
     label: "Finance",
@@ -29,7 +31,6 @@ export const APP_NAV_GROUPS: NavEntry[] = [
       { label: "Tally", href: "/settings/tally" },
     ],
   },
-  { label: "Import", href: "/import" },
 ];
 export const APP_NAV_FLAT: NavChild[] = APP_NAV_GROUPS.flatMap((g) =>
   g.href ? [{ label: g.label, href: g.href }] : (g.children ?? []),

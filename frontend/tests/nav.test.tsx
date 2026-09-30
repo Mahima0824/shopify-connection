@@ -41,7 +41,7 @@ test("topnav uses enterprise canvas background", () => {
 test("topnav groups routes with active trail", () => {
   const { container } = render(<TopNav />);
   const nav = container.querySelector('nav[aria-label="Primary"]') as HTMLElement;
-  for (const label of ["Dashboard", "Orders", "Scan", "Exceptions", "Finance", "Import"]) {
+  for (const label of ["Dashboard", "Orders", "Scan", "Exceptions", "Finance", "Tracking"]) {
     expect(nav.textContent).toMatch(label);
   }
   expect(container.querySelector('[aria-current="page"]')).toBeTruthy();
