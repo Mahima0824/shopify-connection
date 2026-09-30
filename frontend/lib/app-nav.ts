@@ -34,6 +34,15 @@ export const APP_NAV_GROUPS: NavEntry[] = [
       { label: "Tally", href: "/settings/tally" },
     ],
   },
+  {
+    label: "Settings",
+    children: [
+      { label: "Tally", href: "/settings/tally" },
+      { label: "Carriers", href: "/settings/carriers" },
+      { label: "Costs", href: "/settings/costs" },
+      { label: "SLA Rules", href: "/settings/sla" },
+    ],
+  },
 ];
 export const APP_NAV_FLAT: NavChild[] = APP_NAV_GROUPS.flatMap((g) =>
   g.href ? [{ label: g.label, href: g.href }] : (g.children ?? []),
