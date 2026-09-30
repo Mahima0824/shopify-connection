@@ -20,6 +20,7 @@ from app.api.tally import router as tally_router
 from app.api.imports import router as imports_router
 from app.api.shipments import router as shipments_router
 from app.api.carrier_webhooks import router as carrier_webhooks_router
+from app.api.shipsagar import router as shipsagar_router, webhook_router as shipsagar_webhook_router
 from app.api.sla import router as sla_router
 from app.api.statements import router as statements_router
 from app.api.reports import router as reports_router
@@ -88,6 +89,8 @@ app.include_router(tally_router)
 app.include_router(imports_router)
 app.include_router(shipments_router)
 app.include_router(carrier_webhooks_router)
+app.include_router(shipsagar_router)
+app.include_router(shipsagar_webhook_router)
 app.include_router(sla_router)
 app.include_router(statements_router)
 app.include_router(reports_router)

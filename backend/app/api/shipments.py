@@ -22,6 +22,7 @@ def _sdict(s) -> dict:
         "parcel_id": s.parcel_id,
         "carrier_code": s.carrier_code,
         "awb_number": s.awb_number,
+        "shipsagar_tracking_id": getattr(s, "shipsagar_tracking_id", None),
         "tracking_status": s.tracking_status,
         "carrier_status_raw": s.carrier_status_raw,
         "current_location": s.current_location,
@@ -235,6 +236,33 @@ def sync_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get
     s.last_synced_at = datetime.now(timezone.utc)
     db.commit()
     return {'success': True, 'data': {'synced': True, 'new_events': n}}
+
+
+@router.post('/{sid}/register-tracking')
+def register_tracking(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    """Register the shipment's courier tracking number with ShipSagar (plan #18).
+
+    Identity chain: parcel_id -> shipment_id -> awb_number
+    (courier_tracking_number) -> shipsagar_tracking_id. ShipSagar tracking
+    ids are provider references only, never business ids.
+    """
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    if u.get('role') not in ('ADMIN', 'WAREHOUSE'):
+        raise HTTPException(403, 'Warehouse role required')
+    s = db.query(Shipment).filter_by(id=sid, business_id=u.get('business_id')).first()
+    if s is None:
+        raise HTTPException(404, 'Shipment not found')
+    try:
+        result = ss.register_tracking(db, s)
+    except ss.ShipsagarError as e:
+        db.commit()
+        raise HTTPException(400, f"{e.code}: {e.message}")
+    db.commit()
+    db.refresh(s)
+    return {'success': True, 'data': {**_sdict(s),
+            'shipsagar_tracking_id': result['shipsagar_tracking_id'],
+            'shipsagar_stubbed': result['stubbed']}}
 
 
 @router.post('/poll-sweep')

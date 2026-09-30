@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     dtdc_account_code: str = ""
     dtdc_customer_code: str = ""
 
+    # ShipSagar Aggregation Provider (India Post + DTDC tracking via ShipSagar).
+    # Real API spec/creds are ABSENT — adapter runs stubbed until configured.
+    # Secrets stay server-side (env only), never exposed to frontend.
+    shipsagar_api_base_url: str = ""
+    shipsagar_api_key: str = ""
+    shipsagar_webhook_secret: str = ""
+
 
 settings = Settings()
 

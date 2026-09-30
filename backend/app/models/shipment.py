@@ -16,6 +16,10 @@ class Shipment(Base):
     parcel_id: Mapped[str] = mapped_column(ForeignKey("parcels.id"))
     carrier_code: Mapped[str] = mapped_column(String(32))
     awb_number: Mapped[str] = mapped_column(String(64))
+    # Identity chain (plan #17): parcel_id -> shipment_id -> awb_number
+    # (courier_tracking_number) -> shipsagar_tracking_id. The ShipSagar ID is
+    # a provider reference only, never a business ID.
+    shipsagar_tracking_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     tracking_status: Mapped[str] = mapped_column(String(32), default="BOOKED")
     carrier_status_raw: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -36,11 +40,23 @@ class ShipmentEvent(Base):
     __tablename__ = "shipment_events"
     __table_args__ = (
         UniqueConstraint("shipment_id", "carrier_event_id", name="uq_shipev_ship_event"),
+        UniqueConstraint("provider", "provider_event_id", name="uq_shipev_provider_event"),
         Index("ix_shipev_time", "shipment_id", "event_time"),
+        Index("ix_shipev_provider", "provider", "provider_event_id"),
     )
     id: Mapped[str] = uuidpk()
     business_id: Mapped[str] = mapped_column(ForeignKey("businesses.id"))
     shipment_id: Mapped[str] = mapped_column(ForeignKey("shipments.id"))
+    # Provider identity for idempotent webhook ingest (plan #20/#53).
+    # `provider` mirrors `source`; `provider_event_id` mirrors
+    # `carrier_event_id` for ShipSagar rows. Legacy rows keep
+    # provider_event_id NULL so the new unique constraint never collides.
+    provider: Mapped[str] = mapped_column(String(32), default="MANUAL")
+    provider_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # `status`/`sub_status` are plan #20 names; `status` mirrors
+    # `normalized_status` so both vocabularies query the same value.
+    status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sub_status: Mapped[str | None] = mapped_column(String(128), nullable=True)
     carrier_event_id: Mapped[str] = mapped_column(String(128), default="")
     carrier_status_raw: Mapped[str | None] = mapped_column(String(255), nullable=True)
     normalized_status: Mapped[str] = mapped_column(String(32), default="UNKNOWN")
