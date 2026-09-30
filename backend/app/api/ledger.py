@@ -100,6 +100,23 @@ def order_ledger(order_id: str, db: Session = Depends(get_db), u: dict = Depends
     return {"success": True, "data": {"items": ls.order_timeline(db, u.get("business_id"), order_id)}}
 
 
+@router.post("/backfill")
+def backfill(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    """Admin backfill: ledger events for pre-existing orders/payments/refunds (Task 1 owed)."""
+    if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
+        return _err(403, "FORBIDDEN", "Accountant role required")
+    from app.services import report_service as rs
+    from app.services.audit_service import log_audit
+    out = rs.backfill_ledger(db, u.get("business_id"))
+    try:
+        log_audit(db, u.get("business_id"), u.get("user_id"), "ledger", "-",
+                  "LEDGER_BACKFILL", None, out)
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {"success": True, "data": out}
+
+
 @router.post("/reverse")
 def reverse(body: LedgerReverse, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):

@@ -16,4 +16,6 @@ class Customer(Base):
     last_name: Mapped[str] = mapped_column(String(128), default="")
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    state_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    gstin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())

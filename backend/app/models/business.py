@@ -15,4 +15,5 @@ class Business(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata")
     currency: Mapped[str] = mapped_column(String(8), default="INR")
     fy_start_month: Mapped[int] = mapped_column(Integer, default=4)
+    state_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())

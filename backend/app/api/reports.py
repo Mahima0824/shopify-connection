@@ -1,10 +1,143 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+
+EXPORTABLE = ("dashboard", "sales", "orders", "payments", "refunds",
+              "profit", "courier", "gst", "reconciliation")
+
+
+def _err(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status,
+                        content={"success": False, "error": {"code": code, "message": message}})
+
+
+def _range(preset: str | None, from_val: str | None, to_val: str | None,
+           db: Session, business_id: str):
+    from app.services import report_service as rs
+    from app.services import accounting_service as acct
+    try:
+        return rs.resolve_range(preset, from_val, to_val,
+                                fy_start_month=acct._fy_start_month(db, business_id))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+def _filters(status: str | None, courier: str | None, payment_method: str | None,
+             customer: str | None, product: str | None, state: str | None) -> dict:
+    return {"status": status, "courier": courier, "payment_method": payment_method,
+            "customer": customer, "product": product, "state": state}
+
+
+def _maybe_export(name: str, data: dict, fmt: str | None):
+    if not fmt:
+        return {"success": True, "data": data}
+    from app.services import report_service as rs
+    rows_fn = {
+        "sales": lambda: ([["Order", "Date", "Financial", "Operational", "Total"]] +
+                          [[r["name"], r["date"], r["financial"], r["operational"], r["total"]]
+                           for r in data.get("rows", [])]),
+        "orders": lambda: ([["Order", "Date", "Financial", "Operational", "Total"]] +
+                           [[r["name"], r["date"], r["financial"], r["operational"], r["total"]]
+                            for r in data.get("rows", [])]),
+        "payments": lambda: ([["ID", "Order", "Amount", "Status", "Method"]] +
+                             [[r["id"], r["order_id"], r["amount"], r["status"], r["method"]]
+                              for r in data.get("rows", [])]),
+        "refunds": lambda: ([["ID", "Order", "Amount", "Status"]] +
+                            [[r["id"], r["order_id"], r["amount"], r["status"]]
+                             for r in data.get("rows", [])]),
+        "profit": lambda: ([["Metric", "Value"]] +
+                           [["Net sales", data["revenue"]["net_exclusive"]],
+                            ["GST", data["revenue"]["gst"]],
+                            ["COGS", data["profit"]["cogs"]],
+                            ["Gross profit", data["profit"]["gross_profit"]],
+                            ["Operating profit", data["profit"]["operating_profit"]],
+                            ["Margin %", data["profit"]["margin_pct"]],
+                            ["Label", data["profit"]["label"]],
+                            ["Warning", data["profit"]["warning"]]]),
+        "courier": lambda: ([["AWB", "Carrier", "Status", "Order"]] +
+                            [[r["awb"], r["carrier"], r["status"], r["order_id"]]
+                             for r in data.get("rows", [])]),
+        "gst": lambda: ([["Order", "Valid", "Jurisdiction", "Taxable", "CGST", "SGST", "IGST", "Total"]] +
+                        [[r["order_name"], r["valid"], r["jurisdiction"],
+                          r["invoice_check"]["taxable"], r["invoice_check"]["cgst"],
+                          r["invoice_check"]["sgst"], r["invoice_check"]["igst"],
+                          r["invoice_check"]["total"]] for r in data.get("rows", [])]),
+        "reconciliation": lambda: ([["Order", "Code", "Severity", "Message", "Resolved"]] +
+                                   [[r["order_id"], r["code"], r["severity"], r["message"], r["resolved"]]
+                                    for r in data.get("rows", [])]),
+        "dashboard": lambda: ([["KPI", "Value"]] +
+                              [[k, v] for k, v in data.get("kpis", {}).items()]),
+    }
+    table = rows_fn[name]()
+    headers, body = table[0], table[1:]
+    if len(body) > rs.ASYNC_EXPORT_ROW_LIMIT:
+        return JSONResponse(status_code=202, content={
+            "success": False,
+            "error": {"code": "EXPORT_TOO_LARGE",
+                      "message": f"{len(body)} rows exceed sync limit "
+                                 f"({rs.ASYNC_EXPORT_ROW_LIMIT}); run async per #54/#78."}})
+    if fmt == "csv":
+        content = rs.export_table_csv(headers, body)
+        return Response(content=content, media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{name}_report.csv"'})
+    if fmt == "xlsx":
+        content = rs.export_table_xlsx(name.title(), headers, body)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{name}_report.xlsx"'})
+    return _err(400, "BAD_REQUEST", "format must be csv or xlsx")
+
+
+def _endpoint(name: str, builder):
+    def ep(preset: str | None = None,
+           from_val: str | None = Query(default=None, alias="from"),
+           to: str | None = None, status: str | None = None,
+           courier: str | None = None, payment_method: str | None = None,
+           customer: str | None = None, product: str | None = None,
+           state: str | None = None, format: str | None = None,
+           db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+        s, e = _range(preset, from_val, to, db, u.get("business_id"))
+        data = builder(db, u.get("business_id"), s, e,
+                       **_filters(status, courier, payment_method, customer, product, state))
+        return _maybe_export(name, data, format)
+    return ep
+
+
+def _wire():
+    from app.services import report_service as rs
+    for _name, _fn in (
+            ("dashboard", rs.dashboard_report), ("sales", rs.sales_report),
+            ("orders", rs.orders_report), ("payments", rs.payments_report),
+            ("refunds", rs.refunds_report), ("profit", rs.profit_report),
+            ("courier", rs.courier_report), ("gst", rs.gst_report),
+            ("reconciliation", rs.reconciliation_report)):
+        router.get(f"/{_name}")(_endpoint(_name, _fn))
+
+
+_wire()
+
+
+@router.get("/gst/validate")
+def gst_validate(order_id: str, db: Session = Depends(get_db),
+                 u: dict = Depends(get_current_user)):
+    from app.services import report_service as rs
+    try:
+        return {"success": True, "data": rs.validate_order_gst(db, u.get("business_id"), order_id)}
+    except ValueError as e:
+        return _err(404 if "not found" in str(e).lower() else 400, "BAD_REQUEST", str(e))
+
+
+@router.get("/presets")
+def presets():
+    from app.services.report_service import PRESETS
+    return {"success": True, "data": {"presets": list(PRESETS)}}
+
 
 
 class CostItem(BaseModel):
