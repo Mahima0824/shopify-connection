@@ -26,6 +26,7 @@ from app.api.statements import router as statements_router
 from app.api.reports import router as reports_router
 from app.api.carriers import router as carriers_router
 from app.api.ledger import router as ledger_router
+from app.api.accounting import router as accounting_router
 
 
 def seed_initial_data():
@@ -96,6 +97,7 @@ app.include_router(statements_router)
 app.include_router(reports_router)
 app.include_router(carriers_router)
 app.include_router(ledger_router)
+app.include_router(accounting_router)
 
 
 @app.get("/health")

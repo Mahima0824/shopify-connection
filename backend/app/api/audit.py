@@ -15,4 +15,8 @@ def list_audit(entity_type: str | None = None, entity_id: str | None = None,
     rows = q.limit(100).all()
     return {"success": True, "data": {"items": [
         {"id": a.id, "entity_type": a.entity_type, "entity_id": a.entity_id, "action": a.action,
-         "old_data": a.old_data, "new_data": a.new_data} for a in rows]}}
+         "old_data": a.old_data, "new_data": a.new_data,
+         "old_values": getattr(a, "old_values", None), "new_values": getattr(a, "new_values", None),
+         "ip_address": getattr(a, "ip_address", None),
+         "user_agent": getattr(a, "user_agent", None),
+         "created_at": a.created_at.isoformat() if a.created_at else None} for a in rows]}}

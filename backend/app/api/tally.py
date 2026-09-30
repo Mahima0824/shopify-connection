@@ -49,7 +49,17 @@ def get_mapping(db: Session = Depends(get_db), u: dict = Depends(get_current_use
 def put_mapping(body: MappingIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
         raise HTTPException(403, "Accountant role required")
+    from app.services.audit_service import log_audit
+    before = get_or_create_mapping(db, u.get("business_id"))
+    old = {k: getattr(before, k, None) for k in body.model_dump(exclude_unset=True)}
     m = update_mapping(db, u.get("business_id"), body.model_dump(exclude_unset=True))
+    try:
+        log_audit(db, u.get("business_id"), u.get("user_id"), "tally_mapping", m.id,
+                  "MAPPING_CHANGED", old, body.model_dump(exclude_unset=True))
+        db.commit()
+    except Exception:
+        db.rollback()
+    db.refresh(m)
     return {"success": True, "data": m}
 
 
@@ -95,6 +105,15 @@ def export_workbook(db: Session = Depends(get_db), u: dict = Depends(get_current
         status = {"VALIDATION_FAILED": 422, "DUPLICATE_EXPORT": 409,
                   "NOTHING_TO_EXPORT": 404, "NOT_FOUND": 404}.get(e.code, 400)
         return _err(status, e.code, str(e))
+    from app.services.audit_service import log_audit
+    try:
+        log_audit(db, u.get("business_id"), u.get("user_id"), "tally_export",
+                  out["batch"]["id"], "TALLY_GENERATED",
+                  None, {"batch_reference": out["batch"]["batch_reference"],
+                         "record_count": out["batch"]["record_count"]})
+        db.commit()
+    except Exception:
+        db.rollback()
     headers = {"Content-Disposition": f'attachment; filename="{out["file_name"]}"'}
     return Response(
         content=out["content"],
@@ -159,8 +178,16 @@ def mark_imported_ep(bid: str, body: ImportIn,
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
         return _err(403, "FORBIDDEN", "Accountant role required")
     try:
-        return {"success": True, "data": mark_imported(
+        out = mark_imported(
             db, u.get("business_id"), bid, imported=body.imported,
-            partial=body.partial, failed=body.failed)}
+            partial=body.partial, failed=body.failed)
+        from app.services.audit_service import log_audit
+        try:
+            log_audit(db, u.get("business_id"), u.get("user_id"), "tally_export", bid,
+                      "MARKED_IMPORTED", None, {"status": out.get("status")})
+            db.commit()
+        except Exception:
+            db.rollback()
+        return {"success": True, "data": out}
     except TallyError as e:
         return _err(404, e.code, str(e))

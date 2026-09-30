@@ -179,6 +179,15 @@ def upload(statement_type: str = "COURIER_SETTLEMENT", provider: str = "",
         persisted += 1
     db.commit()
     db.refresh(up)
+    try:
+        from app.services.audit_service import log_audit
+        log_audit(db, u.get("business_id"), u.get("user_id"), "statement_upload", up.id,
+                  "STATEMENT_UPLOADED", None,
+                  {"statement_type": stype, "rows": persisted,
+                   "filename": file.filename or ""})
+        db.commit()
+    except Exception:
+        db.rollback()
     out = dict(_udict(up))
     out["persisted_rows"] = persisted
     out["duplicates"] = duplicates

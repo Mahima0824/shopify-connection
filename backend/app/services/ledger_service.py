@@ -151,6 +151,11 @@ def record_event(db: Session, business_id: str, transaction_type: str, amount,
     if a < 0 and t not in ("REFUND", "CANCELLATION", "ADJUSTMENT"):
         raise ValueError("Negative amounts only allowed for REFUND/CANCELLATION/ADJUSTMENT.")
     dt = _utc(transaction_date)
+    try:  # closed-period guard #76/#95 (ADJUSTMENT correction path stays open)
+        from app.services import accounting_service as _acct
+        _acct.assert_open_period(db, business_id, dt, txn_type=t)
+    except ImportError:
+        pass
     key = idempotency_key or f"{t}:{order_id or '-'}:{payment_id or '-'}:{refund_id or '-'}:{a}:{x}:{dt.isoformat()}"
     for _ in range(_max_attempts):
         existing = db.query(FinancialTransaction).filter_by(

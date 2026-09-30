@@ -24,6 +24,7 @@ from app.models.statement import StatementUpload, StatementRow  # noqa: F401
 from app.models.bank_account import BankAccount  # noqa: F401
 from app.models.cost import ProductCostHistory, CostRule  # noqa: F401
 from app.models.financial_transaction import FinancialTransaction  # noqa: F401
+from app.models.accounting_period import AccountingPeriod  # noqa: F401
 from app.models.courier_meta import (  # noqa: F401
     BookingIdempotency,
     ShipmentAttempt,
