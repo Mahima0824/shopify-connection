@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api } from "../../lib/api";
+import { API, api } from "../../lib/api";
 import OrderTable from "../../components/OrderTable";
-import EmptyState from "../../components/EmptyState";
+import ImportResult, { ImportSummary } from "../../components/ImportResult";
 import { IconAlert, IconRefund } from "../../components/icons";
 
 export default function OrdersPage() {
@@ -12,6 +12,9 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -50,6 +53,29 @@ export default function OrdersPage() {
     }
   };
 
+  const handleCsvUpload = async (f: File | undefined) => {
+    if (!f) return;
+    setUploading(true);
+    setImportSummary(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const token = localStorage.getItem("token") ?? "";
+      const r = await fetch(`${API}/api/v1/imports/shopify-csv`, {
+        method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd,
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error?.message ?? "Import failed");
+      setImportSummary(j.data);
+      fetchOrders(true);
+    } catch (err: any) {
+      setError(err?.message ?? "Import failed");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   return (
     <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
 
@@ -71,9 +97,19 @@ export default function OrdersPage() {
           <span style={{ display: "inline-flex", marginRight: "8px" }}><IconRefund size={16} /></span>
           {syncing ? "Syncing Shopify..." : "Sync Shopify Orders"}
         </button>
-        <Link href="/import">Import CSV</Link>
+        <input ref={fileRef} type="file" accept=".csv" aria-label="Upload orders CSV" style={{ display: "none" }}
+          onChange={(e) => handleCsvUpload(e.target.files?.[0])} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary">
+          {uploading ? "Importing…" : "Import CSV"}
+        </button>
         </div>
       </div>
+
+      {importSummary && (
+        <div className="content-card">
+          <ImportResult summary={importSummary} />
+        </div>
+      )}
 
       {/* Filter & Search Controls */}
       <div className="content-card" style={{ padding: "16px 24px" }}>
@@ -106,13 +142,18 @@ export default function OrdersPage() {
             Loading orders directory...
           </div>
         ) : orders.length === 0 ? (
-          <div style={{ padding: "24px" }}>
-            <EmptyState
-              title="No orders yet"
-              body="Sync Shopify orders or import a CSV to populate the directory."
-              primary={{ label: "Import CSV", href: "/import" }}
-              secondary={{ label: "Scan parcels", href: "/scan/dispatch" }}
-            />
+          <div style={{ padding: "24px", textAlign: "center" }}>
+            <p style={{ color: "var(--muted)", marginBottom: "16px" }}>
+              No orders yet. Sync Shopify or import a CSV to populate the directory.
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button onClick={handleSyncShopify} disabled={syncing} className="btn-primary">
+                Sync Shopify Orders
+              </button>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary">
+                Import CSV
+              </button>
+            </div>
           </div>
         ) : (
           <OrderTable orders={orders} />
