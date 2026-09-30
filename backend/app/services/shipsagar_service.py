@@ -163,13 +163,13 @@ def verify_signature(raw_body: bytes, signature: str | None, secret: str | None 
 
 
 def verify_timestamp(ts: str | None, tolerance_seconds: int = 300) -> bool:
-    """Replay protection: timestamp header must be within tolerance.
+    """Replay protection: timestamp header must be present and within tolerance.
 
-    Missing timestamp -> True (payloads without timestamps are allowed but
-    still require signature + event-ID checks).
+    Strict: missing, empty, or unparseable timestamps fail verification
+    (payloads without timestamps are rejected with STALE_TIMESTAMP).
     """
-    if not ts:
-        return True
+    if ts is None or not str(ts).strip():
+        return False
     try:
         value = float(str(ts).strip())
     except (TypeError, ValueError):

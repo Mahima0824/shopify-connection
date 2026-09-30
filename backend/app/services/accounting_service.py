@@ -97,9 +97,15 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
     from app.models.tally import TallyExportRecord
 
     start, end = month_window(year, month)
+    # Fail-closed (#76): any check-query exception blocks close via
+    # check_errors (never silently treated as clean).
     issues: dict[str, list] = {"unreconciled_payments": [], "unreconciled_bank": [],
                                "unexported_transactions": [],
-                               "invalid_gst": [], "missing_cogs": [], "pending_refunds": []}
+                               "invalid_gst": [], "missing_cogs": [], "pending_refunds": [],
+                               "check_errors": []}
+
+    def _block(check: str, exc: Exception) -> None:
+        issues["check_errors"].append(f"{check}: {type(exc).__name__}: {exc}")
 
     try:  # genuine recon state per Task 2 (#35): a payment is reconciled only when a
         # BANK_STATEMENT row links it with status MATCHED (payment_status alone is not proof).
@@ -118,8 +124,8 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
                 continue  # dead payments need no bank recon
             if str(p.id) not in matched_pids:
                 issues["unreconciled_payments"].append(str(p.id))
-    except Exception:
-        pass
+    except Exception as exc:
+        _block("unreconciled_payments", exc)
 
     try:  # bank mismatches block close per #76: any BANK_STATEMENT row in-month that is
         # neither MATCHED nor terminally excluded (IGNORED/DUPLICATE) is still open.
@@ -136,28 +142,35 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
             if (r.reconciliation_status or "UNMATCHED").upper() not in (
                     "MATCHED", "IGNORED", "DUPLICATE"):
                 issues["unreconciled_bank"].append(str(r.id))
-    except Exception:
-        pass
+    except Exception as exc:
+        _block("unreconciled_bank", exc)
 
+    txns = None
     try:
         txns = db.query(FinancialTransaction).filter_by(business_id=business_id).filter(
             FinancialTransaction.transaction_date >= start,
             FinancialTransaction.transaction_date < end).all()
-    except Exception:
-        txns = []
+    except Exception as exc:
+        _block("transactions", exc)
+        txns = None
     try:
         exported = {(x.transaction_id) for x in db.query(TallyExportRecord).filter_by(
             business_id=business_id).all()}
-    except Exception:
-        exported = set()
-    for t in txns:
-        if t.transaction_id not in exported:
-            issues["unexported_transactions"].append(t.transaction_id)
-        try:  # invalid GST: net + tax must equal amount (#47/#50)
-            if abs(float(t.net_amount or 0) + float(t.tax_amount or 0) - float(t.amount or 0)) > 0.01:
+    except Exception as exc:
+        _block("exported", exc)
+        exported = None
+    if txns is None or exported is None:
+        # Cannot prove completeness — fail closed without touching per-txn checks.
+        txns = []
+    else:
+        for t in txns:
+            if t.transaction_id not in exported:
+                issues["unexported_transactions"].append(t.transaction_id)
+            try:  # invalid GST: net + tax must equal amount (#47/#50, Decimal)
+                if abs(_d(t.net_amount) + _d(t.tax_amount) - _d(t.amount)) > Decimal("0.01"):
+                    issues["invalid_gst"].append(t.transaction_id)
+            except Exception:
                 issues["invalid_gst"].append(t.transaction_id)
-        except Exception:
-            issues["invalid_gst"].append(t.transaction_id)
 
     try:  # real GST validation: Task 3 tally gate over the period's rows. Only GST
         # codes map here (mapping/customer/duplicate errors belong to the export flow).
@@ -168,16 +181,16 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
                 ref = e.get("ref")
                 if ref and ref not in issues["invalid_gst"]:
                     issues["invalid_gst"].append(ref)
-    except Exception:
-        pass
+    except Exception as exc:
+        _block("tally_gst_gate", exc)
 
     try:  # missing COGS: orders in month without a COGS event (#30)
         oids = [o.id for o in db.query(Order).filter_by(business_id=business_id).filter(
             Order.order_date >= start, Order.order_date < end).all()]
         cogs_oids = {t.order_id for t in txns if t.transaction_type == "COGS" and t.order_id}
         issues["missing_cogs"] = [oid for oid in oids if oid not in cogs_oids]
-    except Exception:
-        pass
+    except Exception as exc:
+        _block("missing_cogs", exc)
 
     try:
         for r in db.query(Refund).filter_by(business_id=business_id).all():
@@ -186,8 +199,8 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
                 continue
             if (r.status or "").upper() not in ("COMPLETED", "PROCESSED", "SETTLED"):
                 issues["pending_refunds"].append(str(r.id))
-    except Exception:
-        pass
+    except Exception as exc:
+        _block("pending_refunds", exc)
 
     total = sum(len(v) for v in issues.values())
     counts = {k: len(v) for k, v in issues.items()}

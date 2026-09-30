@@ -55,11 +55,14 @@ def _client(monkeypatch, mk):
     return c
 
 
-def _post(c, payload: dict, secret: str = SECRET, ts: str | None = None,
+def _post(c, payload: dict, secret: str = SECRET, ts: str | None = "AUTO",
           bid: str | None = None):
     raw = json.dumps(payload).encode()
     sig = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     headers = {"Content-Type": "application/json", "X-ShipSagar-Signature": sig}
+    if ts == "AUTO":  # strict replay guard: real webhooks always carry a timestamp
+        from datetime import timezone as _tz
+        ts = str(datetime.now(_tz.utc).timestamp())
     if ts is not None:
         headers["X-ShipSagar-Timestamp"] = ts
     if bid is not None:

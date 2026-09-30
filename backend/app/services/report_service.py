@@ -473,14 +473,28 @@ def _num(v):
 
 
 def _xldate(v):
-    """Coerce ISO strings to naive-UTC datetimes so Excel holds real dates (#79)."""
-    if v is None or isinstance(v, datetime):
-        return v.replace(tzinfo=None) if isinstance(v, datetime) else v
-    try:
-        d = datetime.fromisoformat(str(v))
-        return d.replace(tzinfo=None) if d.tzinfo else d
-    except (ValueError, TypeError):
+    """Coerce ISO strings to naive-IST datetimes so Excel holds real dates (#79).
+
+    Repo display discipline is Asia/Kolkata: convert UTC->IST first.
+    """
+    from datetime import timedelta
+    if v is None:
         return v
+    if isinstance(v, datetime):
+        d = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    else:
+        try:
+            d = datetime.fromisoformat(str(v))
+            d = d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return v
+    d = d.astimezone(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        d = d.astimezone(ZoneInfo("Asia/Kolkata"))
+    except Exception:
+        d = d + timedelta(hours=5, minutes=30)
+    return d.replace(tzinfo=None)
 
 
 def export_table_xlsx(title: str, headers: list[str], rows: list[list],
@@ -604,20 +618,21 @@ def monthly_report(db, business_id: str, month: str) -> dict:
         else:
             return_sec["pending_refund"] += 1
 
-    gross = round(sum(float(o.total_amount or 0) for o in orders), 2)
-    discounts = round(sum(float(o.discount_amount or 0) for o in orders), 2)
-    refunds = round(sum(float(r.amount or 0) for r in db.query(Refund).filter_by(business_id=business_id).all()
-                        if r.order_id in set(oids)), 2)
+    gross = _d(sum((_d(o.total_amount) for o in orders), _d(0)))
+    discounts = _d(sum((_d(o.discount_amount) for o in orders), _d(0)))
+    refunds = _d(sum((_d(r.amount) for r in db.query(Refund).filter_by(business_id=business_id).all()
+                        if r.order_id in set(oids)), _d(0)))
     fin_rows = db.query(ShipmentFinancial).filter_by(business_id=business_id).all()
     fin_rows = [f for f in fin_rows if f.order_id in set(oids)]
-    expected = round(sum(float(f.expected_cod_amount or 0) for f in fin_rows), 2)
-    collected = round(sum(float(f.collected_amount or 0) for f in fin_rows), 2)
-    settled = round(sum(float(f.settled_amount or 0) for f in fin_rows), 2)
-    fees = round(sum(float(f.fee_amount or 0) for f in fin_rows), 2)
-    money_sec = {"gross": gross, "discounts": discounts, "refunds": refunds,
-                 "expected": expected, "collected": collected, "settled": settled,
-                 "pending": round(expected - settled, 2), "fees": fees,
-                 "net": round(settled - fees, 2)}
+    expected = _d(sum((_d(f.expected_cod_amount) for f in fin_rows), _d(0)))
+    collected = _d(sum((_d(f.collected_amount) for f in fin_rows), _d(0)))
+    settled = _d(sum((_d(f.settled_amount) for f in fin_rows), _d(0)))
+    fees = _d(sum((_d(f.fee_amount) for f in fin_rows), _d(0)))
+    money_sec = {"gross": float(gross), "discounts": float(discounts), "refunds": float(refunds),
+                 "expected": float(expected), "collected": float(collected),
+                 "settled": float(settled), "pending": float(expected - settled),
+                 "fees": float(fees),
+                 "net": float(settled - fees)}
 
     exc = db.query(Reconciliation).filter_by(business_id=business_id, resolved=False).all()
     exc = [r for r in exc if r.order_id in set(oids)]
@@ -627,7 +642,7 @@ def monthly_report(db, business_id: str, month: str) -> dict:
     exc_sec = {"open": len(exc), "by_severity": by_sev}
 
     cost_lines = []
-    cost_total = 0.0
+    cost_total = _d(0)
     order_count = max(len(orders), 1)
     item_qty = sum(i.quantity for i in db.query(OrderItem).filter(OrderItem.order_id.in_(oids)).all()) if oids else 0
     multipliers = {"COGS_DEFAULT": item_qty, "SHIPPING": len(orders), "GATEWAY_FEE": len(orders),
@@ -636,20 +651,22 @@ def monthly_report(db, business_id: str, month: str) -> dict:
     sources = set()
     for key in ("COGS_DEFAULT", "SHIPPING", "GATEWAY_FEE", "PACKAGING", "RETURN_COST", "RTO_COST", "OTHER"):
         amt, src = get_cost(db, business_id, key, month_end)
-        line = round(amt * multipliers[key], 2)
+        line = _d(_d(amt) * multipliers[key])
         cost_total += line
         sources.add(src)
-        cost_lines.append({"key": key, "per_unit": amt, "units": multipliers[key], "total": line, "source": src})
-    net_revenue = round(gross - discounts - refunds, 2)
-    profit = round(net_revenue - cost_total, 2)
+        cost_lines.append({"key": key, "per_unit": float(_d(amt)), "units": multipliers[key],
+                           "total": float(line), "source": src})
+    net_revenue = gross - discounts - refunds
+    profit = net_revenue - cost_total
     label = "OPERATING PROFIT" if sources == {"ACTUAL_STATEMENT"} else "ESTIMATED OPERATING PROFIT"
-    pnl = {"gross": gross, "discounts": discounts, "refunds": refunds, "net_revenue": net_revenue,
-           "costs": cost_lines, "cost_total": round(cost_total, 2), "profit": profit, "label": label}
+    pnl = {"gross": float(gross), "discounts": float(discounts), "refunds": float(refunds),
+           "net_revenue": float(net_revenue),
+           "costs": cost_lines, "cost_total": float(cost_total), "profit": float(profit), "label": label}
 
     return {"month": month, "generated_at": now.isoformat(), "orders": order_sec, "courier": courier_sec,
             "returns": return_sec, "money": money_sec, "exceptions": exc_sec,
-            "costs": {"lines": cost_lines, "total": round(cost_total, 2)}, "profitability": pnl,
+            "costs": {"lines": cost_lines, "total": float(cost_total)}, "profitability": pnl,
             "order_rows": [{"name": o.shopify_order_name, "financial": o.financial_status,
-                            "operational": o.operational_status, "total": float(o.total_amount or 0)} for o in orders],
+                            "operational": o.operational_status, "total": float(_d(o.total_amount))} for o in orders],
             "shipment_rows": [{"awb": s.awb_number, "carrier": s.carrier_code, "status": s.tracking_status,
                                "location": s.current_location or ""} for s in ships]}

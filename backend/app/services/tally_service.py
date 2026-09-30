@@ -159,6 +159,12 @@ def collect_export_rows(db: Session, business_id: str,
 
     orders = {o.id: o for o in db.query(Order).filter_by(business_id=business_id).all()}
     custs = {c.id: c for c in db.query(Customer).filter_by(business_id=business_id).all()}
+    try:
+        from app.models.business import Business
+        _biz = db.query(Business).filter_by(id=business_id).first()
+        _biz_state = (getattr(_biz, "state_code", "") or "").strip().upper() or None
+    except Exception:
+        _biz_state = None
 
     rows: list[dict] = []
     for t in txns:
@@ -170,6 +176,16 @@ def collect_export_rows(db: Session, business_id: str,
         party = ""
         if c is not None:
             party = f"{c.first_name or ''} {c.last_name or ''}".strip() or (c.email or "")
+        # Jurisdiction (#50): seller = order override else business state;
+        # buyer = place_of_supply else ship state else customer state.
+        seller = ((getattr(o, "business_state_code", "") or "").strip().upper()
+                  if o is not None else "") or _biz_state
+        buyer = ""
+        if o is not None:
+            buyer = ((o.place_of_supply or o.ship_state_code) or "").strip().upper()
+        if not buyer and c is not None:
+            buyer = (c.state_code or "").strip().upper()
+        jurisdiction = _resolve_jurisdiction(seller, buyer)
         vtype = t.tally_voucher_type or _voucher_for(t.transaction_type)
         # Never emit a generic voucher: coerce unknowns into the typed set.
         if vtype not in (V_SALES, V_RECEIPT, V_CREDIT, V_PAYMENT, V_JOURNAL):
@@ -184,6 +200,9 @@ def collect_export_rows(db: Session, business_id: str,
             "order_ref": getattr(o, "shopify_order_name", "") or "",
             "party": party,
             "customer_id": getattr(o, "customer_id", None),
+            "jurisdiction": jurisdiction,
+            "seller_state": seller or None,
+            "buyer_state": buyer or None,
             "amount": float(amt),
             "tax_amount": float(_d(t.tax_amount)),
             "net_amount": float(_d(t.net_amount)),
@@ -240,15 +259,26 @@ def validate_export(db: Session, business_id: str,
         warn("GSTIN_UNVERIFIED", "GSTIN not captured on customers — verify in Tally before filing.")
         warn("STATE_UNVERIFIED", "State/place-of-supply not captured — intra-state split assumed.")
         warn("HSN_UNVERIFIED", "HSN/SAC not captured on items — verify in Tally before filing.")
+    # Jurisdiction-aware warning (#50): UNKNOWN rows default to a CGST/SGST
+    # split with IGST=0 — flag explicitly so IGST is never silently filed as 0.
+    unknown_rows = [r for r in rows
+                    if r["voucher_type"] == V_SALES and r.get("jurisdiction") == "UNKNOWN"]
+    if unknown_rows:
+        warn("IGST_UNVERIFIED",
+             f"{len(unknown_rows)} sale(s) have unknown place-of-supply — "
+             "CGST/SGST split assumed with IGST=0; CA review required before filing.",
+             unknown_rows[0]["voucher_number"])
+        warn("CA_REVIEW",
+             "GST treatment must be reviewed by the business's CA/tax professional before filing.")
 
-    # tax calc + invoice total
+    # tax calc + invoice total (Decimal-quantized, no float drift)
     for r in rows:
-        if abs((r["net_amount"] + r["tax_amount"]) - r["amount"]) > 0.01:
+        if abs(_d(r["net_amount"]) + _d(r["tax_amount"]) - _d(r["amount"])) > _Q:
             err("TAX_CALC_MISMATCH",
                 f"{r['transaction_id']}: net + tax != amount "
                 f"({r['net_amount']}+{r['tax_amount']}!={r['amount']}).", r["transaction_id"])
         if r["transaction_type"] == "SALE" and r["order_total"] is not None:
-            if abs(r["order_total"] - r["amount"]) > 0.01:
+            if abs(_d(r["order_total"]) - _d(r["amount"])) > _Q:
                 err("INVOICE_TOTAL_MISMATCH",
                     f"Invoice {r['voucher_number']}: ledger {r['amount']} != order {r['order_total']}.",
                     r["voucher_number"])
@@ -339,18 +369,48 @@ def validate_export(db: Session, business_id: str,
     }
 
 
-def _split_gst(tax: float) -> tuple[float, float, float]:
-    """Intra-state default split (CGST/SGST); IGST=0. Inter-state needs place-of-supply (#50)."""
-    t = round(float(tax or 0), 2)
-    half = round(t / 2, 2)
-    return half, round(t - half, 2), 0.0
+def _resolve_jurisdiction(seller_state: str | None, buyer_state: str | None) -> str:
+    """Place-of-supply jurisdiction (#50): SAME_STATE / INTER_STATE / UNKNOWN.
+
+    UNKNOWN means jurisdiction cannot be proven — callers must surface an
+    IGST-UNVERIFIED/CA-review warning and never silently file IGST=0.
+    """
+    s = (seller_state or "").strip().upper() or None
+    b = (buyer_state or "").strip().upper() or None
+    if not s or not b:
+        return "UNKNOWN"
+    return "SAME_STATE" if s == b else "INTER_STATE"
+
+
+def _split_gst(tax: float, jurisdiction: str | None = "UNKNOWN") -> tuple[float, float, float]:
+    """Jurisdiction-aware split (#50, Decimal-quantized).
+
+    SAME_STATE (or UNKNOWN default): CGST+SGST halves, IGST=0 — UNKNOWN rows
+    are still flagged IGST-UNVERIFIED in validation, never silently filed.
+    INTER_STATE: full tax as IGST, CGST/SGST=0.
+    """
+    t = _d(tax)
+    if (jurisdiction or "UNKNOWN").upper() == "INTER_STATE":
+        return 0.0, 0.0, float(t)
+    half = (t / 2).quantize(_Q, rounding=ROUND_HALF_UP)
+    return float(half), float(t - half), 0.0
 
 
 def _xl_date(dt):
-    """Excel does not support tz-aware datetimes — write naive (UTC) dates."""
+    """Excel does not support tz-aware datetimes — write naive IST dates.
+
+    Repo display discipline is Asia/Kolkata: convert UTC->IST before taking
+    the date so an evening-UTC txn lands on its IST date in Tally.
+    """
+    from datetime import timedelta
     d = _utc(dt)
     if d is None:
         return None
+    try:
+        from zoneinfo import ZoneInfo
+        d = d.astimezone(ZoneInfo("Asia/Kolkata"))
+    except Exception:
+        d = d + timedelta(hours=5, minutes=30)
     return d.replace(tzinfo=None)
 
 
@@ -419,7 +479,7 @@ def build_workbook(rows: list[dict], mappings: dict, validation: dict,
     ws.append(["Errors", validation.get("error_count", 0)])
     ws.append(["Warnings", validation.get("warning_count", 0)])
     ws.append(["Validation", "PASSED" if validation.get("can_export") else "BLOCKED"])
-    ws.append(["Total Amount", round(sum(r["amount"] for r in rows), 2)])
+    ws.append(["Total Amount", float(sum((_d(r["amount"]) for r in rows), _d(0)))])
     _style_sheet(ws)
 
     def sheet(name, headers, data_rows, date_cols, money_cols):
@@ -435,7 +495,7 @@ def build_workbook(rows: list[dict], mappings: dict, validation: dict,
 
     sale_rows = []
     for r in sales:
-        cg, sg, ig = _split_gst(r["tax_amount"])
+        cg, sg, ig = _split_gst(r["tax_amount"], r.get("jurisdiction"))
         sale_rows.append([r["voucher_type"], r["voucher_number"], _xl_date(r["date"]),
                           r["party"], "", "", mappings.get("sales", ""),
                           round(r["net_amount"], 2), cg, sg, ig, round(r["amount"], 2)])
@@ -464,11 +524,11 @@ def build_workbook(rows: list[dict], mappings: dict, validation: dict,
           ["Voucher Type", "Original Invoice", "Refund Reference", "Customer", "Date",
            "Original Amount", "Refund Amount", "Taxable Refund",
            "CGST Refund", "SGST Refund", "IGST Refund", "Reason"],
-          [[r["voucher_type"], r["order_ref"], r["reference_number"], r["party"], _xl_date(r["date"]),
-            r["order_total"] if r["order_total"] is not None else round(r["amount"], 2),
-            round(r["amount"], 2), round(r["amount"] - r["tax_amount"], 2),
-            *_split_gst(r["tax_amount"]), ""]
-           for r in credits],
+           [[r["voucher_type"], r["order_ref"], r["reference_number"], r["party"], _xl_date(r["date"]),
+             r["order_total"] if r["order_total"] is not None else round(r["amount"], 2),
+             round(r["amount"], 2), round(r["amount"] - r["tax_amount"], 2),
+             *_split_gst(r["tax_amount"], r.get("jurisdiction")), ""]
+            for r in credits],
           date_cols=(5,), money_cols=(6, 7, 8, 9, 10, 11))
 
     sheet("Expenses",
@@ -514,9 +574,9 @@ def _fill_sales_items(db: Session, business_id: str, content: bytes, rows: list[
             OrderItem.order_id.in_(list(sale_voucher))).all()
     for it in items:
         qty = int(it.quantity or 0)
-        rate = float(it.price or 0)
+        rate = _d(it.price)
         ws.append([sale_voucher.get(str(it.order_id), ""), it.title or "", it.sku or "", "",
-                   qty, round(rate, 2), round(qty * rate, 2)])
+                   qty, float(rate), float(_d(rate * qty))])
     if items:
         _style_header(ws, 7)
         _style_sheet(ws, (), (6, 7))
@@ -567,7 +627,7 @@ def generate_workbook_export(db: Session, business_id: str, user_id: str,
     content = build_workbook(rows, comp["mappings"], validation, period, batch_ref)
     content = _fill_sales_items(db, business_id, content, rows)
 
-    total = round(sum(r["amount"] for r in rows), 2)
+    total = float(sum((_d(r["amount"]) for r in rows), _d(0)))
     batch = ExportBatch(business_id=business_id, batch_reference=batch_ref,
                         export_type="TALLY_EXCEL", record_count=len(rows), generated_by=user_id,
                         status="GENERATED", batch_number=batch_ref, date_from=df, date_to=dt_,
