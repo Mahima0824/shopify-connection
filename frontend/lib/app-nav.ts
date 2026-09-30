@@ -27,6 +27,7 @@ export const APP_NAV_GROUPS: NavEntry[] = [
     label: "Finance",
     children: [
       { label: "Statements", href: "/statements" },
+      { label: "Ledger", href: "/finance/ledger" },
       { label: "Reports", href: "/reports/monthly" },
       { label: "Tally", href: "/settings/tally" },
     ],

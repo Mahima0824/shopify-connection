@@ -35,3 +35,118 @@ export async function api<T>(p: string, init?: RequestInit, token?: string): Pro
     throw err;
   }
 }
+
+// --- Finance ledger (FE1) ---
+
+export type LedgerTxnType =
+  | "SALE"
+  | "PAYMENT"
+  | "REFUND"
+  | "CANCELLATION"
+  | "COGS"
+  | "SHIPPING_EXPENSE"
+  | "PACKAGING_EXPENSE"
+  | "PAYMENT_GATEWAY_FEE"
+  | "OTHER_EXPENSE"
+  | "TAX"
+  | "ADJUSTMENT";
+
+export const LEDGER_TXN_TYPES: LedgerTxnType[] = [
+  "SALE",
+  "PAYMENT",
+  "REFUND",
+  "CANCELLATION",
+  "COGS",
+  "SHIPPING_EXPENSE",
+  "PACKAGING_EXPENSE",
+  "PAYMENT_GATEWAY_FEE",
+  "OTHER_EXPENSE",
+  "TAX",
+  "ADJUSTMENT",
+];
+
+export type LedgerEntry = {
+  id: string;
+  transaction_id: string;
+  business_id: string;
+  order_id: string | null;
+  payment_id: string | null;
+  refund_id: string | null;
+  expense_id: string | null;
+  transaction_type: LedgerTxnType | string;
+  transaction_date: string | null;
+  transaction_date_ist: string | null;
+  amount: string;
+  tax_amount: string;
+  net_amount: string;
+  currency: string;
+  debit_account: string;
+  credit_account: string;
+  payment_method: string | null;
+  reference_number: string | null;
+  status: string;
+  tally_voucher_type: string | null;
+  tally_voucher_number: string | null;
+  reversal_of_id: string | null;
+};
+
+export type LedgerListParams = {
+  from?: string;
+  to?: string;
+  type?: LedgerTxnType | string;
+  order_id?: string;
+};
+
+export type LedgerListResponse = { items: LedgerEntry[]; total: number };
+
+export type LedgerSummary = {
+  revenue: {
+    gross_inclusive: string;
+    discounts: string;
+    refunds_inclusive: string;
+    cancellations_inclusive: string;
+    net_inclusive: string;
+    gst: string;
+    gross_exclusive: string;
+    net_exclusive: string;
+  };
+  profit: {
+    net_sales_exclusive: string;
+    cogs: string;
+    gross_profit: string;
+    shipping: string;
+    packaging: string;
+    gateway_fees: string;
+    other: string;
+    operating_profit: string;
+    label: string;
+    warning: string;
+    margin_pct: string;
+  };
+  cogs_total: string;
+  transaction_count: number;
+  display_timezone: string;
+  period: { from: string; to: string };
+};
+
+export function buildLedgerQuery(params: LedgerListParams): string {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.type) q.set("type", params.type);
+  if (params.order_id) q.set("order_id", params.order_id);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+export function listLedger(params: LedgerListParams = {}, token?: string): Promise<LedgerListResponse> {
+  return api<LedgerListResponse>(`/api/v1/ledger${buildLedgerQuery(params)}`, {}, token);
+}
+
+export function getLedgerSummary(
+  params: { from: string; to: string },
+  token?: string,
+): Promise<LedgerSummary> {
+  const q = new URLSearchParams({ from: params.from, to: params.to }).toString();
+  return api<LedgerSummary>(`/api/v1/ledger/summary?${q}`, {}, token);
+}
