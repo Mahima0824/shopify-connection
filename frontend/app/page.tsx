@@ -26,7 +26,7 @@ const features = [
   {
     icon: <IconTag size={20} />,
     title: "Scan",
-    body: "Validate every dispatch and return at the station with a 44px scan flow.",
+    body: "Validate every dispatch and return at the station with a fast scan flow.",
   },
   {
     icon: <IconReceipt size={20} />,
@@ -199,7 +199,7 @@ export default function Home() {
           <div className="grid-3" style={{ marginTop: 32 }}>
             {[
               { n: "1", title: "Connect", body: "Link Shopify and Tally; orders flow into one ledger automatically." },
-              { n: "2", title: "Scan", body: "Validate every dispatch and return at the station with a 44px scan flow." },
+              { n: "2", title: "Scan", body: "Validate every dispatch and return at the station with a fast scan flow." },
               { n: "3", title: "Close", body: "Resolve exceptions and close month-end in hours, not days." },
             ].map((s, i) => (
               <Reveal key={s.n} delay={i * 100}>
