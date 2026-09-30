@@ -101,7 +101,10 @@ export default function StatementsPage() {
         if (!isCurrent()) return;
         setSummary(null);
         setMismatches([]);
-        setReconError(e?.message ?? "Failed to load reconciliation");
+        const msg = e?.status === 404
+          ? "Reconciliation API not found on the backend. Restart the backend server (and run migrations) so it serves the latest code, then Retry."
+          : (e?.message ?? "Failed to load reconciliation");
+        setReconError(msg);
       })
       .finally(() => {
         if (isCurrent()) setReconLoading(false);
@@ -174,7 +177,7 @@ export default function StatementsPage() {
         )}
       </div>
 
-      <div>
+      <div id="reconciliation" style={{ scrollMarginTop: "80px" }}>
         <h2 className="display" style={{ fontSize: "20px", fontWeight: 700 }}>Reconciliation</h2>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Expected settlements vs actual bank credits &mdash; clear the mismatch queue
