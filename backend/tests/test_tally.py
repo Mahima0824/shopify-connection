@@ -62,10 +62,10 @@ def test_tally_api_endpoints():
     assert r.status_code == 200
     assert r.json()["data"]["voucher_sales"] == "Export Sales"
     
-    # 3. Validate
+    # 3. Validate (#47 gate: empty scope -> nothing to export, no errors)
     r = c.post("/api/v1/tally/validate", headers=headers)
     assert r.status_code == 200
-    assert r.json()["data"]["valid"] is True
+    assert r.json()["data"]["error_count"] == 0
     
     # 4. Export
     r = c.post("/api/v1/tally/export", headers=headers)
