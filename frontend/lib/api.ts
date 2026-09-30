@@ -143,6 +143,92 @@ export function listLedger(params: LedgerListParams = {}, token?: string): Promi
   return api<LedgerListResponse>(`/api/v1/ledger${buildLedgerQuery(params)}`, {}, token);
 }
 
+// --- Bank reconciliation / statements mismatch board (FE2) ---
+
+export type BankSummary = {
+  expected_settlement: string;
+  actual_bank_credit: string;
+  difference: string;
+  matched: number;
+  pending: number;
+  mismatch: number;
+  unknown: number;
+  ignored: number;
+  total: number;
+};
+
+export type BankMismatchItem = {
+  bank_row_id: string;
+  order_id: string | null;
+  order_name: string | null;
+  payment_id: string | null;
+  payment_reference: string | null;
+  shipment_id: string | null;
+  gateway_settlement_reference: string | null;
+  expected_amount: number;
+  actual_amount: number;
+  bank_reference: string | null;
+  difference: number;
+  match_level: string | null;
+  transaction_date: string | null;
+  // Present when the backend returns POTENTIAL_MATCH candidates alongside
+  // MISMATCH rows; bank-mismatches today returns MISMATCH only.
+  status?: string;
+};
+
+export type BankMismatchResponse = { items: BankMismatchItem[]; total: number };
+
+export function getBankSummary(token?: string): Promise<BankSummary> {
+  return api<BankSummary>(`/api/v1/reconciliation/bank-summary`, {}, token);
+}
+
+export function listBankMismatches(token?: string): Promise<BankMismatchResponse> {
+  return api<BankMismatchResponse>(`/api/v1/reconciliation/bank-mismatches`, {}, token);
+}
+
+export function manualMatchStatementRow(
+  rowId: string,
+  shipmentId: string,
+  token?: string,
+): Promise<{ id: string; reconciliation_status: string }> {
+  return api<{ id: string; reconciliation_status: string }>(
+    `/api/v1/statements/rows/${rowId}/match`,
+    { method: "POST", body: JSON.stringify({ shipment_id: shipmentId }) },
+    token,
+  );
+}
+
+// Role gating for manual match (ADMIN/ACCOUNTANT only). No prior frontend role
+// handling existed: login stores only the JWT, so decode the payload for a
+// role claim and allow a localStorage "role" override (used by tests/dev).
+export function getStoredRole(token?: string): string | null {
+  try {
+    if (typeof window !== "undefined") {
+      const override = window.localStorage.getItem("role");
+      if (override && override.trim()) return override.trim().toUpperCase();
+    }
+  } catch {
+    // ignore storage errors
+  }
+  const t =
+    token ?? (typeof window !== "undefined" ? window.localStorage.getItem("token") : null);
+  if (t) {
+    try {
+      const payload = JSON.parse(atob(t.split(".")[1] ?? ""));
+      const r = payload.role ?? payload.user_role ?? payload.userRole;
+      if (r && String(r).trim()) return String(r).trim().toUpperCase();
+    } catch {
+      // not a decodable JWT; fall through
+    }
+  }
+  return null;
+}
+
+export function canManualMatch(role?: string | null): boolean {
+  const r = (role ?? getStoredRole() ?? "").toUpperCase();
+  return r === "ADMIN" || r === "ACCOUNTANT";
+}
+
 export function getLedgerSummary(
   params: { from: string; to: string },
   token?: string,
