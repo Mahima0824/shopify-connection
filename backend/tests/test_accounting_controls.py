@@ -79,6 +79,112 @@ def _bid(mk):
     return bid
 
 
+def test_rbac_matrix_single_source_of_truth():
+    """allowed() is the gate: matrix lives in rbac tuples, endpoints enforce it."""
+    from app.services.rbac import ACCOUNTING_ROLES, ADMIN_ONLY, allowed
+    assert allowed("ADMIN", *ACCOUNTING_ROLES)
+    assert allowed("ACCOUNTANT", *ACCOUNTING_ROLES)
+    assert not allowed("WAREHOUSE", *ACCOUNTING_ROLES)
+    assert not allowed("VIEWER", *ACCOUNTING_ROLES)
+    assert not allowed(None, *ACCOUNTING_ROLES)
+    assert allowed("ADMIN", *ADMIN_ONLY)
+    assert not allowed("ACCOUNTANT", *ADMIN_ONLY)
+    # Gate end-to-end: WAREHOUSE/VIEWER 403, ACCOUNTANT passes through to logic.
+    c, mk, bid, h = _env()
+    assert c.post("/api/v1/accounting/periods/2026/5/close",
+                  headers=h["WAREHOUSE"]).status_code == 403
+    assert c.post("/api/v1/accounting/periods/2026/5/reopen",
+                  headers=h["VIEWER"]).status_code == 403
+    assert c.put("/api/v1/accounting/fy", json={"fy_start_month": 4},
+                 headers=h["ACCOUNTANT"]).status_code == 403
+    r = c.post("/api/v1/accounting/periods/2026/5/close", headers=h["ACCOUNTANT"])
+    assert r.status_code == 200, r.text  # clean month: gate passes, close succeeds
+
+
+def test_bank_recon_state_blocks_close():
+    """PAID payment_status alone does not pass; only a MATCHED bank row reconciles.
+    A MISMATCH bank row blocks via unreconciled_bank; fixing both unblocks close."""
+    from app.models.order import Order
+    from app.models.payment import Payment
+    from app.models.statement import StatementRow, StatementUpload
+    c, mk, bid, h = _env()
+    db = mk()
+    o = Order(business_id=bid, internal_order_number="T5B", shopify_order_id="T5B",
+              shopify_order_name="#T5B",
+              order_date=datetime(2026, 7, 10, tzinfo=timezone.utc),
+              total_amount=100, tax_amount=0)
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    p = Payment(business_id=bid, order_id=o.id, amount=100, payment_status="PAID",
+                method="ONLINE", transaction_id="T5PAYB",
+                created_at=datetime(2026, 7, 10, tzinfo=timezone.utc))
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    pid = p.id
+    up = StatementUpload(business_id=bid, statement_type="BANK_STATEMENT", provider="HDFC",
+                         original_filename="july.csv", file_hash="t5hash",
+                         row_count=1, status="READY", uploaded_by=None)
+    db.add(up)
+    db.commit()
+    db.refresh(up)
+    bad = StatementRow(statement_upload_id=up.id, row_number=2,
+                       reference_number="UTR-BAD", transaction_date=datetime(
+                           2026, 7, 11, tzinfo=timezone.utc),
+                       credit=90, debit=0, reconciliation_status="MISMATCH",
+                       import_identity="t5-bank-bad")
+    db.add(bad)
+    db.commit()
+    db.close()
+
+    r = c.post("/api/v1/accounting/periods/2026/7/close", headers=h["ADMIN"])
+    assert r.status_code == 422, r.text
+    counts = r.json()["error"]["issues"]["counts"]
+    assert counts["unreconciled_payments"] == 1  # PAID but no MATCHED bank row
+    assert counts["unreconciled_bank"] == 1  # MISMATCH row
+
+    # Resolve: link payment via MATCHED row, fix the bad row to MATCHED.
+    db = mk()
+    row = db.query(StatementRow).filter_by(import_identity="t5-bank-bad").first()
+    row.reconciliation_status = "MATCHED"
+    row.matched_payment_id = pid
+    db.commit()
+    db.close()
+    r2 = c.get("/api/v1/accounting/periods/2026/7", headers=h["ADMIN"]).json()["data"]
+    assert r2["issues"]["counts"]["unreconciled_payments"] == 0
+    assert r2["issues"]["counts"]["unreconciled_bank"] == 0
+
+
+def test_bad_gst_blocks_close():
+    """Real bad-GST row: ledger SALE 1000.00 against order total 1180.00 trips the
+    Task 3 tally gate (INVOICE_TOTAL_MISMATCH) into invalid_gst."""
+    from app.models.order import Order
+    from app.services import ledger_service as ls
+    c, mk, bid, h = _env()
+    db = mk()
+    o = Order(business_id=bid, internal_order_number="T5G", shopify_order_id="T5G",
+              shopify_order_name="INV-T5G",
+              order_date=datetime(2026, 7, 5, tzinfo=timezone.utc),
+              total_amount=1180, tax_amount=180)
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    ls.record_event(db, bid, "SALE", "1000.00", "180.00",
+                    transaction_date=datetime(2026, 7, 5, tzinfo=timezone.utc),
+                    order_id=o.id, debit_account="Customer / Receivable",
+                    credit_account="Sales Revenue", reference_number="INV-T5G",
+                    tally_voucher_type="Sales", tally_voucher_number="INV-T5G",
+                    idempotency_key="T5-SALE-GST")
+    db.commit()
+    db.close()
+    detail = c.get("/api/v1/accounting/periods/2026/7", headers=h["ADMIN"]).json()["data"]
+    assert detail["issues"]["counts"]["invalid_gst"] >= 1
+    r = c.post("/api/v1/accounting/periods/2026/7/close", headers=h["ADMIN"])
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "CLOSE_BLOCKED"
+
+
 def test_close_refuses_with_issue_count():
     c, mk, _, h = _env()
     _seed_sept_issue(mk, _bid(mk))

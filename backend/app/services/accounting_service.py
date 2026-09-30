@@ -97,16 +97,45 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
     from app.models.tally import TallyExportRecord
 
     start, end = month_window(year, month)
-    issues: dict[str, list] = {"unreconciled_payments": [], "unexported_transactions": [],
+    issues: dict[str, list] = {"unreconciled_payments": [], "unreconciled_bank": [],
+                               "unexported_transactions": [],
                                "invalid_gst": [], "missing_cogs": [], "pending_refunds": []}
 
-    try:
+    try:  # genuine recon state per Task 2 (#35): a payment is reconciled only when a
+        # BANK_STATEMENT row links it with status MATCHED (payment_status alone is not proof).
+        from app.models.statement import StatementRow, StatementUpload
+        matched_pids = {str(r.matched_payment_id) for r in db.query(StatementRow).join(
+            StatementUpload, StatementUpload.id == StatementRow.statement_upload_id).filter(
+            StatementUpload.business_id == business_id,
+            StatementUpload.statement_type == "BANK_STATEMENT",
+            StatementRow.reconciliation_status == "MATCHED",
+            StatementRow.matched_payment_id.isnot(None)).all()}
         for p in db.query(Payment).filter_by(business_id=business_id).all():
             created = _utc(p.created_at) if getattr(p, "created_at", None) else None
             if created is not None and not (start <= created < end):
                 continue
-            if (p.payment_status or "").upper() not in ("PAID", "SETTLED", "RECONCILED"):
+            if (p.payment_status or "").upper() in ("FAILED", "CANCELLED"):
+                continue  # dead payments need no bank recon
+            if str(p.id) not in matched_pids:
                 issues["unreconciled_payments"].append(str(p.id))
+    except Exception:
+        pass
+
+    try:  # bank mismatches block close per #76: any BANK_STATEMENT row in-month that is
+        # neither MATCHED nor terminally excluded (IGNORED/DUPLICATE) is still open.
+        from app.models.statement import StatementRow, StatementUpload
+        for r in db.query(StatementRow).join(
+                StatementUpload,
+                StatementUpload.id == StatementRow.statement_upload_id).filter(
+                StatementUpload.business_id == business_id,
+                StatementUpload.statement_type == "BANK_STATEMENT").all():
+            d = _utc(r.transaction_date) if getattr(r, "transaction_date", None) else (
+                _utc(r.value_date) if getattr(r, "value_date", None) else None)
+            if d is None or not (start <= d < end):
+                continue
+            if (r.reconciliation_status or "UNMATCHED").upper() not in (
+                    "MATCHED", "IGNORED", "DUPLICATE"):
+                issues["unreconciled_bank"].append(str(r.id))
     except Exception:
         pass
 
@@ -129,6 +158,18 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
                 issues["invalid_gst"].append(t.transaction_id)
         except Exception:
             issues["invalid_gst"].append(t.transaction_id)
+
+    try:  # real GST validation: Task 3 tally gate over the period's rows. Only GST
+        # codes map here (mapping/customer/duplicate errors belong to the export flow).
+        from app.services import tally_service as _tally
+        gate = _tally.validate_export(db, business_id, start, end, _check_exported=False)
+        for e in gate.get("errors", []):
+            if e.get("code") in ("TAX_CALC_MISMATCH", "INVOICE_TOTAL_MISMATCH"):
+                ref = e.get("ref")
+                if ref and ref not in issues["invalid_gst"]:
+                    issues["invalid_gst"].append(ref)
+    except Exception:
+        pass
 
     try:  # missing COGS: orders in month without a COGS event (#30)
         oids = [o.id for o in db.query(Order).filter_by(business_id=business_id).filter(

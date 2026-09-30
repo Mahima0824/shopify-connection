@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
 from app.services import accounting_service as acct
-from app.services.rbac import ACCOUNTING_ROLES
+from app.services.rbac import ACCOUNTING_ROLES, ADMIN_ONLY, allowed
 
 router = APIRouter(prefix="/api/v1/accounting", tags=["accounting"])
 
@@ -58,7 +58,7 @@ def period_detail(year: int, month: int, db: Session = Depends(get_db),
 @router.post("/periods/{year}/{month}/close")
 def close(year: int, month: int, request: Request, db: Session = Depends(get_db),
           u: dict = Depends(get_current_user)):
-    if u.get("role") not in ACCOUNTING_ROLES:
+    if not allowed(u.get("role"), *ACCOUNTING_ROLES):
         return _err(403, "FORBIDDEN", "Accountant role required")
     try:
         out = acct.close_month(db, u.get("business_id"), year, month, u.get("user_id"),
@@ -71,7 +71,7 @@ def close(year: int, month: int, request: Request, db: Session = Depends(get_db)
 @router.post("/periods/{year}/{month}/reopen")
 def reopen(year: int, month: int, request: Request, db: Session = Depends(get_db),
            u: dict = Depends(get_current_user)):
-    if u.get("role") not in ACCOUNTING_ROLES:
+    if not allowed(u.get("role"), *ACCOUNTING_ROLES):
         return _err(403, "FORBIDDEN", "Accountant role required")
     try:
         out = acct.reopen_month(db, u.get("business_id"), year, month, u.get("user_id"),
@@ -94,7 +94,7 @@ def fy(date: str | None = None, db: Session = Depends(get_db),
 
 @router.put("/fy")
 def put_fy(body: FyIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
-    if (u.get("role") or "") != "ADMIN":
+    if not allowed(u.get("role"), *ADMIN_ONLY):
         return _err(403, "FORBIDDEN", "Admin role required")
     if not 1 <= int(body.fy_start_month) <= 12:
         return _err(400, "BAD_REQUEST", "fy_start_month must be 1..12")
