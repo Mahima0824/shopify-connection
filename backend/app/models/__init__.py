@@ -21,6 +21,7 @@ from app.models.shipment import Shipment, ShipmentEvent, CarrierConnection  # no
 from app.models.sla import SLARule, ShipmentCase, ShipmentFinancial  # noqa: F401
 from app.models.statement import StatementUpload, StatementRow  # noqa: F401
 from app.models.cost import ProductCostHistory, CostRule  # noqa: F401
+from app.models.financial_transaction import FinancialTransaction  # noqa: F401
 from app.models.courier_meta import (  # noqa: F401
     BookingIdempotency,
     ShipmentAttempt,

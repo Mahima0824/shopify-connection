@@ -223,6 +223,13 @@ def upsert_order(db: Session, business_id: str, payload: dict) -> str:
     _upsert_items_and_payment(db, business_id, o.id, payload, float(n["total_amount"]))
     db.commit()
     db.refresh(o)
+    try:  # additive ledger hook: SALE event, idempotent; never break order sync
+        from app.services.ledger_service import record_sale_from_order
+        record_sale_from_order(db, business_id, o)
+        db.commit()
+    except Exception:
+        log.exception("ledger SALE hook failed")
+        db.rollback()
     try:
         from app.services.barcode_service import ensure_parcel_for_order
         ensure_parcel_for_order(db, o.id)
