@@ -55,13 +55,38 @@ def _client(monkeypatch, mk):
     return c
 
 
-def _post(c, payload: dict, secret: str = SECRET, ts: str | None = None):
+def _post(c, payload: dict, secret: str = SECRET, ts: str | None = None,
+          bid: str | None = None):
     raw = json.dumps(payload).encode()
     sig = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     headers = {"Content-Type": "application/json", "X-ShipSagar-Signature": sig}
     if ts is not None:
         headers["X-ShipSagar-Timestamp"] = ts
+    if bid is not None:
+        headers["X-Business-Id"] = bid
     return c.post("/api/webhooks/shipsagar", content=raw, headers=headers)
+
+
+def _authed(monkeypatch, mk, role="ADMIN", email="a@t.in"):
+    """Business + user + login token for authed endpoint tests."""
+    from app.models.business import Business
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    db = mk()
+    b = Business(name="B", email=email)
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email=email,
+             password_hash=hash_password("x"), role=role)
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    c = _client(monkeypatch, mk)
+    tok = c.post("/api/v1/auth/login",
+                 json={"email": email, "password": "x"}).json()["data"]["token"]
+    return c, {"Authorization": f"Bearer {tok}"}, bid
 
 
 # --- status normalization matrix (both couriers -> plan #15 vocabulary) ---
@@ -140,18 +165,19 @@ def test_stale_timestamp_rejected(monkeypatch):
 def test_webhook_ingest_and_duplicate_delivery(monkeypatch):
     from app.models.shipment import Shipment, ShipmentEvent
     mk = _mk()
-    sid, _ = _seed_shipment(mk)
+    sid, bid = _seed_shipment(mk)
     c = _client(monkeypatch, mk)
     try:
         body = {"event_id": "ss-evt-1", "tracking_number": "EM123456789IN",
                 "courier": "INDIA_POST", "status": "Out for Delivery",
                 "location": "Delhi SP", "message": "OFD",
                 "event_time": datetime.now(timezone.utc).isoformat()}
-        r1 = _post(c, body)
+        r1 = _post(c, body, bid=bid)
         assert r1.status_code == 200, r1.text
         assert r1.json()["data"]["created"] is True
+        assert r1.json()["data"]["stale"] is False
         assert r1.json()["data"]["tracking_status"] == "OUT_FOR_DELIVERY"
-        r2 = _post(c, body)  # duplicate delivery
+        r2 = _post(c, body, bid=bid)  # duplicate delivery
         assert r2.status_code == 200, r2.text
         assert r2.json()["data"]["created"] is False
         assert r2.json()["data"]["deduped"] is True
@@ -170,22 +196,30 @@ def test_webhook_ingest_and_duplicate_delivery(monkeypatch):
 
 def test_webhook_validation_errors(monkeypatch):
     mk = _mk()
-    _seed_shipment(mk)
+    _, bid = _seed_shipment(mk)
     c = _client(monkeypatch, mk)
     try:
+        # missing/unknown tenant scope
+        r = _post(c, {"event_id": "e0", "tracking_number": "EM123456789IN",
+                      "courier": "INDIA_POST", "status": "delivered"})
+        assert r.status_code == 401
+        assert r.json()["error"]["code"] == "UNKNOWN_BUSINESS"
+        r = _post(c, {"event_id": "e0", "tracking_number": "EM123456789IN",
+                      "courier": "INDIA_POST", "status": "delivered"}, bid="nope")
+        assert r.status_code == 401
         # missing event id
         r = _post(c, {"tracking_number": "EM123456789IN", "courier": "INDIA_POST",
-                      "status": "delivered"})
+                      "status": "delivered"}, bid=bid)
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "MISSING_EVENT_ID"
         # unknown tracking
         r = _post(c, {"event_id": "e9", "tracking_number": "NOPE999",
-                      "courier": "DTDC", "status": "delivered"})
+                      "courier": "DTDC", "status": "delivered"}, bid=bid)
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "SHIPMENT_NOT_FOUND"
         # unsupported courier
         r = _post(c, {"event_id": "e8", "tracking_number": "EM123456789IN",
-                      "courier": "FEDEX", "status": "delivered"})
+                      "courier": "FEDEX", "status": "delivered"}, bid=bid)
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "UNSUPPORTED_COURIER"
     finally:
@@ -195,19 +229,20 @@ def test_webhook_validation_errors(monkeypatch):
 def test_rto_flow(monkeypatch):
     from app.models.shipment import Shipment
     mk = _mk()
-    sid, _ = _seed_shipment(mk, carrier="DTDC", awb="D12345")
+    sid, bid = _seed_shipment(mk, carrier="DTDC", awb="D12345")
     c = _client(monkeypatch, mk)
     try:
         assert _post(c, {"event_id": "rto-1", "tracking_number": "D12345",
                          "courier": "DTDC", "status": "In Transit",
-                         "event_time": datetime.now(timezone.utc).isoformat()}).status_code == 200
+                         "event_time": datetime.now(timezone.utc).isoformat()},
+                    bid=bid).status_code == 200
         r = _post(c, {"event_id": "rto-2", "tracking_number": "D12345",
                       "courier": "DTDC", "status": "RTO In Transit",
-                      "event_time": datetime.now(timezone.utc).isoformat()})
+                      "event_time": datetime.now(timezone.utc).isoformat()}, bid=bid)
         assert r.json()["data"]["tracking_status"] == "RTO"
         r = _post(c, {"event_id": "rto-3", "tracking_number": "D12345",
                       "courier": "DTDC", "status": "RTO Delivered back to shipper",
-                      "event_time": datetime.now(timezone.utc).isoformat()})
+                      "event_time": datetime.now(timezone.utc).isoformat()}, bid=bid)
         assert r.json()["data"]["tracking_status"] == "RETURNED"
         db = mk()
         try:
@@ -299,5 +334,177 @@ def test_health_endpoint_counts(monkeypatch):
         assert data["provider"] == "SHIPSAGAR"
         assert data["unregistered_shipments"] == 1
         assert "failed_webhooks" in data and "failed_jobs" in data
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --- fix round 1/5 ---
+
+def test_webhook_tenant_scoped(monkeypatch):
+    """Same AWB in two tenants: webhook resolves only the header tenant."""
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    mk = _mk()
+    sid1, bid1 = _seed_shipment(mk, awb="SHARED-AWB")
+    db = mk()
+    b2 = Business(name="B2", email="b2@t.in")
+    db.add(b2)
+    db.commit()
+    db.refresh(b2)
+    db.add(Shipment(business_id=b2.id, order_id="o9", parcel_id="p9",
+                    carrier_code="INDIA_POST", awb_number="SHARED-AWB",
+                    tracking_status="READY_TO_SHIP"))
+    db.commit()
+    bid2 = b2.id
+    db.close()
+    c = _client(monkeypatch, mk)
+    try:
+        r = _post(c, {"event_id": "tnt-1", "tracking_number": "SHARED-AWB",
+                      "courier": "INDIA_POST", "status": "Out for Delivery",
+                      "event_time": datetime.now(timezone.utc).isoformat()}, bid=bid2)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["tracking_status"] == "OUT_FOR_DELIVERY"
+        db = mk()
+        try:
+            assert db.query(Shipment).filter_by(id=sid1).first().tracking_status == "READY_TO_SHIP"
+            hit = db.query(Shipment).filter_by(
+                business_id=bid2, awb_number="SHARED-AWB").first()
+            assert hit.tracking_status == "OUT_FOR_DELIVERY"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_stale_event_never_regresses_terminal(monkeypatch):
+    """DELIVERED then IN_TRANSIT (or older event_time) is stored, not applied."""
+    from app.models.shipment import Shipment, ShipmentEvent
+    mk = _mk()
+    sid, bid = _seed_shipment(mk)
+    c = _client(monkeypatch, mk)
+    try:
+        now = datetime.now(timezone.utc)
+        r = _post(c, {"event_id": "st-1", "tracking_number": "EM123456789IN",
+                      "courier": "INDIA_POST", "status": "Item Delivered",
+                      "event_time": now.isoformat()}, bid=bid)
+        assert r.json()["data"]["tracking_status"] == "DELIVERED"
+        assert r.json()["data"]["stale"] is False
+        # Rank regress with a NEWER timestamp: still stale.
+        from datetime import timedelta as _td
+        r = _post(c, {"event_id": "st-2", "tracking_number": "EM123456789IN",
+                      "courier": "INDIA_POST", "status": "In Transit",
+                      "event_time": (now + _td(hours=1)).isoformat()}, bid=bid)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["stale"] is True
+        assert r.json()["data"]["tracking_status"] == "DELIVERED"
+        # Same-state but OLDER event_time: stale by time guard alone.
+        r = _post(c, {"event_id": "st-3", "tracking_number": "EM123456789IN",
+                      "courier": "INDIA_POST", "status": "Item Delivered",
+                      "event_time": (now - _td(hours=1)).isoformat()}, bid=bid)
+        assert r.json()["data"]["stale"] is True
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            assert s.tracking_status == "DELIVERED"
+            # Stale checkpoints preserved as history, never double-state.
+            assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 3
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_retry_drain_marks_done_and_dead_letters(monkeypatch):
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    from app import config
+    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    mk = _mk()
+    sid, bid = _seed_shipment(mk, carrier="DTDC", awb="D-DRAIN")
+    db = mk()
+    try:
+        past = datetime.now(timezone.utc) - _td(seconds=5)
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=sid, attempts=1, max_attempts=4,
+                                 status="PENDING", next_retry_at=past))
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=sid, attempts=1, max_attempts=4,
+                                 status="PENDING",
+                                 next_retry_at=datetime.now(timezone.utc) + _td(hours=1)))
+        db.commit()
+        out = ss.drain_retry_queue(db)
+        db.commit()
+        assert out == {"checked": 1, "succeeded": 1, "requeued": 0, "dead_lettered": 0}
+        s = db.query(Shipment).filter_by(id=sid).first()
+        assert (s.shipsagar_tracking_id or "").endswith("D-DRAIN")
+
+        # Failure path with exhausted attempts -> DEAD_LETTER, backoff capped.
+        monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "https://example.invalid")
+        monkeypatch.setattr(config.settings, "shipsagar_api_key", "k")
+
+        def _boom(path, payload):
+            raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "boom")
+
+        monkeypatch.setattr(ss, "_post", _boom)
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=sid, attempts=3, max_attempts=4,
+                                 status="PENDING", next_retry_at=past))
+        db.commit()
+        out = ss.drain_retry_queue(db)
+        db.commit()
+        assert out["checked"] == 1 and out["dead_lettered"] == 1
+        assert db.query(ShipsagarRetryJob).filter_by(status="DEAD_LETTER").count() == 1
+    finally:
+        db.close()
+
+
+def test_retry_drain_endpoint_and_register_envelope(monkeypatch):
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        db = mk()
+        m = Shipment(business_id=bid, order_id="o1", parcel_id="p1",
+                     carrier_code="MANUAL", awb_number="M-ENV",
+                     tracking_status="BOOKED")
+        d = Shipment(business_id=bid, order_id="o2", parcel_id="p2",
+                     carrier_code="DTDC", awb_number="D-ENV",
+                     tracking_status="READY_TO_SHIP")
+        db.add_all([m, d])
+        db.commit()
+        mid, did = m.id, d.id
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=did, attempts=1, max_attempts=4,
+                                 status="PENDING",
+                                 next_retry_at=datetime.now(timezone.utc) - _td(seconds=5)))
+        db.commit()
+        db.close()
+        # Drain endpoint (stub mode: unconfigured settings from _client).
+        r = c.post("/api/v1/shipsagar/retry-drain", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["succeeded"] == 1
+        # Register success still works with envelope success shape.
+        r = c.post(f"/api/v1/shipments/{did}/register-tracking", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+        assert r.json()["data"]["shipsagar_tracking_id"].endswith("D-ENV")
+        # Register error is envelope, not HTTPException detail.
+        r = c.post(f"/api/v1/shipments/{mid}/register-tracking", headers=h)
+        assert r.status_code == 400, r.text
+        assert r.json()["success"] is False
+        assert r.json()["error"]["code"] == "UNSUPPORTED_COURIER"
+        r = c.post("/api/v1/shipments/does-not-exist/register-tracking", headers=h)
+        assert r.status_code == 404
+        assert r.json()["error"]["code"] == "SHIPMENT_NOT_FOUND"
+        # Non-admin cannot drain.
+        c2, h2, _ = _authed(monkeypatch, mk, role="VIEWER", email="v@t.in")
+        r = c2.post("/api/v1/shipsagar/retry-drain", headers=h2)
+        assert r.status_code == 403
+        assert r.json()["error"]["code"] == "FORBIDDEN"
     finally:
         app.dependency_overrides.clear()

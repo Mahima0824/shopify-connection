@@ -316,20 +316,76 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
 TERMINAL_SHIPSAGAR = ("DELIVERED", "RETURNED", "LOST")
 
 
-def find_shipment(db, *, tracking_number: str | None, courier: str | None,
-                  shipsagar_tracking_id: str | None):
-    """Resolve by ShipSagar tracking id first, then courier tracking number."""
+def find_shipment(db, *, business_id: str, tracking_number: str | None,
+                  courier: str | None, shipsagar_tracking_id: str | None):
+    """Resolve by ShipSagar tracking id first, then courier tracking number.
+
+    Always scoped to ``business_id`` — a webhook must never match another
+    tenant's shipment (cf. X-Business-Id pattern in carrier_webhooks).
+    """
     from app.models.shipment import Shipment
     if shipsagar_tracking_id:
         hit = db.query(Shipment).filter_by(
+            business_id=business_id,
             shipsagar_tracking_id=shipsagar_tracking_id.strip()).first()
         if hit is not None:
             return hit
     if tracking_number:
-        q = db.query(Shipment).filter_by(awb_number=tracking_number.strip())
+        q = db.query(Shipment).filter_by(
+            business_id=business_id, awb_number=tracking_number.strip())
         if courier:
             q = q.filter_by(carrier_code=courier.strip().upper())
         return q.first()
+    return None
+
+
+# Forward-only rank for the plan #15 vocabulary. A checkpoint whose rank is
+# below the shipment's current rank is stale (out-of-order redelivery) and
+# must not regress state. Terminal states additionally never change at all.
+_STATUS_RANK = {
+    "NOT_CREATED": 0,
+    "READY_TO_SHIP": 1,
+    "IN_TRANSIT": 2,
+    "OUT_FOR_DELIVERY": 3,
+    "FAILED_ATTEMPT": 3,
+    "EXCEPTION": 4,
+    "DELIVERED": 4,
+    "RTO": 4,
+    "RETURNED": 5,
+    "LOST": 5,
+}
+
+TERMINAL_GUARD = ("DELIVERED", "RETURNED", "LOST")
+
+
+def _as_aware(value):
+    """Coerce to tz-aware UTC; unparseable/None -> None (guard skipped)."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, str) and value.strip():
+            from datetime import datetime as _dt
+            value = _dt.fromisoformat(value.replace("Z", "+00:00"))
+        if getattr(value, "tzinfo", None) is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+    except Exception:
+        return None
+
+
+def _stale_reason(shipment, normalized: str, event_time) -> str | None:
+    """Return why a checkpoint is stale, or None when it may roll up."""
+    current = (getattr(shipment, "tracking_status", "") or "").upper()
+    if current in TERMINAL_GUARD and normalized != current:
+        return f"terminal {current} never regresses to {normalized}"
+    new_rank = _STATUS_RANK.get(normalized)
+    cur_rank = _STATUS_RANK.get(current)
+    if cur_rank is not None and new_rank is not None and new_rank < cur_rank:
+        return f"rank {normalized}({new_rank}) below current {current}({cur_rank})"
+    anchor = _as_aware(getattr(shipment, "last_checkpoint_at", None))
+    moment = _as_aware(event_time)
+    if anchor is not None and moment is not None and moment < anchor:
+        return "event_time older than last checkpoint"
     return None
 
 
@@ -337,22 +393,23 @@ def ingest_shipsagar_event(db, shipment, *, event_id: str, courier: str,
                            raw_status: str, sub_status: str | None = None,
                            message: str | None = None, location: str | None = None,
                            event_time=None, raw_payload: dict | None = None):
-    """Idempotent checkpoint ingest. Returns (event, created_bool).
+    """Idempotent checkpoint ingest. Returns (event, created, stale).
 
     Duplicates (same provider + provider_event_id) never double-record:
     the existing row is returned with created=False.
+    Stale checkpoints (terminal regress / rank regress / older event_time)
+    are persisted as history but NEVER roll up onto the shipment; they
+    return stale=True so callers can report the skip.
     """
-    from datetime import datetime as _dt
     from app.models.shipment import ShipmentEvent
     dup = db.query(ShipmentEvent).filter_by(
         provider=PROVIDER, provider_event_id=event_id).first()
     if dup is not None:
-        return dup, False
-    if isinstance(event_time, str) and event_time.strip():
-        try:
-            event_time = _dt.fromisoformat(event_time.replace("Z", "+00:00"))
-        except ValueError:
-            event_time = _now()
+        return dup, False, False
+    parsed_time = _as_aware(event_time) if isinstance(event_time, str) else event_time
+    if isinstance(event_time, str) and event_time.strip() and parsed_time is None:
+        parsed_time = _now()
+    event_time = parsed_time
     normalized = normalize_shipsagar_status(courier, raw_status)
     ev = ShipmentEvent(
         business_id=shipment.business_id, shipment_id=shipment.id,
@@ -363,6 +420,17 @@ def ingest_shipsagar_event(db, shipment, *, event_id: str, courier: str,
         source="SHIPSAGAR", raw_payload=raw_payload)
     db.add(ev)
     db.flush()
+    stale = _stale_reason(shipment, normalized, event_time)
+    if stale is not None:
+        try:
+            from app.services.audit_service import log_audit as _log
+            _log(db, shipment.business_id, None, "shipment", shipment.id,
+                 "SHIPSAGAR_STALE_EVENT_SKIPPED",
+                 {"tracking_status": getattr(shipment, "tracking_status", None)},
+                 {"status": normalized, "event_id": event_id, "reason": stale})
+        except Exception:
+            pass
+        return ev, True, True
     # Roll up onto the shipment (plan #19 flow).
     shipment.carrier_status_raw = raw_status
     shipment.tracking_status = normalized
@@ -391,4 +459,64 @@ def ingest_shipsagar_event(db, shipment, *, event_id: str, courier: str,
         reconcile_order(db, shipment.order_id)
     except Exception:
         pass
-    return ev, True
+    return ev, True, False
+
+
+# ---------------------------------------------------------------------------
+# Retry-queue consumer (plan #74): cron-safe drain of due PENDING jobs
+# ---------------------------------------------------------------------------
+
+def _retry_due(job, now) -> bool:
+    nxt = _as_aware(getattr(job, "next_retry_at", None))
+    if nxt is None:
+        return True
+    try:
+        return nxt <= now
+    except Exception:
+        return True
+
+
+def drain_retry_queue(db, limit: int = 50) -> dict:
+    """Process due PENDING retry jobs (flush; caller commits).
+
+    Success -> DONE; failure -> attempts advance with backoff caps via
+    record_retry_attempt (exhausted jobs go DEAD_LETTER, never infinite).
+    Cron-safe: only jobs with next_retry_at due are touched.
+    """
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.models.shipment import Shipment
+    now = _now()
+    pending = db.query(ShipsagarRetryJob).filter_by(status="PENDING").order_by(
+        ShipsagarRetryJob.next_retry_at).limit(max(int(limit or 50), 1)).all()
+    out = {"checked": 0, "succeeded": 0, "requeued": 0, "dead_lettered": 0}
+    for job in (j for j in pending if _retry_due(j, now)):
+        out["checked"] += 1
+        try:
+            if (job.operation or "") != "register_tracking":
+                record_retry_attempt(db, job, f"UNKNOWN_OPERATION: {job.operation}")
+            else:
+                s = db.query(Shipment).filter_by(id=job.shipment_id).first() \
+                    if job.shipment_id else None
+                if s is None:
+                    job.attempts = (job.attempts or 0) + 1
+                    job.status = "DEAD_LETTER"
+                    job.next_retry_at = None
+                    job.last_error = "SHIPMENT_NOT_FOUND"
+                    db.flush()
+                else:
+                    register_tracking(db, s)
+                    job.status = "DONE"
+                    job.next_retry_at = None
+                    db.flush()
+        except ShipsagarError as exc:
+            record_retry_attempt(db, job, f"{exc.code}: {exc.message}")
+        except Exception as exc:
+            record_retry_attempt(db, job, f"DRAIN_FAILED: {exc}")
+        if job.status == "DONE":
+            out["succeeded"] += 1
+        elif job.status == "DEAD_LETTER":
+            out["dead_lettered"] += 1
+        else:
+            out["requeued"] += 1
+    db.flush()
+    return out

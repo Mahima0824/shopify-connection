@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -6,6 +7,13 @@ from app.api.auth import get_current_user
 from app.database import get_db
 
 router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
+
+
+def _err(status: int, code: str, message: str) -> JSONResponse:
+    """Envelope error (ledger pattern): {success:false, error:{code,message}}."""
+    return JSONResponse(status_code=status,
+                        content={"success": False, "error": {"code": code, "message": message}},
+                        headers={"X-Error-Code": code})
 
 
 def _sdict(s) -> dict:
@@ -249,15 +257,15 @@ def register_tracking(sid: str, db: Session = Depends(get_db), u: dict = Depends
     from app.models.shipment import Shipment
     from app.services import shipsagar_service as ss
     if u.get('role') not in ('ADMIN', 'WAREHOUSE'):
-        raise HTTPException(403, 'Warehouse role required')
+        return _err(403, 'FORBIDDEN', 'Warehouse role required')
     s = db.query(Shipment).filter_by(id=sid, business_id=u.get('business_id')).first()
     if s is None:
-        raise HTTPException(404, 'Shipment not found')
+        return _err(404, 'SHIPMENT_NOT_FOUND', 'Shipment not found')
     try:
         result = ss.register_tracking(db, s)
     except ss.ShipsagarError as e:
         db.commit()
-        raise HTTPException(400, f"{e.code}: {e.message}")
+        return _err(400, e.code, e.message)
     db.commit()
     db.refresh(s)
     return {'success': True, 'data': {**_sdict(s),

@@ -26,16 +26,18 @@ def _ok(data: dict, status: int = 200):
 
 @webhook_router.post("/shipsagar")
 async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
+    from app.models.business import Business
     from app.services import shipsagar_service as ss
     from app.models.shipment_event import ShipsagarWebhookFailure
 
     raw = await request.body()
     sig = request.headers.get("X-ShipSagar-Signature") or request.headers.get("X-Signature")
     ts = request.headers.get("X-ShipSagar-Timestamp") or request.headers.get("X-Timestamp")
+    tenant = (request.headers.get("X-Business-Id") or "").strip()
 
-    def _fail(reason: str, detail: str, status: int, payload=None):
+    def _fail(reason: str, detail: str, status: int, payload=None, business_id=None):
         try:
-            db.add(ShipsagarWebhookFailure(business_id=None, reason=reason,
+            db.add(ShipsagarWebhookFailure(business_id=business_id, reason=reason,
                                            detail=detail[:2000], raw_payload=payload))
             db.commit()
         except Exception:
@@ -57,6 +59,14 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
     if not isinstance(body, dict):
         return _fail("INVALID_PAYLOAD", "Webhook body must be a JSON object.", 400, payload=None)
 
+    # Tenant scope (X-Business-Id pattern, cf. carrier_webhooks): lookups
+    # below must never match another tenant's shipment.
+    business = db.query(Business).filter_by(id=tenant).first() if tenant else None
+    if business is None:
+        return _fail("UNKNOWN_BUSINESS",
+                     "Unknown or missing X-Business-Id; tenant scope is required.",
+                     401, payload=body)
+
     # 3. Validate event ID / shipment / tracking / courier.
     event_id = str(body.get("event_id") or body.get("id") or body.get("eventId") or "").strip()
     tracking = str(body.get("tracking_number") or body.get("courier_tracking_number")
@@ -71,12 +81,14 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
     if courier and courier not in ss.SUPPORTED_COURIERS:
         return _fail("UNSUPPORTED_COURIER", f"Unsupported courier '{courier}'.", 400, payload=body)
 
-    shipment = ss.find_shipment(db, tracking_number=tracking or None,
+    shipment = ss.find_shipment(db, business_id=business.id,
+                                tracking_number=tracking or None,
                                 courier=courier or None,
                                 shipsagar_tracking_id=ss_tracking_id or None)
     if shipment is None:
         return _fail("SHIPMENT_NOT_FOUND",
-                     "No shipment matches the webhook tracking reference.", 404, payload=body)
+                     "No shipment matches the webhook tracking reference.", 404,
+                     payload=body, business_id=business.id)
     if not courier:
         courier = (shipment.carrier_code or "").upper()
     if courier not in ss.SUPPORTED_COURIERS:
@@ -85,7 +97,7 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
 
     # 4-6. Normalize -> checkpoint -> update shipment (+ audit), idempotent.
     try:
-        ev, created = ss.ingest_shipsagar_event(
+        ev, created, stale = ss.ingest_shipsagar_event(
             db, shipment, event_id=event_id, courier=courier, raw_status=raw_status,
             sub_status=(body.get("sub_status") or None),
             message=(body.get("message") or body.get("remarks") or None),
@@ -103,9 +115,21 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
         except Exception:
             db.rollback()
         return _err("PROCESSING_FAILED", "Webhook processing failed; payload stored.", 500)
-    return _ok({"event_id": event_id, "created": created,
+    return _ok({"event_id": event_id, "created": created, "stale": stale,
                 "tracking_status": shipment.tracking_status,
                 "deduped": not created})
+
+
+@router.post("/retry-drain")
+def retry_drain(limit: int = 50, db: Session = Depends(get_db),
+                u: dict = Depends(get_current_user)):
+    """Cron-safe drain of due ShipSagar retry jobs (plan #74). ADMIN only."""
+    from app.services import shipsagar_service as ss
+    if (u.get("role") or "") != "ADMIN":
+        return _err("FORBIDDEN", "Admin role required.", 403)
+    out = ss.drain_retry_queue(db, limit=limit)
+    db.commit()
+    return _ok(out)
 
 
 @router.get("/health")
