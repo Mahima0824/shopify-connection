@@ -75,6 +75,15 @@ def _maybe_export(name: str, data: dict, fmt: str | None):
     }
     table = rows_fn[name]()
     headers, body = table[0], table[1:]
+    # 1-based money/date columns per report so XLSX holds numerics + real dates (#79).
+    _specs = {
+        "sales": ((5,), (2,)), "orders": ((5,), (2,)),
+        "payments": ((3,), ()), "refunds": ((3,), ()),
+        "profit": ((2,), ()), "courier": ((), ()),
+        "gst": ((4, 5, 6, 7, 8), ()),
+        "reconciliation": ((), ()), "dashboard": ((2,), ()),
+    }
+    money_cols, date_cols = _specs[name]
     if len(body) > rs.ASYNC_EXPORT_ROW_LIMIT:
         return JSONResponse(status_code=202, content={
             "success": False,
@@ -86,7 +95,8 @@ def _maybe_export(name: str, data: dict, fmt: str | None):
         return Response(content=content, media_type="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{name}_report.csv"'})
     if fmt == "xlsx":
-        content = rs.export_table_xlsx(name.title(), headers, body)
+        content = rs.export_table_xlsx(name.title(), headers, body,
+                                       money_cols=money_cols, date_cols=date_cols)
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

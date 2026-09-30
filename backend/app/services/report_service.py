@@ -240,8 +240,15 @@ def backfill_ledger(db, business_id: str) -> dict:
            "refunds": {"created": 0, "skipped": 0}}
     existing = {r.idempotency_key for r in db.query(FinancialTransaction).filter_by(
         business_id=business_id).all()}
+    try:
+        paid_oids = {p.order_id for p in db.query(Payment).filter_by(
+            business_id=business_id).all()
+            if (p.payment_status or "").upper() in ("PAID", "COMPLETED", "SETTLED", "SUCCESS")}
+    except Exception:
+        paid_oids = set()
     for o in db.query(Order).filter_by(business_id=business_id).all():
-        if o.cancelled_at is not None and not float(o.total_amount or 0):
+        if o.cancelled_at is not None and o.id not in paid_oids:
+            # #43/#100: cancelled before payment -> no revenue, no receipt, no refund.
             out["sales"]["skipped"] += 1
             continue
         if f"SALE:{o.id}" in existing:
@@ -280,9 +287,10 @@ def backfill_ledger(db, business_id: str) -> dict:
 
 # --- Unified report builders wired to the finance engines (#55) ---
 
-def _period_engines(db, business_id: str, start: datetime, end: datetime) -> dict:
+def _period_engines(db, business_id: str, start: datetime, end: datetime,
+                    order_ids=None) -> dict:
     from app.services import ledger_service as _ls
-    return _ls.period_summary(db, business_id, _utc(start), _utc(end))
+    return _ls.period_summary(db, business_id, _utc(start), _utc(end), order_ids=order_ids)
 
 
 def dashboard_report(db, business_id: str, start: datetime, end: datetime, **filters) -> dict:
@@ -292,7 +300,7 @@ def dashboard_report(db, business_id: str, start: datetime, end: datetime, **fil
     from app.models.payment import Payment
     orders = filtered_orders(db, business_id, start, end, **filters)
     oids = {o.id for o in orders}
-    eng = _period_engines(db, business_id, start, end)
+    eng = _period_engines(db, business_id, start, end, order_ids=oids)
     rev, profit = eng["revenue"], eng["profit"]
     refunds = db.query(Refund).filter_by(business_id=business_id).all()
     refunds = [r for r in refunds if r.order_id in oids]
@@ -341,7 +349,7 @@ def dashboard_report(db, business_id: str, start: datetime, end: datetime, **fil
 
 def sales_report(db, business_id: str, start: datetime, end: datetime, **filters) -> dict:
     orders = filtered_orders(db, business_id, start, end, **filters)
-    eng = _period_engines(db, business_id, start, end)
+    eng = _period_engines(db, business_id, start, end, order_ids={o.id for o in orders})
     by_status: dict[str, int] = {}
     for o in orders:
         by_status[o.financial_status or "UNKNOWN"] = by_status.get(o.financial_status or "UNKNOWN", 0) + 1
@@ -390,8 +398,8 @@ def refunds_report(db, business_id: str, start: datetime, end: datetime, **filte
 
 
 def profit_report(db, business_id: str, start: datetime, end: datetime, **filters) -> dict:
-    eng = _period_engines(db, business_id, start, end)
     orders = filtered_orders(db, business_id, start, end, **filters)
+    eng = _period_engines(db, business_id, start, end, order_ids={o.id for o in orders})
     return {"period": {"from": _utc(start).isoformat(), "to": _utc(end).isoformat()},
             "orders": len(orders), "revenue": eng["revenue"], "profit": eng["profit"],
             "cogs_total": eng["cogs_total"], "transaction_count": eng["transaction_count"],
@@ -454,8 +462,29 @@ def export_table_csv(headers: list[str], rows: list[list]) -> bytes:
     return buf.getvalue().encode("utf-8")
 
 
+def _num(v):
+    """Coerce money cells to real numerics (#79): '1180.00' -> 1180.0, else as-is."""
+    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
+        return v
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return v
+
+
+def _xldate(v):
+    """Coerce ISO strings to naive-UTC datetimes so Excel holds real dates (#79)."""
+    if v is None or isinstance(v, datetime):
+        return v.replace(tzinfo=None) if isinstance(v, datetime) else v
+    try:
+        d = datetime.fromisoformat(str(v))
+        return d.replace(tzinfo=None) if d.tzinfo else d
+    except (ValueError, TypeError):
+        return v
+
+
 def export_table_xlsx(title: str, headers: list[str], rows: list[list],
-                      money_cols: tuple = ()) -> bytes:
+                      money_cols: tuple = (), date_cols: tuple = ()) -> bytes:
     import io as _io
     from openpyxl import Workbook as _WB
     from openpyxl.styles import Font as _Font, PatternFill as _Fill
@@ -469,11 +498,29 @@ def export_table_xlsx(title: str, headers: list[str], rows: list[list],
         c.fill = _Fill("solid", fgColor="1F4E5F")
     ws.auto_filter.ref = ws.dimensions
     for r in rows:
-        ws.append(list(r))
+        out = list(r)
+        for ci in money_cols:
+            if 0 < ci <= len(out):
+                out[ci - 1] = _num(out[ci - 1])
+        for ci in date_cols:
+            if 0 < ci <= len(out):
+                out[ci - 1] = _xldate(out[ci - 1])
+        ws.append(out)
     for row in ws.iter_rows(min_row=2):
         for c in row:
-            if isinstance(c.value, float) and (c.column in money_cols or not money_cols):
-                c.number_format = "#,##0.00"
+            if isinstance(c.value, (int, float)) and not isinstance(c.value, bool):
+                if c.column in money_cols or not money_cols:
+                    c.number_format = "#,##0.00"
+            if isinstance(c.value, datetime) and c.column in date_cols:
+                c.number_format = "YYYY-MM-DD"
+    if rows and money_cols:  # totals row with live SUM formulas (#79)
+        n = ws.max_row
+        ws.cell(row=n + 1, column=1, value="TOTAL").font = _Font(bold=True)
+        for ci in money_cols:
+            letter = ws.cell(row=1, column=ci).column_letter
+            cell = ws.cell(row=n + 1, column=ci, value=f"=SUM({letter}2:{letter}{n})")
+            cell.font = _Font(bold=True)
+            cell.number_format = "#,##0.00"
     for col in ws.columns:
         w = max((len(str(c.value or "")) for c in col), default=10)
         ws.column_dimensions[col[0].column_letter].width = min(w + 2, 40)

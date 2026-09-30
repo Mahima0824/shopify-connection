@@ -285,10 +285,17 @@ def order_timeline(db: Session, business_id: str, order_id: str) -> list[dict]:
     } for r in rows]
 
 
-def period_summary(db: Session, business_id: str, start: datetime, end: datetime) -> dict:
+def period_summary(db: Session, business_id: str, start: datetime, end: datetime,
+                   order_ids: set[str] | list[str] | None = None) -> dict:
     rows = db.query(FinancialTransaction).filter_by(business_id=business_id).filter(
         FinancialTransaction.transaction_date >= _utc(start),
-        FinancialTransaction.transaction_date < _utc(end)).all()
+        FinancialTransaction.transaction_date < _utc(end))
+    if order_ids is not None:
+        # Report filters narrow rows AND totals to the same set (#56/#28):
+        # only order-linked events in the filtered set count.
+        oids = set(order_ids)
+        rows = rows.filter(FinancialTransaction.order_id.in_(oids))
+    rows = rows.all()
     txns = [{"transaction_type": r.transaction_type, "amount": str(r.amount),
              "tax_amount": str(r.tax_amount)} for r in rows]
     rev = revenue_summary(txns)
@@ -300,13 +307,16 @@ def period_summary(db: Session, business_id: str, start: datetime, end: datetime
         _sum("COGS"), _sum("SHIPPING_EXPENSE"), _sum("PACKAGING_EXPENSE"),
         _sum("PAYMENT_GATEWAY_FEE"), _sum("OTHER_EXPENSE"))
     missing = 0
-    try:  # incomplete-cost signal per #30: orders in range without COGS events
-        from app.models.order import Order
-        oids = [o.id for o in db.query(Order).filter_by(business_id=business_id).filter(
-            Order.order_date >= _utc(start), Order.order_date < _utc(end)).all()]
-        if oids:
+    try:  # incomplete-cost signal per #30: orders in scope without COGS events
+        if order_ids is not None:
+            scope_oids = list(set(order_ids))
+        else:
+            from app.models.order import Order
+            scope_oids = [o.id for o in db.query(Order).filter_by(business_id=business_id).filter(
+                Order.order_date >= _utc(start), Order.order_date < _utc(end)).all()]
+        if scope_oids:
             cogs_oids = {r.order_id for r in rows if r.transaction_type == "COGS" and r.order_id}
-            missing = sum(1 for oid in oids if oid not in cogs_oids)
+            missing = sum(1 for oid in scope_oids if oid not in cogs_oids)
     except Exception:
         pass
     profit = profit_summary(rev["net_exclusive"], cogs_v, ship_v, pack_v, fee_v, other_v,
