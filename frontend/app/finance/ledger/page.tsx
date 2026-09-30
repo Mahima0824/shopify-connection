@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EmptyState from "../../../components/EmptyState";
 import MetricCard from "../../../components/MetricCard";
 import { LEDGER_TXN_TYPES, LedgerEntry, LedgerSummary, getLedgerSummary, listLedger } from "../../../lib/api";
@@ -20,7 +20,9 @@ function defaultRange(): { from: string; to: string } {
 
 function inr(v: string | number): string {
   const n = Number(v ?? 0);
-  return `₹${Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
+  // "U+20B9" (rupee sign) as a unicode escape keeps this file pure ASCII,
+  // immune to encoding misinterpretation at any layer (editor/git/server/browser).
+  return `\u20B9${Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
 }
 
 export default function LedgerPage() {
@@ -34,8 +36,11 @@ export default function LedgerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const reqRef = useRef(0);
 
   const load = useCallback(() => {
+    const req = ++reqRef.current;
+    const isCurrent = () => reqRef.current === req;
     setLoading(true);
     setError(null);
     setPage(0);
@@ -46,14 +51,28 @@ export default function LedgerPage() {
       ...(type ? { type } : {}),
       ...(orderSearch.trim() ? { order_id: orderSearch.trim() } : {}),
     };
-    const listP = listLedger(listParams, token).then((d) => setItems(d.items ?? []));
+    const listP = listLedger(listParams, token).then((d) => {
+      if (isCurrent()) setItems(d.items ?? []);
+    });
     const summaryP =
       from && to
-        ? getLedgerSummary({ from: isoStart(from), to: isoStart(to) }, token).then(setSummary)
-        : Promise.resolve(setSummary(null));
+        ? getLedgerSummary({ from: isoStart(from), to: isoStart(to) }, token).then((s) => {
+            if (isCurrent()) setSummary(s);
+          })
+        : Promise.resolve().then(() => {
+            if (isCurrent()) setSummary(null);
+          });
     Promise.all([listP, summaryP])
-      .catch((e) => setError(e?.message ?? "Failed to load ledger"))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        // Never leave prior rows/summary visible alongside an error.
+        if (!isCurrent()) return;
+        setItems([]);
+        setSummary(null);
+        setError(e?.message ?? "Failed to load ledger");
+      })
+      .finally(() => {
+        if (isCurrent()) setLoading(false);
+      });
   }, [from, to, type, orderSearch]);
 
   useEffect(() => {
@@ -72,7 +91,7 @@ export default function LedgerPage() {
       <div>
         <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Ledger</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
-          Immutable financial events — read-only. Corrections happen via reversal entries.
+          Immutable financial events &mdash; read-only. Corrections happen via reversal entries.
         </p>
       </div>
 
@@ -123,7 +142,7 @@ export default function LedgerPage() {
             <MetricCard
               title={estimated ? "Operating profit (ESTIMATED)" : "Operating profit"}
               value={inr(summary.profit.operating_profit)}
-              subtitle={`Margin ${summary.profit.margin_pct}% · ${summary.transaction_count} txns`}
+              subtitle={`Margin ${summary.profit.margin_pct}% \u00B7 ${summary.transaction_count} txns`}
             />
           </div>
           {summary.profit.warning && (
@@ -135,7 +154,7 @@ export default function LedgerPage() {
       )}
 
       {loading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading ledger…</div>
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading ledger&hellip;</div>
       ) : items.length === 0 ? (
         <EmptyState
           title="No ledger entries"
@@ -177,7 +196,7 @@ export default function LedgerPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--hairline)" }}>
             <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-              Page {safePage + 1} of {totalPages} · {items.length} entries
+              Page {safePage + 1} of {totalPages} &middot; {items.length} entries
             </span>
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="btn-secondary" aria-label="Previous page">

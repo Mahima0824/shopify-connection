@@ -1,9 +1,11 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
-import { expect, test, vi, beforeEach } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { APP_NAV_GROUPS } from "../lib/app-nav";
 import { buildLedgerQuery, getLedgerSummary, LEDGER_TXN_TYPES, listLedger } from "../lib/api";
 import LedgerPage from "../app/finance/ledger/page";
+
+afterEach(() => { cleanup(); });
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -95,6 +97,12 @@ test("ledger page shows ESTIMATED + warning when costs incomplete", async () => 
   render(<LedgerPage />);
   await waitFor(() => expect(screen.getByText(/ESTIMATED/i)).toBeTruthy());
   expect(screen.getByText(/COGS missing/i)).toBeTruthy();
+  // Rupee sign (U+20B9) must render as a real glyph, never mojibake.
+  // String.fromCharCode keeps this assertion pure ASCII too.
+  const rupee = String.fromCharCode(0x20B9);
+  expect(screen.getAllByText(new RegExp(rupee)).length).toBeGreaterThan(0);
+  expect(document.body.textContent ?? "").toContain(rupee);
+  expect(document.body.textContent ?? "").not.toContain("u20B9");
 });
 
 test("ledger page surfaces envelope errors with retry", async () => {
@@ -105,4 +113,33 @@ test("ledger page surfaces envelope errors with retry", async () => {
   render(<LedgerPage />);
   await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   expect(screen.getByText(/Retry/i)).toBeTruthy();
+});
+
+test("ledger error clears stale rows and summary", async () => {
+  let mode = "ok";
+  const summary = {
+    revenue: { net_exclusive: "1000.00" },
+    profit: { gross_profit: "400.00", operating_profit: "300.00", label: "OPERATING PROFIT", warning: "", margin_pct: "30.00", cogs: "600.00" },
+    transaction_count: 1,
+  };
+  const row = { id: "9", transaction_type: "SALE", amount: "100.00", tax_amount: "0.00", net_amount: "100.00",
+    order_id: "STALE-1", transaction_date_ist: "2026-09-01", reference_number: "r1" };
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+    if (mode === "fail") {
+      return { ok: true, json: async () => ({ success: false, error: { code: "BAD_REQUEST", message: "boom" } }) };
+    }
+    if (String(url).includes("/summary")) {
+      return { ok: true, json: async () => ({ success: true, data: summary }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: { items: [row], total: 1 } }) };
+  }));
+  render(<LedgerPage />);
+  await waitFor(() => expect(screen.getByText("STALE-1")).toBeTruthy());
+  expect(screen.getByText("Net sales")).toBeTruthy();
+  mode = "fail";
+  fireEvent.click(screen.getByText("Apply", { selector: "button" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  expect(screen.queryByText("STALE-1")).toBeNull();
+  expect(screen.queryByText("Net sales")).toBeNull();
+  expect(screen.getByText(/No ledger entries/i)).toBeTruthy();
 });
