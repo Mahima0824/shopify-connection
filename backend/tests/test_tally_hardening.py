@@ -69,6 +69,30 @@ def _mkorder(db, b, name="#T1", total="1180.00", tax="180.00", customer_id=None,
     return o, (c.id if c else None)
 
 
+def test_sales_items_scoped_to_export_date_range():
+    from app.services import tally_service as ts
+    from app.models.order import OrderItem
+    from openpyxl import load_workbook
+    import io
+    db, b = _mkbiz()
+    o1, _ = _mkorder(db, b, name="#SEPT", total="1180.00", tax="180.00",
+                     dt=datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc))
+    o2, _ = _mkorder(db, b, name="#OCT", total="590.00", tax="90.00",
+                     dt=datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc))
+    db.add(OrderItem(business_id=b.id, order_id=o1.id, title="Sept Shoes",
+                     sku="SEP-1", quantity=2, price=500.0))
+    db.add(OrderItem(business_id=b.id, order_id=o2.id, title="Oct Hat",
+                     sku="OCT-1", quantity=1, price=500.0))
+    db.commit()
+    out = ts.generate_workbook_export(db, b.id, "u1",
+                                      "2026-09-01T00:00:00+00:00", "2026-10-01T00:00:00+00:00")
+    ws = load_workbook(filename=io.BytesIO(out["content"]))["Sales_Items"]
+    data = [r for r in ws.iter_rows(min_row=2) if r[0].value not in (None, "TOTAL")]
+    assert data, "expected scoped item rows"
+    assert {r[0].value for r in data} == {"#SEPT"}, [r[0].value for r in data]
+    assert "Oct Hat" not in [r[1].value for r in data]
+
+
 def test_validation_gate_blocks_on_errors():
     from app.services import tally_service as ts
     db, b = _mkbiz()
@@ -226,6 +250,17 @@ def test_api_workbook_lifecycle_envelope_and_from_alias():
     r = c.post(f"/api/v1/tally/exports/{bid}/mark-imported",
                json={"imported": True}, headers=h)
     assert r.json()["data"]["status"] == "IMPORTED"
+
+    # list date filter (finding 2): far-future `from` yields nothing; bad date -> envelope
+    r = c.get("/api/v1/tally/exports?from=2099-01-01T00:00:00%2B00:00", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["items"] == []
+    r = c.get("/api/v1/tally/exports", headers=h)
+    assert len(r.json()["data"]["items"]) >= 1
+    r = c.get("/api/v1/tally/exports?from=not-a-date", headers=h)
+    assert r.status_code == 400
+    assert r.json()["success"] is False
+    assert r.json()["error"]["code"] == "BAD_REQUEST"
 
     # re-export now blocked with envelope error (duplicate prevention #44)
     r = c.post("/api/v1/tally/export-workbook", headers=h)

@@ -494,25 +494,28 @@ def build_workbook(rows: list[dict], mappings: dict, validation: dict,
     return buf.getvalue()
 
 
-def _fill_sales_items(db: Session, business_id: str, content: bytes) -> bytes:
-    """Populate Sales_Items from order lines (additive enrichment)."""
+def _fill_sales_items(db: Session, business_id: str, content: bytes, rows: list[dict]) -> bytes:
+    """Populate Sales_Items from order lines, scoped to this export's date range.
+
+    Only items whose parent order has a Sales row in this export are included
+    (rows are already date-filtered by collect_export_rows).
+    """
     from openpyxl import load_workbook
     from app.models.order import OrderItem
     wb = load_workbook(filename=io.BytesIO(content))
     ws = wb["Sales_Items"]
-    # remove placeholder totals row if present (empty sheet has only header)
-    items = db.query(OrderItem).filter_by(business_id=business_id).all()
-    order_ref = {}
-    try:
-        from app.models.order import Order
-        order_ref = {o.id: (o.shopify_order_name or "") for o in
-                     db.query(Order).filter_by(business_id=business_id).all()}
-    except Exception:
-        pass
+    sale_voucher: dict[str, str] = {}
+    for r in rows:
+        if r["voucher_type"] == V_SALES and r["order_id"]:
+            sale_voucher.setdefault(str(r["order_id"]), r["voucher_number"])
+    items = []
+    if sale_voucher:
+        items = db.query(OrderItem).filter_by(business_id=business_id).filter(
+            OrderItem.order_id.in_(list(sale_voucher))).all()
     for it in items:
         qty = int(it.quantity or 0)
         rate = float(it.price or 0)
-        ws.append([order_ref.get(it.order_id, ""), it.title or "", it.sku or "", "",
+        ws.append([sale_voucher.get(str(it.order_id), ""), it.title or "", it.sku or "", "",
                    qty, round(rate, 2), round(qty * rate, 2)])
     if items:
         _style_header(ws, 7)
@@ -562,7 +565,7 @@ def generate_workbook_export(db: Session, business_id: str, user_id: str,
                  f"{int(datetime.now(timezone.utc).timestamp() * 1000) % 1000000:06d}")
 
     content = build_workbook(rows, comp["mappings"], validation, period, batch_ref)
-    content = _fill_sales_items(db, business_id, content)
+    content = _fill_sales_items(db, business_id, content, rows)
 
     total = round(sum(r["amount"] for r in rows), 2)
     batch = ExportBatch(business_id=business_id, batch_reference=batch_ref,

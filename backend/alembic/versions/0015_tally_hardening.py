@@ -33,7 +33,7 @@ def upgrade():
         sa.Column("internal_account", sa.String(64), nullable=False),
         sa.Column("tally_ledger_name", sa.String(128), server_default="", nullable=False),
         sa.Column("voucher_type", sa.String(64), nullable=True),
-        sa.Column("is_active", sa.Boolean(), server_default="1", nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.true(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("business_id", "internal_account", name="uq_tally_ledgermap_biz_acct"),
@@ -48,24 +48,15 @@ def upgrade():
         ("total_amount", sa.Numeric(18, 2)),
         ("file_name", sa.String(128)),
     ):
-        try:
-            op.add_column("export_batches", sa.Column(col, typ, nullable=True))
-        except Exception:
-            pass
-    try:
-        op.alter_column("export_batches", "status", type_=sa.String(32),
-                        existing_type=sa.String(32))
-    except Exception:
-        pass
+        op.add_column("export_batches", sa.Column(col, typ, nullable=True))
+    op.alter_column("export_batches", "status", type_=sa.String(32),
+                    existing_type=sa.String(32))
 
 
 def downgrade():
     for col in ("file_name", "total_amount", "transaction_count", "date_to",
                 "date_from", "batch_number"):
-        try:
-            op.drop_column("export_batches", col)
-        except Exception:
-            pass
+        op.drop_column("export_batches", col)
     op.drop_table("tally_ledger_mappings")
     op.drop_index("ix_tally_export_txn", table_name="tally_export_records")
     op.drop_table("tally_export_records")

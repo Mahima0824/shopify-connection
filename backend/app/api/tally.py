@@ -115,8 +115,17 @@ def list_batches(db: Session = Depends(get_db), u: dict = Depends(get_current_us
 def list_exports(from_val: str | None = Query(default=None, alias="from"),
                  to: str | None = Query(default=None),
                  db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
-    batches = db.query(ExportBatch).filter_by(business_id=u.get("business_id")).order_by(
-        ExportBatch.created_at.desc()).all()
+    from datetime import datetime
+    from app.services import ledger_service as ls
+    q = db.query(ExportBatch).filter_by(business_id=u.get("business_id"))
+    try:
+        if from_val:
+            q = q.filter(ExportBatch.created_at >= ls._utc(datetime.fromisoformat(from_val)))
+        if to:
+            q = q.filter(ExportBatch.created_at < ls._utc(datetime.fromisoformat(to)))
+    except ValueError:
+        return _err(400, "BAD_REQUEST", "from/to must be ISO datetimes")
+    batches = q.order_by(ExportBatch.created_at.desc()).all()
     return {"success": True, "data": {"items": [
         {"id": b.id, "batch_reference": b.batch_reference,
          "record_count": b.record_count, "status": b.status,
