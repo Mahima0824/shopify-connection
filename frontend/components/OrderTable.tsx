@@ -46,7 +46,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
             <th>Fulfillment / Op Status</th>
             <th>Total Amount</th>
             <th>Date</th>
-            <th style={{ textAlign: "right" }}>Action</th>
+            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -71,8 +71,8 @@ export default function OrderTable({ orders }: { orders: any[] }) {
                   ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
                   : "-"}
               </td>
-              <td style={{ textAlign: "right", borderBottom: "1px solid var(--hairline)" }}>
-                <Link href={`/orders/${o.id}`} className="btn-secondary">
+              <td style={{ textAlign: "right", whiteSpace: "nowrap", borderBottom: "1px solid var(--hairline)" }}>
+                <Link href={`/orders/${o.id}`} className="btn-secondary" style={{ whiteSpace: "nowrap" }}>
                   View Timeline
                 </Link>
               </td>
