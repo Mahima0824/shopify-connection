@@ -156,7 +156,8 @@ def match_bank_row(db, business_id: str, fields: dict) -> dict:
                     "settlement_reference": c["settlement_reference"] or fields.get("external_reference"),
                 })
     dated = [c for c in cands if c["expected"] == actual]
-    # L3: exact amount + date window, unambiguous only.
+    # L3: exact amount + date window, unambiguous only. The date window is mandatory:
+    # without a row date there is no L3 decision (amount-alone must never hard-match).
     if row_date is not None:
         in_window = [c for c in dated
                      if c["date"] is not None and abs((c["date"] - row_date).days) <= DATE_WINDOW_DAYS]
@@ -170,17 +171,7 @@ def match_bank_row(db, business_id: str, fields: dict) -> dict:
             return {"status": "POTENTIAL_MATCH", "level": "L3", "order_id": None,
                     "payment_id": None, "shipment_id": None, "settlement_reference": None,
                     "expected": None, "actual": actual, "difference": None}
-    else:
-        if len(dated) == 1:
-            c = dated[0]
-            return _check_amount(actual, c["expected"], {
-                "level": "L3", "order_id": c["order_id"], "payment_id": c["payment_id"],
-                "shipment_id": c["shipment_id"], "settlement_reference": c["settlement_reference"],
-            })
-        if len(dated) > 1:
-            return {"status": "POTENTIAL_MATCH", "level": "L3", "order_id": None,
-                    "payment_id": None, "shipment_id": None, "settlement_reference": None,
-                    "expected": None, "actual": actual, "difference": None}
+    # No row date: fall through to L4/UNMATCHED — never MATCHED on amount alone.
     # L4: amount + description similarity -> POTENTIAL_MATCH only, never auto-match.
     desc = fields.get("description") or ""
     if desc and dated:

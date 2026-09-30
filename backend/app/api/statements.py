@@ -115,7 +115,7 @@ def upload(statement_type: str = "COURIER_SETTLEMENT", provider: str = "",
         bank = db.query(BankAccount).filter_by(id=bank_account_id,
                                                business_id=u.get("business_id")).first()
         if bank is None:
-            raise HTTPException(400, "INVALID_BANK_ACCOUNT: unknown bank account.")
+            return _err(400, "INVALID_BANK_ACCOUNT", "Unknown bank account.")
     content = file.file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "File too large (10MB max).")
@@ -136,16 +136,16 @@ def upload(statement_type: str = "COURIER_SETTLEMENT", provider: str = "",
         try:
             override = _json.loads(column_map)
         except ValueError:
-            raise HTTPException(400, "INVALID_COLUMN_MAP: must be a JSON object.")
+            return _err(400, "INVALID_COLUMN_MAP", "Column map must be a JSON object.")
         normed = {" ".join((h or "").strip().lower().split()): h for h in headers}
         for field, header in (override or {}).items():
             if field not in BANK_COLUMNS and field not in (
                     "external_reference", "order_reference", "awb_number",
                     "transaction_date", "value_date"):
-                raise HTTPException(400, f"INVALID_COLUMN_MAP: unknown field '{field}'.")
+                return _err(400, "INVALID_COLUMN_MAP", f"Unknown field '{field}'.")
             key = " ".join(str(header or "").strip().lower().split())
             if key not in normed:
-                raise HTTPException(400, f"INVALID_COLUMN_MAP: header '{header}' not in file.")
+                return _err(400, "INVALID_COLUMN_MAP", f"Header '{header}' not in file.")
             mapping[field] = normed[key]
 
     def dt(v):

@@ -211,3 +211,31 @@ def test_desc_similarity_unit():
     assert desc_similarity("NEFT settlement SET-83 bank credit", "settlement SET-83 order credit") > 0.25
     assert desc_similarity("ATM withdrawal cash", "settlement SET-83 order credit") < 0.25
     assert desc_similarity("", "anything") == 0.0
+
+
+def test_amount_alone_never_hard_matches():
+    """No-date fallback: exact amount with a single candidate must not hard-MATCH (#35)."""
+    c, h, acct = _env()
+    uid = _upload_bank(c, h, acct, [",Cash deposit,,,500,42000"]).json()["data"]["id"]
+    _process(c, h, uid)
+    r = _rows(c, h, uid)[0]
+    assert r["reconciliation_status"] != "MATCHED", r
+    assert r["reconciliation_status"] == "UNMATCHED", r
+    assert r["matched_order_id"] is None and r["matched_payment_id"] is None
+
+
+def test_bank_envelope_errors():
+    """New INVALID_BANK_ACCOUNT / INVALID_COLUMN_MAP errors use the envelope, not {detail}."""
+    c, h, acct = _env()
+    content = (BANK_HDR + "\n2026-09-10,Desc,SET-83,,980,1\n").encode()
+    bad_acct = c.post("/api/v1/statements/upload?type=BANK_STATEMENT&bank_account_id=nope",
+                      files={"file": ("b.csv", content, "text/csv")}, headers=h)
+    assert bad_acct.status_code == 400
+    body = bad_acct.json()
+    assert body["success"] is False and body["error"]["code"] == "INVALID_BANK_ACCOUNT"
+    for bad_map in ('{"oops": "Date"}', '{"description": "Nope"}', 'not-json'):
+        r = c.post(f"/api/v1/statements/upload?type=BANK_STATEMENT&bank_account_id={acct}"
+                   f"&column_map={bad_map}",
+                   files={"file": ("b.csv", content, "text/csv")}, headers=h)
+        assert r.status_code == 400, (bad_map, r.text)
+        assert r.json()["error"]["code"] == "INVALID_COLUMN_MAP", r.text
