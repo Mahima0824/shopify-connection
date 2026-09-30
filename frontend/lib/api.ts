@@ -383,3 +383,128 @@ export function canReopenMonth(role?: string | null): boolean {
   const r = (role ?? getStoredRole() ?? "").toUpperCase();
   return r === "ADMIN";
 }
+
+// --- Reports GST + profit with FY presets (FE5) ---
+
+export const REPORT_PRESETS = [
+  "today",
+  "yesterday",
+  "this_week",
+  "last_week",
+  "this_month",
+  "last_month",
+  "this_quarter",
+  "this_year",
+  "financial_year",
+  "last_fy",
+  "custom",
+] as const;
+
+export type ReportPreset = (typeof REPORT_PRESETS)[number];
+
+export type GstTotals = {
+  taxable: string;
+  cgst: string;
+  sgst: string;
+  igst: string;
+};
+
+export type GstRow = {
+  order_id: string;
+  order_name: string | null;
+  valid: boolean;
+  jurisdiction: string;
+  invoice_check?: { taxable: string; cgst: string; sgst: string; igst: string; total: string };
+  errors?: { code: string; message: string }[];
+  warnings?: string[];
+};
+
+export type GstReport = {
+  period: { from: string; to: string };
+  orders: number;
+  invalid: number;
+  totals: GstTotals;
+  rows: GstRow[];
+};
+
+export type ProfitReport = {
+  period: { from: string; to: string };
+  orders: number;
+  revenue: { gross_inclusive: string; net_exclusive: string; gst: string };
+  profit: {
+    cogs: string;
+    gross_profit: string;
+    operating_profit: string;
+    margin_pct: string;
+    label: string;
+    warning: string;
+  };
+};
+
+export function buildReportRangeQuery(params: { preset?: string; from?: string; to?: string }): string {
+  const q = new URLSearchParams();
+  if (params.preset) q.set("preset", params.preset);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+export function getGstReport(
+  params: { preset?: string; from?: string; to?: string },
+  token?: string,
+): Promise<GstReport> {
+  return api<GstReport>(`/api/v1/reports/gst${buildReportRangeQuery(params)}`, {}, token);
+}
+
+export function getProfitReport(
+  params: { preset?: string; from?: string; to?: string },
+  token?: string,
+): Promise<ProfitReport> {
+  return api<ProfitReport>(`/api/v1/reports/profit${buildReportRangeQuery(params)}`, {}, token);
+}
+
+// --- ShipSagar health + retry drain (FE5) ---
+
+export type ShipsagarHealth = {
+  provider: string;
+  configured: boolean;
+  status: string;
+  failed_webhooks: number;
+  failed_jobs: number;
+  pending_jobs: number;
+  unregistered_shipments: number;
+};
+
+export type RetryDrainResult = {
+  drained?: number;
+  moved_to_dead_letter?: number;
+  remaining?: number;
+  [k: string]: unknown;
+};
+
+export function getShipsagarHealth(token?: string): Promise<ShipsagarHealth> {
+  return api<ShipsagarHealth>(`/api/v1/shipsagar/health`, {}, token);
+}
+
+export function drainShipsagarRetries(limit = 50, token?: string): Promise<RetryDrainResult> {
+  return api<RetryDrainResult>(
+    `/api/v1/shipsagar/retry-drain?limit=${limit}`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export function canDrainRetries(role?: string | null): boolean {
+  const r = (role ?? getStoredRole() ?? "").toUpperCase();
+  return r === "ADMIN";
+}
+
+export function shipmentProvider(s: {
+  carrier_code?: string | null;
+  shipsagar_tracking_id?: string | null;
+}): "SHIPSAGAR" | "MANUAL" | "DIRECT" {
+  if (s.shipsagar_tracking_id) return "SHIPSAGAR";
+  if ((s.carrier_code ?? "").toUpperCase() === "MANUAL") return "MANUAL";
+  return "DIRECT";
+}
