@@ -141,7 +141,9 @@ def record_event(db: Session, business_id: str, transaction_type: str, amount,
                  refund_id=None, expense_id=None, currency="INR", debit_account="",
                  credit_account="", payment_method=None, reference_number=None,
                  idempotency_key=None, reversal_of_id=None,
-                 tally_voucher_type=None, tally_voucher_number=None) -> FinancialTransaction:
+                 tally_voucher_type=None, tally_voucher_number=None,
+                 _max_attempts: int = 5) -> FinancialTransaction:
+    from sqlalchemy.exc import IntegrityError
     t = (transaction_type or "").upper()
     if t not in TRANSACTION_TYPES:
         raise ValueError(f"Unknown transaction_type '{transaction_type}'.")
@@ -150,23 +152,37 @@ def record_event(db: Session, business_id: str, transaction_type: str, amount,
         raise ValueError("Negative amounts only allowed for REFUND/CANCELLATION/ADJUSTMENT.")
     dt = _utc(transaction_date)
     key = idempotency_key or f"{t}:{order_id or '-'}:{payment_id or '-'}:{refund_id or '-'}:{a}:{x}:{dt.isoformat()}"
+    for _ in range(_max_attempts):
+        existing = db.query(FinancialTransaction).filter_by(
+            business_id=business_id, idempotency_key=key).first()
+        if existing is not None:
+            return existing  # idempotent replay (incl. concurrent writer won the race)
+        txn = FinancialTransaction(
+            business_id=business_id, transaction_id=_next_txn_id(db, business_id),
+            order_id=order_id, payment_id=payment_id, refund_id=refund_id, expense_id=expense_id,
+            transaction_type=t, transaction_date=dt, amount=a, tax_amount=x, net_amount=(a - x),
+            currency=currency or "INR", debit_account=debit_account or "",
+            credit_account=credit_account or "", payment_method=payment_method,
+            reference_number=reference_number, status="POSTED", idempotency_key=key,
+            reversal_of_id=reversal_of_id, tally_voucher_type=tally_voucher_type,
+            tally_voucher_number=tally_voucher_number,
+        )
+        savepoint = db.begin_nested()  # SAVEPOINT: rollback below discards only our insert
+        db.add(txn)
+        try:
+            db.flush()
+        except IntegrityError:
+            savepoint.rollback()
+            continue  # re-count a fresh transaction_id (or find concurrent idempotent row) and retry
+        else:
+            savepoint.commit()
+            return txn
+    # Re-check once more: a concurrent idempotent insert may have landed.
     existing = db.query(FinancialTransaction).filter_by(
         business_id=business_id, idempotency_key=key).first()
     if existing is not None:
-        return existing  # idempotent replay
-    txn = FinancialTransaction(
-        business_id=business_id, transaction_id=_next_txn_id(db, business_id),
-        order_id=order_id, payment_id=payment_id, refund_id=refund_id, expense_id=expense_id,
-        transaction_type=t, transaction_date=dt, amount=a, tax_amount=x, net_amount=(a - x),
-        currency=currency or "INR", debit_account=debit_account or "",
-        credit_account=credit_account or "", payment_method=payment_method,
-        reference_number=reference_number, status="POSTED", idempotency_key=key,
-        reversal_of_id=reversal_of_id, tally_voucher_type=tally_voucher_type,
-        tally_voucher_number=tally_voucher_number,
-    )
-    db.add(txn)
-    db.flush()
-    return txn
+        return existing
+    raise IntegrityError("financial_transactions insert failed after retries", None, None)
 
 
 def reverse_event(db: Session, business_id: str, transaction_id: str, reason: str = "") -> FinancialTransaction:

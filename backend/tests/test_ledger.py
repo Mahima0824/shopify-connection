@@ -128,9 +128,9 @@ def test_ledger_crud_summary_and_date_range():
     _post(c, h, "SALE", "1180.00", "180.00", "2026-09-10T10:00:00+00:00")
     _post(c, h, "REFUND", "590.00", "90.00", "2026-09-12T10:00:00+00:00")
     _post(c, h, "SALE", "500.00", "0.00", "2026-08-05T10:00:00+00:00")
-    sept = c.get("/api/v1/ledger", params={"from_": "2026-09-01T00:00:00+00:00", "to": "2026-10-01T00:00:00+00:00"}, headers=h).json()["data"]
+    sept = c.get("/api/v1/ledger", params={"from": "2026-09-01T00:00:00+00:00", "to": "2026-10-01T00:00:00+00:00"}, headers=h).json()["data"]
     assert sept["total"] == 2
-    s = c.get("/api/v1/ledger/summary", params={"from_": "2026-09-01T00:00:00+00:00", "to": "2026-10-01T00:00:00+00:00"}, headers=h).json()["data"]
+    s = c.get("/api/v1/ledger/summary", params={"from": "2026-09-01T00:00:00+00:00", "to": "2026-10-01T00:00:00+00:00"}, headers=h).json()["data"]
     assert s["revenue"]["net_inclusive"] == "590.00"
     assert s["revenue"]["net_exclusive"] == "500.00"
     assert s["display_timezone"] == "Asia/Kolkata"
@@ -154,3 +154,78 @@ def test_ledger_reverse_and_idempotency():
     assert rev["transaction_type"] == "ADJUSTMENT"
     items = c.get("/api/v1/ledger", headers=h).json()["data"]["items"]
     assert any(i["transaction_id"] == txn["transaction_id"] and i["amount"] == "1000.00" for i in items)
+
+
+def test_ledger_from_param_contract():
+    # #56 contract: query param is literally `from`, not `from_`.
+    c, h = _api_env()
+    _post(c, h, "SALE", "100.00")
+    r = c.get("/api/v1/ledger?from=2026-09-01T00%3A00%3A00%2B00%3A00", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["success"] is True
+
+
+def test_ledger_error_envelope():
+    c, h = _api_env()
+    bad_type = c.post("/api/v1/ledger",
+                      json={"transaction_type": "NOPE", "amount": "1.00"}, headers=h)
+    assert bad_type.status_code == 400
+    body = bad_type.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "BAD_REQUEST"
+    assert body["error"]["message"]
+
+    bad_date = c.get("/api/v1/ledger/summary",
+                     params={"from": "not-a-date", "to": "2026-10-01T00:00:00+00:00"}, headers=h)
+    assert bad_date.status_code == 400
+    assert bad_date.json()["success"] is False
+    assert "code" in bad_date.json()["error"]
+
+    missing = c.post("/api/v1/ledger/reverse",
+                     json={"transaction_id": "TXN-99999999", "reason": "x"}, headers=h)
+    assert missing.status_code == 404
+    assert missing.json() == {"success": False, "error": {"code": "NOT_FOUND",
+                                                         "message": "Original transaction not found."}}
+
+
+def test_ledger_forbidden_envelope():
+    c, _h = _api_env()
+    # No auth token -> auth dependency rejects before role check.
+    r = c.post("/api/v1/ledger", json={"transaction_type": "SALE", "amount": "1.00"})
+    assert r.status_code in (401, 403)
+
+
+def test_txn_id_collision_retries():
+    from unittest.mock import patch
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.database import Base
+    import app.models  # noqa: F401
+    from app.models.business import Business
+    from app.services import ledger_service as lsvc
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    mk = sessionmaker(bind=eng)
+    db = mk()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    first = lsvc.record_event(db, b.id, "SALE", "10.00", idempotency_key="K-A")
+    db.commit()
+    real_next = lsvc._next_txn_id
+    calls = {"n": 0}
+
+    def flaky(db_, biz, prefix="TXN"):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return first.transaction_id  # force unique collision on first attempt
+        return real_next(db_, biz, prefix)
+
+    with patch.object(lsvc, "_next_txn_id", side_effect=flaky):
+        second = lsvc.record_event(db, b.id, "SALE", "20.00", idempotency_key="K-B")
+    assert calls["n"] >= 2
+    assert second.transaction_id != first.transaction_id
+    assert str(second.amount) == "20.00"
+    db.close()

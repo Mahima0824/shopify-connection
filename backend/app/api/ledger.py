@@ -1,7 +1,9 @@
 """Ledger routes (thin): immutable events + summaries. No PUT/PATCH/DELETE by design (#95)."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -11,6 +13,11 @@ from app.schemas.ledger import LedgerCreate, LedgerReverse
 from app.services import ledger_service as ls
 
 router = APIRouter(prefix="/api/v1/ledger", tags=["ledger"])
+
+
+def _err(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status,
+                        content={"success": False, "error": {"code": code, "message": message}})
 
 
 def _to_dict(r: FinancialTransaction) -> dict:
@@ -31,28 +38,33 @@ def _to_dict(r: FinancialTransaction) -> dict:
 @router.post("")
 def create_event(body: LedgerCreate, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
-        raise HTTPException(403, "Accountant role required")
+        return _err(403, "FORBIDDEN", "Accountant role required")
     try:
         r = ls.record_event(db, u.get("business_id"), **body.model_dump())
         db.commit()
         db.refresh(r)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        db.rollback()
+        return _err(400, "BAD_REQUEST", str(e))
+    except IntegrityError as e:
+        db.rollback()
+        return _err(409, "CONFLICT", f"Transaction conflict: {e.orig}"[:300])
     return {"success": True, "data": _to_dict(r)}
 
 
 @router.get("")
-def list_events(from_: str | None = None, to: str | None = None, type: str | None = None,
+def list_events(from_val: str | None = Query(default=None, alias="from"),
+                to: str | None = None, type: str | None = None,
                 order_id: str | None = None, db: Session = Depends(get_db),
                 u: dict = Depends(get_current_user)):
     q = db.query(FinancialTransaction).filter_by(business_id=u.get("business_id"))
     try:
-        if from_:
-            q = q.filter(FinancialTransaction.transaction_date >= ls._utc(datetime.fromisoformat(from_)))
+        if from_val:
+            q = q.filter(FinancialTransaction.transaction_date >= ls._utc(datetime.fromisoformat(from_val)))
         if to:
             q = q.filter(FinancialTransaction.transaction_date < ls._utc(datetime.fromisoformat(to)))
     except ValueError:
-        raise HTTPException(400, "from/to must be ISO datetimes")
+        return _err(400, "BAD_REQUEST", "from/to must be ISO datetimes")
     if type:
         q = q.filter(FinancialTransaction.transaction_type == type.upper())
     if order_id:
@@ -62,11 +74,12 @@ def list_events(from_: str | None = None, to: str | None = None, type: str | Non
 
 
 @router.get("/summary")
-def summary(from_: str, to: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+def summary(from_val: str = Query(alias="from"), to: str = Query(),
+            db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     try:
-        s, e = ls._utc(datetime.fromisoformat(from_)), ls._utc(datetime.fromisoformat(to))
+        s, e = ls._utc(datetime.fromisoformat(from_val)), ls._utc(datetime.fromisoformat(to))
     except ValueError:
-        raise HTTPException(400, "from/to must be ISO datetimes")
+        return _err(400, "BAD_REQUEST", "from/to must be ISO datetimes")
     return {"success": True, "data": ls.period_summary(db, u.get("business_id"), s, e)}
 
 
@@ -75,7 +88,7 @@ def fy_summary(date: str | None = None, db: Session = Depends(get_db), u: dict =
     try:
         d = ls._utc(datetime.fromisoformat(date)) if date else datetime.now(timezone.utc)
     except ValueError:
-        raise HTTPException(400, "date must be ISO datetime")
+        return _err(400, "BAD_REQUEST", "date must be ISO datetime")
     s, e = ls.fy_bounds(d)
     out = ls.period_summary(db, u.get("business_id"), s, e)
     out["fy"] = {"start": s.isoformat(), "end": e.isoformat()}
@@ -90,11 +103,17 @@ def order_ledger(order_id: str, db: Session = Depends(get_db), u: dict = Depends
 @router.post("/reverse")
 def reverse(body: LedgerReverse, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
-        raise HTTPException(403, "Accountant role required")
+        return _err(403, "FORBIDDEN", "Accountant role required")
     try:
         r = ls.reverse_event(db, u.get("business_id"), body.transaction_id, body.reason)
         db.commit()
         db.refresh(r)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        db.rollback()
+        if "not found" in str(e).lower():
+            return _err(404, "NOT_FOUND", str(e))
+        return _err(400, "BAD_REQUEST", str(e))
+    except IntegrityError as e:
+        db.rollback()
+        return _err(409, "CONFLICT", f"Transaction conflict: {e.orig}"[:300])
     return {"success": True, "data": _to_dict(r)}
