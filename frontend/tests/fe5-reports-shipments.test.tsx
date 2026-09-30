@@ -132,7 +132,7 @@ test("shipments page shows provider badge, health line, ADMIN retry-drain with c
     }
     if (String(url).includes("/shipsagar/retry-drain")) {
       expect(init?.method).toBe("POST");
-      return { ok: true, json: async () => ({ success: true, data: { drained: 3 } }) };
+      return { ok: true, json: async () => ({ success: true, data: { checked: 4, succeeded: 3, requeued: 1, dead_lettered: 0 } }) };
     }
     return {
       ok: true,
@@ -146,6 +146,7 @@ test("shipments page shows provider badge, health line, ADMIN retry-drain with c
   const btn = screen.getByText("Retry drain", { selector: "button" });
   fireEvent.click(btn);
   await waitFor(() => expect(screen.getByText(/Retry drain complete/)).toBeTruthy());
+  expect(screen.getByText(/3 drained, 1 requeued, 0 dead-lettered \(4 checked\)/)).toBeTruthy();
   expect(drainShipsagarRetries).toBeDefined();
 });
 

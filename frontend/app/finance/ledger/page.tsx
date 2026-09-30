@@ -11,6 +11,16 @@ function isoStart(date: string): string {
   return date ? `${date}T00:00:00` : "";
 }
 
+function isoEnd(date: string): string {
+  if (!date) return "";
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}T00:00:00`;
+}
+
 function defaultRange(): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
@@ -47,7 +57,7 @@ export default function LedgerPage() {
     const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? undefined) : undefined;
     const listParams = {
       ...(from ? { from: isoStart(from) } : {}),
-      ...(to ? { to: isoStart(to) } : {}),
+      ...(to ? { to: isoEnd(to) } : {}),
       ...(type ? { type } : {}),
       ...(orderSearch.trim() ? { order_id: orderSearch.trim() } : {}),
     };
@@ -56,7 +66,7 @@ export default function LedgerPage() {
     });
     const summaryP =
       from && to
-        ? getLedgerSummary({ from: isoStart(from), to: isoStart(to) }, token).then((s) => {
+        ? getLedgerSummary({ from: isoStart(from), to: isoEnd(to) }, token).then((s) => {
             if (isCurrent()) setSummary(s);
           })
         : Promise.resolve().then(() => {

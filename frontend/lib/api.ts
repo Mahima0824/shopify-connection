@@ -477,6 +477,10 @@ export type ShipsagarHealth = {
 };
 
 export type RetryDrainResult = {
+  checked?: number;
+  succeeded?: number;
+  requeued?: number;
+  dead_lettered?: number;
   drained?: number;
   moved_to_dead_letter?: number;
   remaining?: number;

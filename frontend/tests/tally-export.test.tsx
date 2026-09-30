@@ -163,6 +163,23 @@ test("duplicate export (409) shows friendly already-exported message", async () 
   await waitFor(() => expect(screen.getByText(/already exported/i)).toBeTruthy());
 });
 
+test("batch history header is honest (Created, not Range) and validate sends inclusive to-date", async () => {
+  const fetchMock = baseStub();
+  vi.stubGlobal("fetch", fetchMock);
+  render(<TallyPage />);
+  await waitFor(() => expect(screen.getByText("TALLY_EXPORT_2026_09.xlsx")).toBeTruthy());
+  expect(screen.getByText("Created", { selector: "th" })).toBeTruthy();
+  expect(screen.queryByText("Range", { selector: "th" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Validate/i }));
+  await waitFor(() => expect(screen.getByText("PASSED")).toBeTruthy());
+  const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("/api/v1/tally/validate"));
+  expect(call).toBeTruthy();
+  const toM = String(call[0]).match(/to=([^&]*)/);
+  expect(toM).toBeTruthy();
+  // Inclusive to-day: backend `to` is exclusive, so frontend must send next-day midnight.
+  expect(decodeURIComponent(toM?.[1] ?? "")).toMatch(/T00:00:00$/);
+});
+
 test("batch history shows file + status and mark-imported posts + reloads", async () => {
   const fetchMock = baseStub();
   vi.stubGlobal("fetch", fetchMock);

@@ -61,6 +61,31 @@ test("getLedgerSummary hits /api/v1/ledger/summary", async () => {
   expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/v1\/ledger\/summary\?/);
 });
 
+test("ledger page sends inclusive to-date as next-day midnight (backend to is exclusive)", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ success: true, data: { items: [], total: 0 } }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<LedgerPage />);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+  const listUrl = urls.find((u) => /\/api\/v1\/ledger\?/.test(u)) ?? "";
+  // Default range `to` is today; exclusive backend filter needs next-day T00:00:00.
+  const m = listUrl.match(/to=([^&]*)/);
+  expect(m).toBeTruthy();
+  const toVal = decodeURIComponent(m?.[1] ?? "");
+  expect(toVal).toMatch(/T00:00:00$/);
+  // `to` sent must be exactly one day after the To date input value.
+  const toInput = (document.querySelector('input[aria-label="To date"]') as HTMLInputElement)?.value ?? "";
+  expect(toInput).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  const d = new Date(`${toInput}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const expected = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00`;
+  expect(toVal).toBe(expected);
+});
+
 test("ledger page renders empty state when no entries", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true,

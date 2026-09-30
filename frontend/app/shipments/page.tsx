@@ -56,8 +56,11 @@ export default function ShipmentsPage() {
     try {
       const token = localStorage.getItem("token") ?? undefined;
       const out = await drainShipsagarRetries(50, token);
-      const n = out.drained ?? out.remaining ?? 0;
-      setDrainMsg(`Retry drain complete: ${n} processed.`);
+      const drained = out.succeeded ?? out.drained ?? 0;
+      const requeued = out.requeued ?? out.remaining ?? 0;
+      const dead = out.dead_lettered ?? out.moved_to_dead_letter ?? 0;
+      const checked = out.checked ?? drained + requeued + dead;
+      setDrainMsg(`Retry drain complete: ${drained} drained, ${requeued} requeued, ${dead} dead-lettered (${checked} checked).`);
       const h = await getShipsagarHealth(token);
       setHealth(h);
     } catch (e: any) {

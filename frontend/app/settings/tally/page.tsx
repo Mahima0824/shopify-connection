@@ -18,6 +18,16 @@ function isoStart(date: string): string {
   return date ? `${date}T00:00:00` : "";
 }
 
+function isoEnd(date: string): string {
+  if (!date) return "";
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}T00:00:00`;
+}
+
 function defaultRange(): { from: string; to: string } {
   const to = new Date();
   const from = new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
@@ -101,7 +111,7 @@ export default function TallySettingsPage() {
     setExportError(null);
     const token = typeof window !== "undefined" ? (localStorage.getItem("token") ?? undefined) : undefined;
     validateTallyExport(
-      { ...(from ? { from: isoStart(from) } : {}), ...(to ? { to: isoStart(to) } : {}) },
+      { ...(from ? { from: isoStart(from) } : {}), ...(to ? { to: isoEnd(to) } : {}) },
       token,
     )
       .then((d) => {
@@ -125,7 +135,7 @@ export default function TallySettingsPage() {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const q = buildTallyRangeQuery({
         ...(from ? { from: isoStart(from) } : {}),
-        ...(to ? { to: isoStart(to) } : {}),
+        ...(to ? { to: isoEnd(to) } : {}),
       });
       const res = await fetch(`${API}/api/v1/tally/export-workbook${q}`, {
         method: "POST",
@@ -477,7 +487,7 @@ export default function TallySettingsPage() {
               <thead>
                 <tr>
                   <th>File</th>
-                  <th>Range</th>
+                  <th>Created</th>
                   <th style={{ textAlign: "right" }}>Count</th>
                   <th>Status</th>
                   <th style={{ textAlign: "right" }}>Action</th>
