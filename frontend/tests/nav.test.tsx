@@ -27,10 +27,15 @@ test("topnav centers app sections with active effect and no underline", () => {
   expect(active?.getAttribute("style") ?? "").toMatch(/9999/);
 });
 
-test("topnav uses cream background", () => {
+test("exactly one current-page marker exists", () => {
+  const { container } = render(<TopNav />);
+  expect(container.querySelectorAll('[aria-current="page"]').length).toBe(1);
+});
+
+test("topnav uses enterprise canvas background", () => {
   const { container } = render(<TopNav />);
   const header = container.querySelector("header") as HTMLElement;
-  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/#fffaf0|cream|var\(--canvas\)/i);
+  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/var\(--canvas\)/i);
 });
 
 test("topnav groups routes with active trail", () => {

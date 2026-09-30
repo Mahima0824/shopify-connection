@@ -11,12 +11,19 @@ function isActive(pathname: string | null, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+function isExact(pathname: string | null, href: string) {
+  return pathname === href;
+}
+
 function isGroupActive(pathname: string | null, href?: string, children?: { href: string }[]) {
   if (href) return isActive(pathname, href);
   return (children ?? []).some((c) => isActive(pathname, c.href));
 }
 
 const pill = (active: boolean, extra?: React.CSSProperties): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 44,
   padding: "8px 16px",
   borderRadius: 9999,
   color: active ? "var(--ink)" : "var(--muted)",
@@ -133,7 +140,7 @@ export default function TopNav() {
                       <Link
                         key={c.href}
                         href={c.href}
-                        aria-current={childActive ? "page" : undefined}
+                        aria-current={isExact(pathname, c.href) ? "page" : undefined}
                         onClick={closeDrop}
                         style={{
                           display: "flex",
@@ -192,6 +199,7 @@ export default function TopNav() {
                   onClick={() => setOpen(false)}
                   style={{
                     display: "block",
+                    minHeight: 44,
                     padding: "8px 16px",
                     borderRadius: 9999,
                     color: active ? "var(--ink)" : "var(--body)",
@@ -234,7 +242,7 @@ export default function TopNav() {
                       <Link
                         key={c.href}
                         href={c.href}
-                        aria-current={childActive ? "page" : undefined}
+                        aria-current={isExact(pathname, c.href) ? "page" : undefined}
                         onClick={() => setOpen(false)}
                         style={{
                           display: "flex",
