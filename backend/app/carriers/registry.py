@@ -24,3 +24,21 @@ def normalize_status(code: str, raw: str) -> str:
         return get_provider(code).normalize_status(raw)
     except CarrierError:
         return "UNKNOWN"
+
+
+def db_normalize(db, business_id: str, provider: str, raw: str) -> str | None:
+    from app.models.courier_meta import CourierStatusMapping
+    code = (raw or "").strip()
+    if not code:
+        return None
+    for bid in (business_id, None):
+        q = db.query(CourierStatusMapping).filter_by(
+            provider=(provider or "").upper(), provider_status_code=code)
+        if bid is None:
+            q = q.filter(CourierStatusMapping.business_id.is_(None))
+        else:
+            q = q.filter(CourierStatusMapping.business_id == bid)
+        m = q.first()
+        if m is not None:
+            return m.normalized_status
+    return None

@@ -70,7 +70,10 @@ def test_batches_serializable(auth_client):
     assert isinstance(r.json()["data"], list)
 
 
-def test_prod_defaults_safe(monkeypatch):
-    monkeypatch.delenv("APP_ENV", raising=False)
+def test_prod_defaults_safe(monkeypatch, tmp_path):
+    # Model default must be production regardless of local .env (backend/.env
+    # sets APP_ENV=dev for local demo; that file is gitignored and env-specific).
     from app import config
+    assert config.Settings.model_fields["app_env"].default == "production"
+    monkeypatch.setenv("APP_ENV", "production")
     assert config.Settings().app_env == "production"

@@ -8,12 +8,27 @@ import ManualBarcodeInput from "../../../components/scanner/ManualBarcodeInput";
 
 type Last = { barcode: string; order: string; total: number; status: string } | null;
 
+type BookingState = "IDLE" | "BOOKING" | "BOOKED" | "BOOKING_ERROR";
+
+type ParcelInfo = { id: string; barcode: string; orderId: string; orderName: string };
+
+type ExistingShipment = { carrier_code: string; awb_number: string } | null;
+
+const COURIERS = ["MANUAL", "DTDC", "INDIA_POST"];
+
 export default function DispatchPage() {
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
   const [last, setLast] = useState<Last>(null);
   const [hist, setHist] = useState<string[]>([]);
   const [camOn, setCamOn] = useState(false);
+  const [parcel, setParcel] = useState<ParcelInfo | null>(null);
+  const [existing, setExisting] = useState<ExistingShipment>(null);
+  const [booking, setBooking] = useState<BookingState>("IDLE");
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [courier, setCourier] = useState("MANUAL");
+  const [awb, setAwb] = useState("");
+  const bookingBusy = useRef(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => { ref.current?.focus(); }, []);
@@ -33,8 +48,25 @@ export default function DispatchPage() {
     if (!barcode) return;
     const token = localStorage.getItem("token") ?? undefined;
     const client_scan_id = `dispatch:${crypto.randomUUID()}`;
+    setParcel(null);
+    setExisting(null);
+    setBooking("IDLE");
+    setBookingError(null);
     try {
-      await api<{ parcel: any; order: any }>(`/api/v1/parcels/${barcode}`, {}, token);
+      const looked = await api<{ parcel: any; order: any }>(`/api/v1/parcels/${barcode}`, {}, token);
+      const p = looked.parcel;
+      const o = looked.order;
+      setParcel({ id: p.id, barcode, orderId: o?.id ?? "", orderName: o?.shopify_order_name ?? "Order" });
+      if (o?.id) {
+        try {
+          const s = await api<{ items: any[] }>(
+            `/api/v1/shipments?order_id=${encodeURIComponent(o.id)}`, {}, token);
+          const hit = (s.items ?? []).find((r) => r.parcel_id === p.id);
+          if (hit) setExisting({ carrier_code: hit.carrier_code, awb_number: hit.awb_number });
+        } catch {
+          // Shipment check is best-effort; booking will surface duplicates.
+        }
+      }
       const out = await api<{ parcel: any; order: any }>(`/api/v1/scan/dispatch`, {
         method: "POST",
         body: JSON.stringify({ barcode, client_scan_id })
@@ -61,6 +93,28 @@ export default function DispatchPage() {
     if (!barcode) return;
     setCode("");
     await submitBarcode(barcode);
+  }
+
+  async function bookShipment() {
+    if (!parcel || bookingBusy.current) return;
+    bookingBusy.current = true;
+    setBooking("BOOKING");
+    setBookingError(null);
+    const token = localStorage.getItem("token") ?? undefined;
+    try {
+      const s = await api<any>(`/api/v1/shipments/${parcel.id}/book`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ carrier_code: courier, awb_number: awb.trim() || undefined }),
+      }, token);
+      setExisting({ carrier_code: s.carrier_code, awb_number: s.awb_number });
+      setBooking("BOOKED");
+    } catch (err: any) {
+      setBooking("BOOKING_ERROR");
+      setBookingError(err?.message ?? "Booking failed");
+    } finally {
+      bookingBusy.current = false;
+    }
   }
 
   return (
@@ -128,6 +182,63 @@ export default function DispatchPage() {
           <ManualBarcodeInput onSubmit={(v) => submitBarcode(v)} />
         </div>
       </div>
+
+      {/* Courier booking */}
+      {parcel && (
+        <div className="content-card">
+          <h2 style={{ fontSize: "16px", marginBottom: "4px", color: "var(--muted)", textTransform: "uppercase" }}>
+            Courier booking
+          </h2>
+          <p style={{ fontSize: "14px", color: "var(--muted)", marginBottom: "16px" }}>
+            {parcel.orderName} · {parcel.barcode}
+          </p>
+          {existing ? (
+            <p role="status" style={{ fontSize: "14px" }}>
+              <span className="badge badge-success">BOOKED</span>{" "}
+              <span style={{ fontWeight: 600 }}>{existing.carrier_code} · {existing.awb_number}</span>{" "}
+              <span style={{ color: "var(--muted)" }}>— shipment exists, booking skipped.</span>
+            </p>
+          ) : (
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+              <select
+                value={courier}
+                onChange={(e) => setCourier(e.target.value)}
+                aria-label="Courier"
+                className="input-control"
+                style={{ width: "180px" }}
+                disabled={booking === "BOOKING"}
+              >
+                {COURIERS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+              <input
+                className="input-control"
+                value={awb}
+                onChange={(e) => setAwb(e.target.value)}
+                placeholder="AWB number (required for MANUAL)"
+                aria-label="AWB number"
+                style={{ flex: 1, minWidth: "200px" }}
+                disabled={booking === "BOOKING"}
+              />
+              <button
+                type="button"
+                onClick={bookShipment}
+                disabled={booking === "BOOKING"}
+                className="btn-primary"
+              >
+                {booking === "BOOKING" ? "Booking…" : "Book shipment"}
+              </button>
+              {booking === "BOOKED" && (
+                <span role="status" className="badge badge-success">BOOKED</span>
+              )}
+              {booking === "BOOKING_ERROR" && bookingError && (
+                <span role="alert" className="badge-danger" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
+                  {bookingError}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Grid: Last Scanned Card & History */}
       <div className="cols-2" style={{ gap: "24px" }}>

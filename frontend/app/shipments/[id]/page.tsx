@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { cooldownMessage } from "../../../lib/tracking";
 
 export default function ShipmentDetailPage({ params }: { params: { id: string } }) {
   const [ship, setShip] = useState<any | null>(null);
@@ -11,6 +12,8 @@ export default function ShipmentDetailPage({ params }: { params: { id: string } 
   const [error, setError] = useState<string | null>(null);
   const [awb, setAwb] = useState("");
   const [reason, setReason] = useState("");
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   function load() {
     const token = localStorage.getItem("token") ?? undefined;
     api<any>(`/api/v1/shipments/${params.id}`, {}, token).then(setShip).catch((e) => setError(e?.message));
@@ -30,6 +33,21 @@ export default function ShipmentDetailPage({ params }: { params: { id: string } 
       { method: "POST", body: JSON.stringify({ awb_number: awb, reason }) }, token);
     setAwb(""); setReason(""); load();
   }
+  async function refresh() {
+    const token = localStorage.getItem("token") ?? undefined;
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const out = await api<{ synced: boolean; reason?: string }>(
+        `/api/v1/shipments/${params.id}/sync`, { method: "POST" }, token);
+      setSyncMsg(out.synced ? "Refreshed from carrier." : `Refresh skipped (${out.reason ?? "no update"}).`);
+      load();
+    } catch (e: any) {
+      setSyncMsg(cooldownMessage(e));
+    } finally {
+      setSyncing(false);
+    }
+  }
   if (error) return <div className="container"><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
   if (!ship) return <div className="container"><p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading shipment…</p></div>;
   return (
@@ -40,6 +58,12 @@ export default function ShipmentDetailPage({ params }: { params: { id: string } 
           <span className="badge-pill">{ship.tracking_status}</span>
           <span style={{ marginLeft: "12px" }}>{ship.current_location ?? "No location yet"}</span>
         </p>
+        <div style={{ marginTop: "12px", display: "flex", gap: "12px", alignItems: "center" }}>
+          <button onClick={refresh} disabled={syncing} className="btn-secondary">
+            {syncing ? "Refreshing…" : "Refresh from carrier"}
+          </button>
+          {syncMsg && <span role="status" style={{ fontSize: "13px" }}>{syncMsg}</span>}
+        </div>
       </div>
       <div className="content-card">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Record checkpoint</h2>

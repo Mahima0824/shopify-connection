@@ -26,6 +26,23 @@ def list_providers(db: Session = Depends(get_db), u: dict = Depends(get_current_
     return {"success": True, "data": {"items": items}}
 
 
+@router.get("/health")
+def health(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.carriers.registry import PROVIDERS
+    from app.models.shipment import CarrierConnection
+    conns = {c.carrier_code: c for c in db.query(CarrierConnection).filter_by(
+        business_id=u.get("business_id")).all()}
+    items = []
+    for p in PROVIDERS.values():
+        c = conns.get(p.code)
+        items.append({"code": p.code, "name": p.name, "capabilities": p.capabilities(),
+                      "configured": c is not None and bool(c.is_active),
+                      "last_success": c.last_success_at.isoformat() if c is not None and c.last_success_at else None,
+                      "last_error": c.last_error_message if c is not None else None,
+                      "last_error_at": c.last_error_at.isoformat() if c is not None and c.last_error_at else None})
+    return {"success": True, "data": {"items": items}}
+
+
 @router.post("/{code}/connect")
 def connect(code: str, body: ConnectIn, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     import json as _json

@@ -169,3 +169,104 @@ def resolve_case(cid: str, db: Session = Depends(get_db), u: dict = Depends(get_
 def at_risk(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     from app.services.money_service import money_at_risk
     return {"success": True, "data": money_at_risk(db, u.get("business_id"))}
+
+
+def _open_issue(db, order, code: str, severity: str, message: str) -> bool:
+    """Upsert a Reconciliation row by (order_id, issue_code). Returns True if newly opened."""
+    from datetime import datetime, timezone
+    from app.models.reconciliation import Reconciliation
+    r = db.query(Reconciliation).filter_by(order_id=order.id, issue_code=code).first()
+    if r is None:
+        r = Reconciliation(business_id=order.business_id, order_id=order.id,
+                           reconciliation_status="EXCEPTION", severity=severity,
+                           issue_code=code, issue_message=message, resolved=False)
+        db.add(r)
+        return True
+    r.severity = severity
+    r.issue_message = message
+    r.reconciliation_status = "EXCEPTION"
+    r.resolved = False
+    r.resolved_by = None
+    r.resolved_at = None
+    r.updated_at = datetime.now(timezone.utc)
+    return False
+
+
+def _aware(v):
+    from datetime import timezone
+    if v is None:
+        return None
+    try:
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+    except Exception:
+        return v
+
+
+@router.post("/sla/evaluate")
+def evaluate(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from datetime import datetime, timezone, timedelta
+    from app.models.shipment import Shipment
+    from app.models.order import Order
+    from app.models.reconciliation import Reconciliation
+    from app.models.sla import SLARule
+    from app.services.shipment_service import TERMINAL
+    from app.services.sla_service import sla_status, shipment_clock
+    if u.get("role") != "ADMIN":
+        raise HTTPException(403, "Admin role required")
+    bid = u.get("business_id")
+    now = datetime.now(timezone.utc)
+    opened = 0
+    checked = 0
+    seen_orders: set[str] = set()
+    for s in db.query(Shipment).filter_by(business_id=bid).all():
+        if (s.tracking_status or "") in TERMINAL:
+            continue
+        checked += 1
+        o = db.query(Order).filter_by(id=s.order_id).first()
+        if o is None:
+            continue
+        # Reconcile checks (R011 stuck / R012 RTO delay / R022 breach) once per order.
+        if o.id not in seen_orders:
+            seen_orders.add(o.id)
+            try:
+                from app.services.reconciliation_service import reconcile_order
+                before = {(r.order_id, r.issue_code)
+                          for r in db.query(Reconciliation).filter_by(business_id=bid, resolved=False).all()}
+                res = reconcile_order(db, o.id)
+                after = {(r.order_id, r.issue_code)
+                         for r in db.query(Reconciliation).filter_by(business_id=bid, resolved=False).all()}
+                opened += len(after - before)
+                _ = res
+            except Exception:
+                pass
+        # WAREHOUSE_DELAY: hub-status + >24h idle.
+        if (s.tracking_status or "") in ("AT_HUB", "RETURN_AT_HUB"):
+            last = _aware(s.last_checkpoint_at)
+            if last is not None and now - last > timedelta(hours=24):
+                if _open_issue(db, o, "WAREHOUSE_DELAY", "HIGH",
+                               f"Shipment {s.awb_number} idle at hub over 24h."):
+                    opened += 1
+        # TRACKING_STALE: UNKNOWN + >24h unsynced.
+        if (s.tracking_status or "") == "UNKNOWN":
+            sync_at = _aware(s.last_synced_at) or _aware(s.created_at) or _aware(s.shipped_at)
+            if sync_at is not None and now - sync_at > timedelta(hours=24):
+                if _open_issue(db, o, "TRACKING_STALE", "MEDIUM",
+                               f"Shipment {s.awb_number} status unknown over 24h."):
+                    opened += 1
+        # RTO_DELAY fallback per SLA rules (covers no-rule 45d default via shipment_clock).
+        if (s.tracking_status or "") in ("RTO_INITIATED", "RTO_IN_TRANSIT", "RETURN_AT_HUB"):
+            rule = db.query(SLARule).filter_by(business_id=bid, carrier_code=s.carrier_code).first()
+            if rule is None:
+                rule = db.query(SLARule).filter_by(business_id=bid, carrier_code="*").first()
+            try:
+                st = sla_status(shipment_clock(db, s, rule), now)
+            except Exception:
+                st = {"status": "NORMAL", "days_used": 0}
+            if st.get("status") in ("APPROACHING", "BREACHED"):
+                if _open_issue(db, o, "RTO_DELAY", "HIGH",
+                               f"RTO shipment {s.awb_number} aged {st.get('days_used', 0)}d."):
+                    opened += 1
+    db.commit()
+    return {"success": True, "data": {"checked": checked, "opened": opened}}

@@ -5,7 +5,7 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-TERMINAL = ("DELIVERED", "RETURNED", "LOST", "CLOSED")
+TERMINAL = ("DELIVERED", "RETURNED", "RTO_DELIVERED", "LOST", "CLOSED")
 
 TERMINAL_EVENT_MAP = {
     "DELIVERED": "delivered_at",
@@ -21,13 +21,16 @@ def ingest_event(db, shipment, raw: str | None, message: str | None = None,
                  source: str = "MANUAL", raw_payload: dict | None = None):
     """Upsert a shipment event (dedupe by carrier_event_id) and roll up shipment fields."""
     from app.models.shipment import ShipmentEvent
-    from app.carriers.registry import normalize_status
+    from app.carriers.registry import db_normalize, normalize_status
     if carrier_event_id:
         existing = db.query(ShipmentEvent).filter_by(
             shipment_id=shipment.id, carrier_event_id=carrier_event_id).first()
         if existing is not None:
             return existing, False
-    norm = normalize_status(shipment.carrier_code, raw or "")
+    try:
+        norm = db_normalize(db, shipment.business_id, shipment.carrier_code, raw or "") or normalize_status(shipment.carrier_code, raw or "")
+    except Exception:
+        norm = normalize_status(shipment.carrier_code, raw or "")
     ev = ShipmentEvent(
         business_id=shipment.business_id, shipment_id=shipment.id,
         carrier_event_id=carrier_event_id or "", carrier_status_raw=raw,
