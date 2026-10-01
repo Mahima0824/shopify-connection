@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import Loading from "./components/Loading";
 import NotFound from "./pages/NotFound";
 import TopNav from "./components/TopNav";
 import Landing from "./pages/Landing";
@@ -35,7 +37,9 @@ export function AppShell() {
     <>
       <TopNav />
       <main style={{ paddingTop: 24 }}>
-        <Outlet />
+        <Suspense fallback={<Loading />}>
+          <Outlet />
+        </Suspense>
       </main>
     </>
   );
