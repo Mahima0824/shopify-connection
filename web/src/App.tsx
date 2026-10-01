@@ -1,10 +1,11 @@
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import NotFound from "./pages/NotFound";
+import TopNav from "./components/TopNav";
 
 export function AppShell() {
   return (
     <>
-      <nav>ReconHub</nav>
+      <TopNav />
       <main style={{ paddingTop: 24 }}>
         <Outlet />
       </main>
