@@ -7,6 +7,17 @@ import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
 import OrderDetail from "./pages/OrderDetail";
 import Exceptions from "./pages/Exceptions";
+import Parcels from "./pages/Parcels";
+import ParcelDetail from "./pages/ParcelDetail";
+import ParcelLabels from "./pages/ParcelLabels";
+import ParcelTestSheet from "./pages/ParcelTestSheet";
+import ScanHub from "./pages/ScanHub";
+import Dispatch from "./pages/Dispatch";
+import ReturnScan from "./pages/ReturnScan";
+import RtoScan from "./pages/RtoScan";
+import Shipments from "./pages/Shipments";
+import ShipmentDetail from "./pages/ShipmentDetail";
+import Outstanding from "./pages/Outstanding";
 
 export function AppShell() {
   return (
@@ -28,39 +39,21 @@ export function AppRoutes() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
-        <Route path="/parcels" element={<div data-route="parcels" />} />
-        <Route
-          path="/parcels/labels"
-          element={<div data-route="parcel-labels" />}
-        />
-        <Route
-          path="/parcels/test-sheet"
-          element={<div data-route="parcel-test-sheet" />}
-        />
-        <Route
-          path="/parcels/:barcode"
-          element={<div data-route="parcel-detail" />}
-        />
-        <Route path="/scan" element={<div data-route="scan-hub" />} />
-        <Route
-          path="/scan/dispatch"
-          element={<div data-route="scan-dispatch" />}
-        />
-        <Route path="/scan/return" element={<div data-route="return-scan" />} />
-        <Route path="/scan/rto" element={<div data-route="rto-scan" />} />
-        <Route path="/shipments" element={<div data-route="shipments" />} />
-        <Route
-          path="/shipments/outstanding"
-          element={<div data-route="outstanding" />}
-        />
+        <Route path="/parcels" element={<Parcels />} />
+        <Route path="/parcels/labels" element={<ParcelLabels />} />
+        <Route path="/parcels/test-sheet" element={<ParcelTestSheet />} />
+        <Route path="/parcels/:barcode" element={<ParcelDetail />} />
+        <Route path="/scan" element={<ScanHub />} />
+        <Route path="/scan/dispatch" element={<Dispatch />} />
+        <Route path="/scan/return" element={<ReturnScan />} />
+        <Route path="/scan/rto" element={<RtoScan />} />
+        <Route path="/shipments" element={<Shipments />} />
+        <Route path="/shipments/outstanding" element={<Outstanding />} />
         <Route
           path="/shipments/tracking"
           element={<div data-route="shipments-tracking" />}
         />
-        <Route
-          path="/shipments/:id"
-          element={<div data-route="shipment-detail" />}
-        />
+        <Route path="/shipments/:id" element={<ShipmentDetail />} />
         <Route path="/statements" element={<div data-route="statements" />} />
         <Route
           path="/statements/:id"
