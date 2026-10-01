@@ -266,7 +266,7 @@ git commit -m "feat: port parcels, scan and shipments routes"
 - Wire 11 routes into App.tsx
 - Test: port remaining 13 test files (`responsive`, `tokens`, `nav` with MemoryRouter, `tally`, `tally-export`, `statements`, `statements-recon`, `month-close`, `ledger`, `fe5-reports-shipments`, `import`, `loading`, `tracking`, `return` if unported) with fixed imports; nav.test: replace `vi.mock("next/navigation")` with `<MemoryRouter initialEntries={["/dashboard"]}>` wrapper and drop the mock import.
 
-**Interfaces:** Consumes Tasks 1-4. After this task ALL 28 routes + ALL 24 tests exist in `web/`.
+**Interfaces:** Consumes Tasks 1-4. After this task ALL 29 routes + ALL 24 tests exist in `web/`.
 
 - [ ] **Step 1: Copy, swap, wire**
 - [ ] **Step 2: Port tests; run `npm test` → red-then-green (full suite)**

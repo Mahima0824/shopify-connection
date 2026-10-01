@@ -10,7 +10,7 @@ stays untouched and runnable (other session active there) until an explicit
 later cutover, which is out of scope.
 
 ## 2. Context (evidence)
-- 28 pages under `frontend/app/**/page.tsx`, 26 already `"use client"`;
+- 29 pages under: `frontend/app/**/page.tsx`, 26 already `"use client"`;
   remaining 2 (`app/page.tsx`, `app/scan/page.tsx`) are static markup, trivially client-safe.
 - Zero Next-only features (no next/image, next/font, metadata API, server
   actions, middleware, route handlers). Only Next imports repo-wide:
@@ -53,7 +53,7 @@ later cutover, which is out of scope.
   (strict, bundler resolution, noUnusedLocals OFF to match frontend
   tolerance), `package.json` (dev/build/test/preview scripts).
 
-## 5. Route table (28)
+## 5. Route table (29)
 `/` Landing · `/login` · `/dashboard` · `/orders` · `/orders/:id` ·
 `/parcels` · `/parcels/labels` · `/parcels/test-sheet` · `/parcels/:barcode` ·
 `/scan` · `/scan/dispatch` · `/scan/return` · `/scan/rto` · `/shipments` ·
