@@ -18,6 +18,17 @@ import RtoScan from "./pages/RtoScan";
 import Shipments from "./pages/Shipments";
 import ShipmentDetail from "./pages/ShipmentDetail";
 import Outstanding from "./pages/Outstanding";
+import StatementList from "./pages/StatementList";
+import StatementDetail from "./pages/StatementDetail";
+import MonthlyReport from "./pages/MonthlyReport";
+import TallySettings from "./pages/TallySettings";
+import CostsSettings from "./pages/CostsSettings";
+import CarriersSettings from "./pages/CarriersSettings";
+import SlaSettings from "./pages/SlaSettings";
+import FinanceClose from "./pages/FinanceClose";
+import FinanceLedger from "./pages/FinanceLedger";
+import Tracking from "./pages/Tracking";
+import ShipmentsTracking from "./pages/ShipmentsTracking";
 
 export function AppShell() {
   return (
@@ -49,44 +60,19 @@ export function AppRoutes() {
         <Route path="/scan/rto" element={<RtoScan />} />
         <Route path="/shipments" element={<Shipments />} />
         <Route path="/shipments/outstanding" element={<Outstanding />} />
-        <Route
-          path="/shipments/tracking"
-          element={<div data-route="shipments-tracking" />}
-        />
+        <Route path="/shipments/tracking" element={<ShipmentsTracking />} />
         <Route path="/shipments/:id" element={<ShipmentDetail />} />
-        <Route path="/statements" element={<div data-route="statements" />} />
-        <Route
-          path="/statements/:id"
-          element={<div data-route="statement-detail" />}
-        />
-        <Route
-          path="/reports/monthly"
-          element={<div data-route="monthly-report" />}
-        />
+        <Route path="/statements" element={<StatementList />} />
+        <Route path="/statements/:id" element={<StatementDetail />} />
+        <Route path="/reports/monthly" element={<MonthlyReport />} />
         <Route path="/exceptions" element={<Exceptions />} />
-        <Route path="/import" element={<div data-route="import" />} />
-        <Route
-          path="/finance/close"
-          element={<div data-route="finance-close" />}
-        />
-        <Route
-          path="/finance/ledger"
-          element={<div data-route="finance-ledger" />}
-        />
-        <Route path="/tracking" element={<div data-route="tracking" />} />
-        <Route
-          path="/settings/tally"
-          element={<div data-route="tally-settings" />}
-        />
-        <Route
-          path="/settings/costs"
-          element={<div data-route="costs-settings" />}
-        />
-        <Route
-          path="/settings/carriers"
-          element={<div data-route="carriers-settings" />}
-        />
-        <Route path="/settings/sla" element={<div data-route="sla-settings" />} />
+        <Route path="/finance/close" element={<FinanceClose />} />
+        <Route path="/finance/ledger" element={<FinanceLedger />} />
+        <Route path="/tracking" element={<Tracking />} />
+        <Route path="/settings/tally" element={<TallySettings />} />
+        <Route path="/settings/costs" element={<CostsSettings />} />
+        <Route path="/settings/carriers" element={<CarriersSettings />} />
+        <Route path="/settings/sla" element={<SlaSettings />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
