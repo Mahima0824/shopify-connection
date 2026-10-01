@@ -274,14 +274,14 @@ export default function TallySettingsPage() {
             Validate a period first &mdash; errors block export, warnings do not
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
+        <div style={{ display: "flex", gap: "16px", alignItems: "end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "var(--muted)", minWidth: "180px", flex: "0 1 200px" }}>
             From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="input-control" />
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="input-control" style={{ width: "100%" }} />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "var(--muted)", minWidth: "180px", flex: "0 1 200px" }}>
             To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="input-control" />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="input-control" style={{ width: "100%" }} />
           </label>
           <button onClick={handleValidate} disabled={validating} className="btn-secondary" style={{ minHeight: 44 }}>
             {validating ? "Validating..." : "Validate"}
