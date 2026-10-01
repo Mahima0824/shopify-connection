@@ -1,6 +1,12 @@
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import NotFound from "./pages/NotFound";
 import TopNav from "./components/TopNav";
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Orders from "./pages/Orders";
+import OrderDetail from "./pages/OrderDetail";
+import Exceptions from "./pages/Exceptions";
 
 export function AppShell() {
   return (
@@ -17,11 +23,11 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<div data-route="landing" />} />
-        <Route path="/login" element={<div data-route="login" />} />
-        <Route path="/dashboard" element={<div data-route="dashboard" />} />
-        <Route path="/orders" element={<div data-route="orders" />} />
-        <Route path="/orders/:id" element={<div data-route="order-detail" />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id" element={<OrderDetail />} />
         <Route path="/parcels" element={<div data-route="parcels" />} />
         <Route
           path="/parcels/labels"
@@ -64,7 +70,7 @@ export function AppRoutes() {
           path="/reports/monthly"
           element={<div data-route="monthly-report" />}
         />
-        <Route path="/exceptions" element={<div data-route="exceptions" />} />
+        <Route path="/exceptions" element={<Exceptions />} />
         <Route path="/import" element={<div data-route="import" />} />
         <Route
           path="/finance/close"
