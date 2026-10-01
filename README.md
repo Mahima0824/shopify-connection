@@ -1,51 +1,51 @@
-# Recon MVP — Supabase + FastAPI + React (Vite)
+# Recon MVP â€” Supabase + FastAPI + React (Vite)
 
-Monorepo delivering **Shopify → FastAPI → Supabase (PostgreSQL) → React**, with email+password auth (JWT), idempotent Shopify sync, barcode dispatch, returns, reconciliation engine, executive dashboard, and Tally export.
+Monorepo delivering **Shopify â†’ FastAPI â†’ Supabase (PostgreSQL) â†’ React**, with email+password auth (JWT), idempotent Shopify sync, barcode dispatch, returns, reconciliation engine, executive dashboard, and Tally export.
 
-- `backend/` — FastAPI + SQLAlchemy 2.0 + Alembic (thin routes in `app/api/`, business logic in `app/services/`).
-- `web/` — Vite + React 18 + react-router login / dashboard / scan / exceptions / tally.
-- `docs/superpowers/` — design specs and implementation plans.
+- `backend/` â€” FastAPI + SQLAlchemy 2.0 + Alembic (thin routes in `app/api/`, business logic in `app/services/`).
+- `web/` â€” Vite + React 18 + react-router login / dashboard / scan / exceptions / tally.
+- `docs/superpowers/` â€” design specs and implementation plans.
 
 ## Project structure
 
 ```
-├── backend/                  # FastAPI service (port 8000)
-│   ├── app/
-│   │   ├── api/              # Route modules: auth, orders, parcels, scanning,
-│   │   │                     # returns, shipments (+carriers/sla/shipsagar),
-│   │   │                     # statements, reports, ledger, accounting,
-│   │   │                     # reconciliation, dashboard, export, imports,
-│   │   │                     # shopify, webhooks, tally, audit
-│   │   ├── services/         # Business logic per domain (order, scanning,
-│   │   │                     # reconciliation, tally, report, money, …)
-│   │   ├── carriers/         # Courier provider integrations
-│   │   ├── models/ + schemas/# SQLAlchemy models + Pydantic schemas
-│   │   ├── config.py / database.py / main.py
-│   ├── alembic/              # DB migrations
-│   └── tests/                # Backend test suite (pytest)
-├── web/                      # Vite + React 18 SPA (dev port 5173)
-│   ├── src/
-│   │   ├── pages/            # 29 routes: Landing, Login, Dashboard, Orders,
-│   │   │                     # OrderDetail, Parcels (+Labels/TestSheet/Detail),
-│   │   │                     # ScanHub, Dispatch, ReturnScan, RtoScan,
-│   │   │                     # Shipments (+Outstanding/Tracking/Detail),
-│   │   │                     # Statements (+Detail), MonthlyReport,
-│   │   │                     # FinanceClose/Ledger, Tracking, Exceptions,
-│   │   │                     # Tally/Costs/Carriers/Sla settings, NotFound
-│   │   ├── components/       # TopNav, Footer, MetricCard, OrderTable,
-│   │   │                     # Timeline, ScanBanner, SeverityBadge,
-│   │   │                     # EmptyState, Reveal, Loading, icons
-│   │   │                     # scanner/ (camera + manual input),
-│   │   │                     # barcode/ (labels + preview)
-│   │   ├── lib/              # api client, nav, barcode, scan utils, sla
-│   │   ├── styles/           # Design tokens + responsive CSS
-│   │   ├── App.tsx           # Route table + app shell
-│   │   └── main.tsx          # Entry point
-│   ├── tests/                # 26 vitest suites
-│   └── dist/                 # Production build output (`npm run build`)
-├── docs/superpowers/         # specs/ (design) + plans/ (implementation)
-├── .env / .env.example       # Backend + shared secrets (never commit .env)
-└── web/.env                  # Web keys VITE_API_URL, VITE_SUPABASE_* (gitignored)
+â”œâ”€â”€ backend/                  # FastAPI service (port 8000)
+â”‚   â”œâ”€â”€ app/
+â”‚   â”‚   â”œâ”€â”€ api/              # Route modules: auth, orders, parcels, scanning,
+â”‚   â”‚   â”‚                     # returns, shipments (+carriers/sla/shipsagar),
+â”‚   â”‚   â”‚                     # statements, reports, ledger, accounting,
+â”‚   â”‚   â”‚                     # reconciliation, dashboard, export, imports,
+â”‚   â”‚   â”‚                     # shopify, webhooks, tally, audit
+â”‚   â”‚   â”œâ”€â”€ services/         # Business logic per domain (order, scanning,
+â”‚   â”‚   â”‚                     # reconciliation, tally, report, money, â€¦)
+â”‚   â”‚   â”œâ”€â”€ carriers/         # Courier provider integrations
+â”‚   â”‚   â”œâ”€â”€ models/ + schemas/# SQLAlchemy models + Pydantic schemas
+â”‚   â”‚   â”œâ”€â”€ config.py / database.py / main.py
+â”‚   â”œâ”€â”€ alembic/              # DB migrations
+â”‚   â””â”€â”€ tests/                # Backend test suite (pytest)
+â”œâ”€â”€ web/                      # Vite + React 18 SPA (dev port 5173)
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ pages/            # 29 routes: Landing, Login, Dashboard, Orders,
+â”‚   â”‚   â”‚                     # OrderDetail, Parcels (+Labels/TestSheet/Detail),
+â”‚   â”‚   â”‚                     # ScanHub, Dispatch, ReturnScan, RtoScan,
+â”‚   â”‚   â”‚                     # Shipments (+Outstanding/Tracking/Detail),
+â”‚   â”‚   â”‚                     # Statements (+Detail), MonthlyReport,
+â”‚   â”‚   â”‚                     # FinanceClose/Ledger, Tracking, Exceptions,
+â”‚   â”‚   â”‚                     # Tally/Costs/Carriers/Sla settings, NotFound
+â”‚   â”‚   â”œâ”€â”€ components/       # TopNav, Footer, MetricCard, OrderTable,
+â”‚   â”‚   â”‚                     # Timeline, ScanBanner, SeverityBadge,
+â”‚   â”‚   â”‚                     # EmptyState, Reveal, Loading, icons
+â”‚   â”‚   â”‚                     # scanner/ (camera + manual input),
+â”‚   â”‚   â”‚                     # barcode/ (labels + preview)
+â”‚   â”‚   â”œâ”€â”€ lib/              # api client, nav, barcode, scan utils, sla
+â”‚   â”‚   â”œâ”€â”€ styles/           # Design tokens + responsive CSS
+â”‚   â”‚   â”œâ”€â”€ App.tsx           # Route table + app shell
+â”‚   â”‚   â””â”€â”€ main.tsx          # Entry point
+â”‚   â”œâ”€â”€ tests/                # 26 vitest suites
+â”‚   â””â”€â”€ dist/                 # Production build output (`npm run build`)
+â”œâ”€â”€ docs/superpowers/         # specs/ (design) + plans/ (implementation)
+â”œâ”€â”€ .env / .env.example       # Backend + shared secrets (never commit .env)
+â””â”€â”€ web/.env                  # Web keys VITE_API_URL, VITE_SUPABASE_* (gitignored)
 ```
 
 ## Prerequisites
@@ -109,7 +109,7 @@ Web tests (from `web/`): `npm test`. Build check: `npm run build` (outputs stati
 
 All endpoints use the envelope `{success: true, data}` / `{success: false, error: {code, message}}`:
 
-- `POST /api/v1/auth/login {email, password} → {token, user}`
+- `POST /api/v1/auth/login {email, password} â†’ {token, user}`
 - `GET /api/v1/auth/me` (Bearer token)
 - `POST /api/v1/shopify/sync?days=30`
 - `GET /api/v1/orders`, `GET /api/v1/orders/{id}`
@@ -121,14 +121,14 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 - `GET/PUT /api/v1/tally/mapping`, `POST /api/v1/tally/export`, `GET /api/v1/tally/batches`
 
 ## Sprints Completed
-- **Sprint 1 — Foundation**: Auth, Orders, Shopify Sync.
-- **Sprint 2 — Dispatch**: Barcode generator, lookup, label printer, dispatch transaction.
-- **Sprint 3 — Returns**: Customer Returns, RTO, partial quantities, vertical order timeline, audit logs.
-- **Sprint 4 — Webhooks & Reconciliation**: HMAC-verified Shopify webhooks, 8-rule auto-reconciliation engine (R001–R008), Exceptions queue.
-- **Sprint 5 — Dashboard, Reports, Excel & Tally**: Executive Dashboard, Excel export generator, Tally ERP/Prime ledger mappings, validation, idempotent Tally export batching.
+- **Sprint 1 â€” Foundation**: Auth, Orders, Shopify Sync.
+- **Sprint 2 â€” Dispatch**: Barcode generator, lookup, label printer, dispatch transaction.
+- **Sprint 3 â€” Returns**: Customer Returns, RTO, partial quantities, vertical order timeline, audit logs.
+- **Sprint 4 â€” Webhooks & Reconciliation**: HMAC-verified Shopify webhooks, 8-rule auto-reconciliation engine (R001â€“R008), Exceptions queue.
+- **Sprint 5 â€” Dashboard, Reports, Excel & Tally**: Executive Dashboard, Excel export generator, Tally ERP/Prime ledger mappings, validation, idempotent Tally export batching.
 
 ## CSV import (no-connection onboarding)
-- Export: Shopify admin → Orders → Export → CSV.
+- Export: Shopify admin â†’ Orders â†’ Export â†’ CSV.
 - Upload: `/import` page or `POST /api/v1/imports/shopify-csv` (multipart `file`, ADMIN/ACCOUNTANT, `?dry_run=true` for validation-only).
 - Identity: real Shopify `Id` reused (`gid://shopify/Order/<Id>`), so later webhooks/sync upsert instead of duplicating. Caps: 5MB / 5,000 rows. Refunded Amount > 0 creates a refund row.
 
@@ -140,12 +140,12 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 - No secrets in git: verified via `git grep -E \"supabase|shopy_|sk-|Bearer \" -- .env.example` and never commit `.env`.
 
 
-## Real-world phase � shipments, SLA, statements, P&L
+## Real-world phase ï¿½ shipments, SLA, statements, P&L
 - Shipments: dispatch with carrier_code + wb_number creates a BOOKED shipment; GET /api/v1/shipments, detail, manual checkpoints, AWB correction (ADMIN + reason, audited).
 - Tracking: POST /shipments/{id}/sync (live provider or terminal-stop); carrier webhooks POST /api/v1/webhooks/{carrier} (X-Business-Id). MANUAL provider works now; DTDC/Tirupati/India Post raise CARRIER_NOT_CONNECTED until real creds land.
 - SLA: GET/POST /sla/rules (ADMIN), outstanding board GET /shipments/outstanding, cases, money-at-risk GET /money/at-risk.
 - Statements: upload CSV/XLSX POST /statements/upload, dry-run, process (AWB > order > controlled match; never amount-alone), manual match with audit, settlement records.
 - Reports: GET /reports/monthly?month=YYYY-MM + Excel export; costs GET/PUT /reports/costs (versioned, past months frozen); P&L labeled ESTIMATED unless all-actual.
-- Reconciliation R009�R022 + ?category=courier|money|returns|sla filter; UI at /shipments, /statements, /reports/monthly, /settings/{carriers,sla,costs}.
+- Reconciliation R009ï¿½R022 + ?category=courier|money|returns|sla filter; UI at /shipments, /statements, /reports/monthly, /settings/{carriers,sla,costs}.
 - Alembic  006_shipments,  007_sla,  008_statements,  009_costs (live DB at head).
 
