@@ -478,6 +478,12 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     Shipment already exists; a transport failure queues a bounded retry job
     and raises so the retry queue picks it up.
 
+    A refusal queues no retry, because repeating it will not turn it into
+    success. The tracking id is persisted all the same, which drops the parcel
+    out of the health endpoint's unregistered_shipments count, so a refusal is
+    recorded as a SHIPSAGAR_PUSH_REJECTED audit row; without that durable trace
+    a permanently-rejected parcel would read as healthy forever.
+
     Returns {"shipsagar_tracking_id", "stubbed", "pushed", "message"}.
     """
     code = ((courier or getattr(shipment, "carrier_code", "")) or "").upper()
@@ -516,11 +522,6 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     pushed = bool(result.get("ok"))
     message = result.get("message", "")
     if not pushed:
-        # ShipSagar received the request and refused it, so there is no retry
-        # to queue (the refusal will not become success on a repeat). The id is
-        # persisted all the same, which drops the parcel out of the health
-        # endpoint's unregistered_shipments count — without a durable trace here
-        # a permanently-rejected parcel would read as healthy forever.
         try:
             from app.services.audit_service import log_audit
             log_audit(db, shipment.business_id, None, "shipment", shipment.id,
