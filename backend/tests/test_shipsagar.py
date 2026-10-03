@@ -48,7 +48,8 @@ def _seed_shipment(mk, carrier="INDIA_POST", awb="EM123456789IN"):
 def _client(monkeypatch, mk):
     from app import config
     monkeypatch.setattr(config.settings, "shipsagar_webhook_secret", SECRET)
-    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
     monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
     app.dependency_overrides[get_db] = lambda: mk()
     c = TestClient(app)
@@ -264,7 +265,8 @@ def test_register_tracking_stub_keeps_identity_chain(monkeypatch):
     from app.models.shipment import Shipment
     from app.services import shipsagar_service as ss
     from app import config
-    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
     monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
     mk = _mk()
     sid, _ = _seed_shipment(mk)
@@ -423,7 +425,8 @@ def test_retry_drain_marks_done_and_dead_letters(monkeypatch):
     from app.models.shipment_event import ShipsagarRetryJob
     from app.services import shipsagar_service as ss
     from app import config
-    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
     monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
     mk = _mk()
     sid, bid = _seed_shipment(mk, carrier="DTDC", awb="D-DRAIN")
@@ -445,8 +448,8 @@ def test_retry_drain_marks_done_and_dead_letters(monkeypatch):
         assert (s.shipsagar_tracking_id or "").endswith("D-DRAIN")
 
         # Failure path with exhausted attempts -> DEAD_LETTER, backoff capped.
-        monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "https://example.invalid")
-        monkeypatch.setattr(config.settings, "shipsagar_api_key", "k")
+        monkeypatch.setattr(config.settings, "shipsagar_token", "TOK")
+        monkeypatch.setattr(config.settings, "shipsagar_client_code", "C1001")
 
         def _boom(path, payload):
             raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "boom")
@@ -527,3 +530,213 @@ def test_shipsagar_settings_exist_and_default_to_unconfigured(monkeypatch):
     assert s.shipsagar_client_code == ""
     # The declared default base URL is the real ShipSagar host.
     assert s.shipsagar_api_base_url == "https://app.shipsagar.com/api/Web"
+
+
+# --- real ShipSagar client: PushShipment + TrackShipment ---
+
+def _configured(monkeypatch, token="TOK", client_code="C1001"):
+    from app import config
+    monkeypatch.setattr(config.settings, "shipsagar_token", token)
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", client_code)
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+
+
+class _OrderStub:
+    internal_order_number = "MAN-AB12CD34"
+    shopify_order_name = "#10452"
+    receiver_name = "Dileep Kumar"
+    receiver_email = "rahul@example.com"
+    receiver_mobile = "9963026645"
+    receiver_company = "Reshamgath"
+
+
+def test_is_configured_keys_off_token_and_client_code(monkeypatch):
+    from app import config
+    from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    assert ss.is_configured() is False
+    _configured(monkeypatch, token="T", client_code="")
+    assert ss.is_configured() is False
+    _configured(monkeypatch, token="", client_code="C")
+    assert ss.is_configured() is False
+    _configured(monkeypatch)
+    assert ss.is_configured() is True
+
+
+def test_is_configured_accepts_deprecated_api_key_as_token(monkeypatch):
+    from app import config
+    from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "C1001")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "LEGACY")
+    assert ss.is_configured() is True
+
+
+def test_post_sends_token_and_client_code_in_the_body(monkeypatch):
+    """Real ShipSagar auth is body-based; no Authorization header is sent."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch, token="TOK9", client_code="C1001")
+    seen = {}
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"status": "success", "message": "Data has been recorded successfully"}
+
+    def _fake_post(url, json=None, headers=None, timeout=None):
+        seen["url"] = url
+        seen["json"] = json
+        seen["headers"] = headers
+        return _Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    out = ss._post("/PushShipment", {"TrackingNo": "EG080960145IN"})
+    assert seen["url"] == "https://app.shipsagar.com/api/Web/PushShipment"
+    assert seen["json"]["Token"] == "TOK9"
+    assert seen["json"]["ClientCode"] == "C1001"
+    assert seen["json"]["TrackingNo"] == "EG080960145IN"
+    assert not (seen["headers"] or {}).get("Authorization")
+    assert out["status"] == "success"
+
+
+def test_build_push_payload_maps_every_business_field():
+    from app.services.shipsagar_service import build_push_payload
+    payload = build_push_payload(
+        tracking_no="EG080960145IN", courier_code="ip", order=_OrderStub())
+    assert payload["CourierCode"] == "IP"
+    assert payload["TrackingNo"] == "EG080960145IN"
+    assert payload["OrderNo"] == "MAN-AB12CD34"
+    assert payload["CustomerName"] == "Dileep Kumar"
+    assert payload["EmailID"] == "rahul@example.com"
+    assert payload["MobileNo"] == "9963026645"
+    assert payload["ShipmentType"] == "Road"
+    assert payload["CountryName"] == "India"
+    assert payload["CompanyName"] == "Reshamgath"
+
+
+def test_build_push_payload_blanks_missing_optional_fields():
+    from app.services import shipsagar_service as ss
+    o = _OrderStub()
+    o.receiver_email = ""
+    o.receiver_company = ""
+    payload = ss.build_push_payload(tracking_no="T1", courier_code="IP", order=o)
+    assert payload["EmailID"] == ""
+    assert payload["CompanyName"] == ""
+
+
+def test_push_shipment_success_and_error_shapes(monkeypatch):
+    """Success is lowercase 'success'; failure is uppercase 'Status'/'Message'."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "success", "message": "Data has been recorded successfully"})
+    out = ss.push_shipment(tracking_no="T1", courier_code="IP", order=_OrderStub())
+    assert out == {"ok": True, "message": "Data has been recorded successfully"}
+
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "Status": "ERROR", "Message": "please try again later"})
+    out = ss.push_shipment(tracking_no="T1", courier_code="IP", order=_OrderStub())
+    assert out["ok"] is False
+    assert out["message"] == "please try again later"
+
+
+def test_push_shipment_raises_when_not_configured(monkeypatch):
+    from app import config
+    from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    try:
+        ss.push_shipment(tracking_no="T1", courier_code="IP", order=_OrderStub())
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_NOT_CONFIGURED"
+
+
+TRACK_OK = {
+    "status": "SUCCESS",
+    "message": "3 Record Found",
+    "TrackingDetails": [{
+        "ClientCode": "C1001",
+        "TrackingNo": "324049418658",
+        "CourierCode": "ATS",
+        "TrackingHistory": [
+            {"ActionDate": "16-May-2023", "ActionTime": "12:27",
+             "ActionLocation": "", "ActionDescription": "Label Created"},
+            {"ActionDate": "16-May-2023", "ActionTime": "15:51",
+             "ActionLocation": "", "ActionDescription": "Package picked up"},
+            {"ActionDate": "16-May-2023", "ActionTime": "19:43",
+             "ActionLocation": "New Delhi",
+             "ActionDescription": "Package arrived at the carrier facility"},
+        ],
+    }],
+}
+
+
+def test_track_shipment_flattens_history_and_parses_dates(monkeypatch):
+    from datetime import datetime, timezone
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: TRACK_OK)
+    out = ss.track_shipment("324049418658")
+    assert out["awb"] == "324049418658"
+    assert len(out["events"]) == 3
+    first = out["events"][0]
+    assert first["status_raw"] == "Label Created"
+    assert first["location"] == ""
+    # ShipSagar timestamps are not ISO; the parser attaches UTC explicitly.
+    assert first["event_time"] == datetime(2023, 5, 16, 12, 27, tzinfo=timezone.utc)
+    assert out["events"][2]["location"] == "New Delhi"
+
+
+def test_track_shipment_synthesizes_a_stable_event_id(monkeypatch):
+    """ShipSagar sends no event id; the synthetic one makes dedupe work."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: TRACK_OK)
+    a = ss.track_shipment("324049418658")
+    b = ss.track_shipment("324049418658")
+    ids_a = [e["event_id"] for e in a["events"]]
+    ids_b = [e["event_id"] for e in b["events"]]
+    assert ids_a == ids_b
+    assert len(set(ids_a)) == 3
+
+
+def test_track_shipment_raises_on_error_status(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "Status": "ERROR", "Message": "please try again later"})
+    try:
+        ss.track_shipment("324049418658")
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_API_ERROR"
+        assert "please try again later" in exc.message
+
+
+def test_track_shipment_unparseable_date_falls_back_to_now(monkeypatch):
+    from datetime import datetime, timezone
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, pl: {
+        "status": "SUCCESS", "TrackingDetails": [{
+            "CourierCode": "IP", "TrackingNo": "T9", "TrackingHistory": [
+                {"ActionDate": "not-a-date", "ActionTime": "99:99",
+                 "ActionLocation": "X", "ActionDescription": "Item Booked"}]}]})
+    out = ss.track_shipment("T9")
+    et = out["events"][0]["event_time"]
+    assert abs((datetime.now(timezone.utc) - et).total_seconds()) < 120
+
+
+def test_track_shipment_handles_empty_tracking_details(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, pl: {
+        "status": "SUCCESS", "message": "0 Record Found", "TrackingDetails": []})
+    assert ss.track_shipment("NOPE") == {"awb": "NOPE", "events": []}

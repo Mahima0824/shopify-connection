@@ -1,16 +1,19 @@
-"""ShipSagar provider adapter (plan #17/#18/#53/#69/#74/#75).
+"""ShipSagar provider adapter.
 
-ShipSagar aggregates INDIA_POST + DTDC tracking. Identity chain::
+ShipSagar aggregates courier tracking for many carriers. Identity chain::
 
     parcel_id -> shipment_id -> courier_tracking_number (shipments.awb_number)
         -> shipsagar_tracking_id
 
 ShipSagar IDs are provider references only — never business IDs.
 
-Real API spec/creds are ABSENT, so the HTTP client is a stub with a clean
-seam: configure SHIPSAGAR_API_BASE_URL + SHIPSAGAR_API_KEY and implement
-``_post()`` against the real spec later. Webhook ingest, signature
-verification, idempotency, retry/backoff and health counters are fully real.
+Two endpoints are integrated against https://app.shipsagar.com/api/Web:
+``PushShipment`` (register a shipment) and ``TrackShipment`` (poll history).
+Both authenticate with ``Token`` + ``ClientCode`` carried in the JSON body.
+
+Webhook ingest, signature verification, idempotency, retry/backoff and health
+counters are unchanged. ShipSagar's own key casing is inconsistent between its
+success and failure bodies, so every status read goes through ``_status_of``.
 """
 
 from __future__ import annotations
@@ -41,6 +44,17 @@ STATUSES = (
 # Retry backoff per plan #74: 30s -> 2min -> 10min -> dead-letter.
 BACKOFF_SECONDS = (30, 120, 600)
 MAX_ATTEMPTS = 4
+
+DEFAULT_BASE_URL = "https://app.shipsagar.com/api/Web"
+PUSH_SHIPMENT_PATH = "/PushShipment"
+TRACK_SHIPMENT_PATH = "/TrackShipment"
+SHIPSAGAR_NOT_CONFIGURED_MESSAGE = (
+    "ShipSagar credentials absent — set SHIPSAGAR_TOKEN and SHIPSAGAR_CLIENT_CODE.")
+
+# ShipSagar's PushShipment contract. Country and transport mode are fixed for
+# this deployment; everything else is mapped from the Order at push time.
+DEFAULT_COUNTRY = "India"
+DEFAULT_SHIPMENT_TYPE = "Road"
 
 
 def _now():
@@ -223,11 +237,12 @@ def record_retry_attempt(db, job, error: str):
 
 
 def is_configured() -> bool:
-    return bool(settings.shipsagar_api_base_url and settings.shipsagar_api_key)
+    token = (settings.shipsagar_token or settings.shipsagar_api_key or "").strip()
+    return bool(token and (settings.shipsagar_client_code or "").strip())
 
 
 # ---------------------------------------------------------------------------
-# Tracking registration (plan #18) — stubbed HTTP with a clean seam
+# Real ShipSagar HTTP client: PushShipment + TrackShipment
 # ---------------------------------------------------------------------------
 
 class ShipsagarError(Exception):
@@ -237,34 +252,136 @@ class ShipsagarError(Exception):
         self.message = message
 
 
-def _post(path: str, payload: dict) -> dict:
-    """Clean seam for the real ShipSagar HTTP API.
+def _base_url() -> str:
+    return (settings.shipsagar_api_base_url or DEFAULT_BASE_URL).rstrip("/")
 
-    When SHIPSAGAR_API_BASE_URL/API_KEY are configured this performs the
-    live call; otherwise it raises ShipsagarError("SHIPSAGAR_NOT_CONFIGURED").
-    Swap the body for the real spec once credentials arrive — callers and
-    retry/health wiring stay unchanged.
+
+def _auth_payload() -> dict:
+    return {
+        "Token": (settings.shipsagar_token or settings.shipsagar_api_key or "").strip(),
+        "ClientCode": (settings.shipsagar_client_code or "").strip(),
+    }
+
+
+def _status_of(data: dict) -> str:
+    """ShipSagar returns 'status' on success and 'Status' on failure."""
+    d = data or {}
+    return str(d.get("status") or d.get("Status") or "").strip().lower()
+
+
+def _message_of(data: dict) -> str:
+    d = data or {}
+    return str(d.get("message") or d.get("Message") or "").strip()
+
+
+def _is_ok(data: dict) -> bool:
+    return _status_of(data) == "success"
+
+
+def _post(path: str, payload: dict) -> dict:
+    """POST a ShipSagar endpoint. Auth travels in the body, not a header.
+
+    Raises ShipsagarError for configuration, transport and malformed-response
+    failures. A provider-level ERROR body is returned to the caller so
+    push_shipment can report it without raising.
     """
     if not is_configured():
-        raise ShipsagarError("SHIPSAGAR_NOT_CONFIGURED",
-                             "ShipSagar credentials absent — registration queued for retry.")
+        raise ShipsagarError("SHIPSAGAR_NOT_CONFIGURED", SHIPSAGAR_NOT_CONFIGURED_MESSAGE)
     try:
-        import httpx  # lazy: optional dependency
+        import httpx as _httpx
     except ImportError as exc:
         raise ShipsagarError("SHIPSAGAR_CLIENT_MISSING", "httpx is not installed.") from exc
-    import httpx as _httpx
-    resp = _httpx.post(
-        settings.shipsagar_api_base_url.rstrip("/") + path,
-        json=payload,
-        headers={"Authorization": f"Bearer {settings.shipsagar_api_key}"},
-        timeout=10.0,
-    )
+    body = {**_auth_payload(), **(payload or {})}
+    try:
+        resp = _httpx.post(_base_url() + path, json=body,
+                           headers={"Content-Type": "application/json"}, timeout=10.0)
+    except Exception as exc:
+        raise ShipsagarError("SHIPSAGAR_API_ERROR",
+                             f"ShipSagar request failed: {exc}") from exc
     if resp.status_code >= 400:
-        raise ShipsagarError("SHIPSAGAR_API_ERROR", f"ShipSagar API {resp.status_code}: {resp.text[:500]}")
+        raise ShipsagarError("SHIPSAGAR_API_ERROR",
+                             f"ShipSagar API {resp.status_code}: {str(resp.text)[:500]}")
     try:
         return resp.json()
     except Exception as exc:
-        raise ShipsagarError("SHIPSAGAR_BAD_RESPONSE", "ShipSagar returned non-JSON.") from exc
+        raise ShipsagarError("SHIPSAGAR_BAD_RESPONSE",
+                             "ShipSagar returned non-JSON.") from exc
+
+
+def build_push_payload(*, tracking_no: str, courier_code: str, order) -> dict:
+    """Map an Order onto the PushShipment business fields."""
+    return {
+        "CourierCode": (courier_code or "").strip().upper(),
+        "TrackingNo": (tracking_no or "").strip(),
+        "OrderNo": str(getattr(order, "internal_order_number", "")
+                       or getattr(order, "shopify_order_name", "") or "").strip(),
+        "CustomerName": str(getattr(order, "receiver_name", "") or "").strip(),
+        "EmailID": str(getattr(order, "receiver_email", "") or "").strip(),
+        "ShipmentType": DEFAULT_SHIPMENT_TYPE,
+        "MobileNo": str(getattr(order, "receiver_mobile", "") or "").strip(),
+        "CountryName": DEFAULT_COUNTRY,
+        "CompanyName": str(getattr(order, "receiver_company", "") or "").strip(),
+    }
+
+
+def push_shipment(*, tracking_no: str, courier_code: str, order) -> dict:
+    """Register a shipment with ShipSagar. Returns {"ok", "message"}.
+
+    A provider-level ERROR is a returned result, not an exception — the local
+    Shipment already exists by the time this is called.
+    """
+    data = _post(PUSH_SHIPMENT_PATH,
+                 build_push_payload(tracking_no=tracking_no,
+                                    courier_code=courier_code, order=order))
+    return {"ok": _is_ok(data), "message": _message_of(data)}
+
+
+def _parse_event_time(date_str, time_str):
+    """ShipSagar splits the timestamp into '16-May-2023' and '12:27'."""
+    from datetime import datetime as _dt
+    raw = f"{str(date_str or '').strip()} {str(time_str or '').strip()}".strip()
+    if raw:
+        for fmt in ("%d-%b-%Y %H:%M", "%d-%b-%Y %I:%M %p", "%d-%B-%Y %H:%M"):
+            try:
+                return _dt.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+    return _now()
+
+
+def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
+    """Fetch tracking history for one AWB. Returns {"awb", "events"}.
+
+    ShipSagar returns a TrackingDetails array for a single TrackingNo and no
+    event identifier, so event_id is synthesized from the AWB, the event's own
+    timestamp and its index. That makes repeated polls dedupe cleanly through
+    shipment_service.ingest_event.
+    """
+    awb = (tracking_no or "").strip()
+    data = _post(TRACK_SHIPMENT_PATH, {"TrackingNo": awb})
+    if not _is_ok(data):
+        raise ShipsagarError("SHIPSAGAR_API_ERROR",
+                             _message_of(data) or "ShipSagar TrackShipment failed.")
+    details = data.get("TrackingDetails") or []
+    if not details:
+        return {"awb": awb, "events": []}
+    detail = details[0] or {}
+    resolved_courier = str(detail.get("CourierCode") or courier_code or "").strip()
+    events = []
+    for idx, raw_ev in enumerate(detail.get("TrackingHistory") or []):
+        raw_ev = raw_ev or {}
+        at_date = str(raw_ev.get("ActionDate") or "").strip()
+        at_time = str(raw_ev.get("ActionTime") or "").strip()
+        description = str(raw_ev.get("ActionDescription") or "").strip()
+        events.append({
+            "event_id": f"ss-{awb}-{at_date}-{at_time}-{idx}",
+            "status_raw": description,
+            "normalized_status": normalize_shipsagar_status(resolved_courier, description),
+            "message": description,
+            "location": str(raw_ev.get("ActionLocation") or "").strip(),
+            "event_time": _parse_event_time(at_date, at_time),
+        })
+    return {"awb": awb, "events": events}
 
 
 def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
