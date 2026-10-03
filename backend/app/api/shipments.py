@@ -270,7 +270,9 @@ def register_tracking(sid: str, db: Session = Depends(get_db), u: dict = Depends
     db.refresh(s)
     return {'success': True, 'data': {**_sdict(s),
             'shipsagar_tracking_id': result['shipsagar_tracking_id'],
-            'shipsagar_stubbed': result['stubbed']}}
+            'shipsagar_stubbed': result['stubbed'],
+            'pushed': result.get('pushed', False),
+            'message': result.get('message', '')}}
 
 
 @router.post('/poll-sweep')

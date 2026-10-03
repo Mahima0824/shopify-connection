@@ -507,15 +507,30 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     except ShipsagarError as exc:
         schedule_retry(db, business_id=getattr(shipment, "business_id", None),
                        operation="register_tracking", shipment_id=getattr(shipment, "id", None),
-                       error=f"{exc.code}: {exc.message}",
-                       payload={"courier": code, "tracking_number": awb})
+                       error=f"{exc.code}: {exc.message}")
         db.flush()
         raise
     tracking_id = f"SS-{awb}"
     shipment.shipsagar_tracking_id = tracking_id
     db.flush()
+    pushed = bool(result.get("ok"))
+    message = result.get("message", "")
+    if not pushed:
+        # ShipSagar received the request and refused it, so there is no retry
+        # to queue (the refusal will not become success on a repeat). The id is
+        # persisted all the same, which drops the parcel out of the health
+        # endpoint's unregistered_shipments count — without a durable trace here
+        # a permanently-rejected parcel would read as healthy forever.
+        try:
+            from app.services.audit_service import log_audit
+            log_audit(db, shipment.business_id, None, "shipment", shipment.id,
+                      "SHIPSAGAR_PUSH_REJECTED", {},
+                      {"message": message, "courier": code, "tracking_number": awb,
+                       "shipsagar_tracking_id": tracking_id})
+        except Exception:
+            pass
     return {"shipsagar_tracking_id": tracking_id, "stubbed": False,
-            "pushed": bool(result.get("ok")), "message": result.get("message", "")}
+            "pushed": pushed, "message": message}
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +707,12 @@ def drain_retry_queue(db, limit: int = 50) -> dict:
     Success -> DONE; failure -> attempts advance with backoff caps via
     record_retry_attempt (exhausted jobs go DEAD_LETTER, never infinite).
     Cron-safe: only jobs with next_retry_at due are touched.
+
+    register_tracking reports a ShipSagar refusal in its return value instead
+    of raising, so "no exception" no longer means "pushed". A refusal is
+    therefore treated as a failed attempt — bounded, like every other failure —
+    rather than silently retiring a shipment the aggregator never accepted.
+    The unconfigured stub path counts as success: there was nothing to push to.
     """
     from app.models.shipment_event import ShipsagarRetryJob
     from app.models.shipment import Shipment
@@ -714,10 +735,14 @@ def drain_retry_queue(db, limit: int = 50) -> dict:
                     job.last_error = "SHIPMENT_NOT_FOUND"
                     db.flush()
                 else:
-                    register_tracking(db, s)
-                    job.status = "DONE"
-                    job.next_retry_at = None
-                    db.flush()
+                    result = register_tracking(db, s)
+                    if result.get("stubbed") or result.get("pushed"):
+                        job.status = "DONE"
+                        job.next_retry_at = None
+                        db.flush()
+                    else:
+                        record_retry_attempt(
+                            db, job, f"SHIPMENT_REJECTED: {result.get('message', '')}")
         except ShipsagarError as exc:
             record_retry_attempt(db, job, f"{exc.code}: {exc.message}")
         except Exception as exc:

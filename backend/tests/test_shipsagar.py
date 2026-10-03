@@ -1250,6 +1250,7 @@ def test_register_tracking_calls_push_shipment_when_configured(monkeypatch):
 
 def test_register_tracking_reports_provider_error_without_raising(monkeypatch):
     from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     mk = _mk()
@@ -1263,6 +1264,256 @@ def test_register_tracking_reports_provider_error_without_raising(monkeypatch):
         assert out["pushed"] is False
         assert out["message"] == "please try again later"
         assert out["shipsagar_tracking_id"] == "SS-D-ERR-1"
+        # The other half of the distinction: ShipSagar received the request
+        # and refused it, so there is nothing transient to retry. A retry job
+        # here would storm against a rejection that will never succeed.
+        db.commit()
+        assert db.query(ShipsagarRetryJob).filter_by(
+            shipment_id=sid).count() == 0
+    finally:
+        db.close()
+
+
+def test_register_tracking_transport_failure_queues_one_retry_and_raises(monkeypatch):
+    """The transport half of the distinction: queue a bounded job and re-raise.
+
+    Symmetric partner to the provider-ERROR test above. Deleting the
+    schedule_retry call must turn this red; deleting nothing here and only
+    raising must turn the count to 0 and also fail.
+    """
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-TRAN-1", order_no="MAN-R3")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+
+        def _boom(*, tracking_no, courier_code, order):
+            raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+        monkeypatch.setattr(ss, "push_shipment", _boom)
+        try:
+            ss.register_tracking(db, s)
+            raise AssertionError("expected ShipsagarError")
+        except ss.ShipsagarError as exc:
+            assert exc.code == "SHIPSAGAR_API_ERROR"
+        db.commit()
+        jobs = db.query(ShipsagarRetryJob).filter_by(shipment_id=sid).all()
+        assert len(jobs) == 1
+        assert jobs[0].status == "PENDING"
+        assert jobs[0].operation == "register_tracking"
+        assert jobs[0].attempts == 1 and jobs[0].max_attempts == 4
+        assert "SHIPSAGAR_API_ERROR" in jobs[0].last_error
+        assert jobs[0].next_retry_at is not None
+        # The push never landed, so no tracking id may be persisted.
+        assert s.shipsagar_tracking_id is None
+    finally:
+        db.close()
+
+
+def test_register_tracking_stub_promotes_only_promotable_statuses(monkeypatch):
+    """Stub path promotes the pre-dispatch statuses and leaves later ones alone.
+
+    The earlier READY_TO_SHIP assertion was vacuous: the seed default was
+    already READY_TO_SHIP, so it passed whatever the promotion logic did.
+    """
+    from app import config
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    mk = _mk()
+    cases = [("S-NOTCREATED", "NOT_CREATED", "READY_TO_SHIP"),
+             ("S-BOOKED", "BOOKED", "READY_TO_SHIP"),
+             ("S-EMPTY", "", "READY_TO_SHIP"),
+             ("S-TRANSIT", "IN_TRANSIT", "IN_TRANSIT"),
+             ("S-DELIVERED", "DELIVERED", "DELIVERED")]
+    ids = [(awb, _seed_shipment_with_order(mk, awb, status=status, order_no=f"MAN-{awb}"), expected)
+           for awb, status, expected in cases]
+    db = mk()
+    try:
+        for awb, sid, expected in ids:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            out = ss.register_tracking(db, s)
+            assert out["stubbed"] is True
+            assert s.tracking_status == expected, (awb, s.tracking_status)
+            assert out["shipsagar_tracking_id"] == f"SS-STUB-DTDC-{awb}"
+    finally:
+        db.close()
+
+
+def test_register_tracking_endpoint_surfaces_push_outcome(monkeypatch):
+    """A rejected push must be visible to the API caller, not just logged.
+
+    SS-{awb} is persisted either way, so without pushed/message in the
+    response a caller cannot tell a registered parcel from a refused one.
+    """
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        db = mk()
+        db.add_all([
+            Shipment(business_id=bid, order_id="o1", parcel_id="p1",
+                     carrier_code="DTDC", awb_number="D-OK", tracking_status="READY_TO_SHIP"),
+            Shipment(business_id=bid, order_id="o2", parcel_id="p2",
+                     carrier_code="DTDC", awb_number="D-NOPE", tracking_status="READY_TO_SHIP"),
+        ])
+        db.commit()
+        ok_id = db.query(Shipment).filter_by(awb_number="D-OK").first().id
+        bad_id = db.query(Shipment).filter_by(awb_number="D-NOPE").first().id
+        db.close()
+
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": True, "message": "Data has been recorded successfully"})
+        r = c.post(f"/api/v1/shipments/{ok_id}/register-tracking", headers=h)
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["pushed"] is True
+        assert data["message"] == "Data has been recorded successfully"
+        assert data["shipsagar_stubbed"] is False
+
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "Invalid AWB for the courier"})
+        r = c.post(f"/api/v1/shipments/{bad_id}/register-tracking", headers=h)
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["pushed"] is False
+        assert data["message"] == "Invalid AWB for the courier"
+        assert data["shipsagar_tracking_id"] == "SS-D-NOPE"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_health_counts_shipments_whose_push_shipsagar_refused(monkeypatch):
+    """A refused push must not read as healthy forever.
+
+    SS-{awb} is persisted even on refusal, so the shipment leaves the
+    unregistered_shipments count and no retry job is queued by design.
+    Without a dedicated counter such a parcel reports healthy indefinitely.
+    """
+    from app.models.audit_log import AuditLog
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        db = mk()
+        db.add_all([
+            Shipment(business_id=bid, order_id="o1", parcel_id="p1",
+                     carrier_code="DTDC", awb_number="D-H-OK", tracking_status="READY_TO_SHIP"),
+            Shipment(business_id=bid, order_id="o2", parcel_id="p2",
+                     carrier_code="DTDC", awb_number="D-H-BAD", tracking_status="READY_TO_SHIP"),
+        ])
+        db.commit()
+        ok_id = db.query(Shipment).filter_by(awb_number="D-H-OK").first().id
+        bad_id = db.query(Shipment).filter_by(awb_number="D-H-BAD").first().id
+        db.close()
+
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": True, "message": "Data has been recorded successfully"})
+        assert c.post(f"/api/v1/shipments/{ok_id}/register-tracking",
+                      headers=h).status_code == 200
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["rejected_pushes"] == 0
+
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "Invalid AWB for the courier"})
+        assert c.post(f"/api/v1/shipments/{bad_id}/register-tracking",
+                      headers=h).status_code == 200
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["rejected_pushes"] == 1
+        # Backward compatibility: the pre-existing keys are untouched, and a
+        # refused push leaves the parcel out of unregistered_shipments.
+        assert data["provider"] == "SHIPSAGAR"
+        assert data["unregistered_shipments"] == 0
+        assert data["status"] == "warning"
+        db = mk()
+        try:
+            row = db.query(AuditLog).filter_by(
+                action="SHIPSAGAR_PUSH_REJECTED", entity_id=bad_id).first()
+            assert row is not None
+            assert row.entity_type == "shipment" and row.business_id == bid
+            assert "Invalid AWB" in row.new_data["message"]
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_retry_drain_requeues_when_shipsagar_refuses_the_push(monkeypatch):
+    """A retried shipment that ShipSagar refuses must not be marked DONE.
+
+    register_tracking reports a provider ERROR instead of raising, so 'no
+    exception' no longer means 'pushed'. Treating it as success silently
+    retires a shipment the aggregator never accepted.
+    """
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-DRAIN-REJ", order_no="MAN-DRAIN-REJ")
+    db = mk()
+    past = datetime.now(timezone.utc) - _td(seconds=5)
+    s = db.query(Shipment).filter_by(id=sid).first()
+    bid = s.business_id
+    db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                             shipment_id=sid, attempts=1, max_attempts=4,
+                             status="PENDING", next_retry_at=past))
+    db.commit()
+    try:
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "Invalid AWB for the courier"})
+        out = ss.drain_retry_queue(db)
+        db.commit()
+        assert out == {"checked": 1, "succeeded": 0, "requeued": 1, "dead_lettered": 0}
+        job = db.query(ShipsagarRetryJob).filter_by(
+            business_id=bid, shipment_id=sid, status="PENDING").first()
+        assert job is not None
+        assert job.attempts == 2
+        assert job.next_retry_at is not None
+        assert "Invalid AWB for the courier" in job.last_error
+    finally:
+        db.close()
+
+
+def test_retry_drain_dead_letters_when_provider_refusal_exhausts_attempts(monkeypatch):
+    """Bounded, like every other drain failure: refusals dead-letter too."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-DRAIN-DL", order_no="MAN-DRAIN-DL")
+    db = mk()
+    past = datetime.now(timezone.utc) - _td(seconds=5)
+    s = db.query(Shipment).filter_by(id=sid).first()
+    bid = s.business_id
+    db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                             shipment_id=sid, attempts=3, max_attempts=4,
+                             status="PENDING", next_retry_at=past))
+    db.commit()
+    try:
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "please try again later"})
+        out = ss.drain_retry_queue(db)
+        db.commit()
+        assert out == {"checked": 1, "succeeded": 0, "requeued": 0, "dead_lettered": 1}
+        job = db.query(ShipsagarRetryJob).filter_by(
+            business_id=bid, shipment_id=sid, status="DEAD_LETTER").first()
+        assert job is not None
+        assert job.attempts == 4 and job.next_retry_at is None
+        assert "please try again later" in job.last_error
     finally:
         db.close()
 

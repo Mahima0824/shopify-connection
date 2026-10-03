@@ -134,8 +134,17 @@ def retry_drain(limit: int = 50, db: Session = Depends(get_db),
 
 @router.get("/health")
 def shipsagar_health(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
-    """Integration health counters (plan #75)."""
+    """Integration health counters (plan #75).
+
+    rejected_pushes counts distinct shipments ShipSagar refused at
+    PushShipment. Such a shipment still carries its SS-{awb} id, so it is
+    absent from unregistered_shipments, and a refusal is not retried (it
+    would not become success), so no retry job exists either. Without this
+    counter a permanently-rejected parcel reads as healthy forever. The trace
+    is an audit_logs row written by register_tracking — no schema change.
+    """
     from sqlalchemy import func as _func
+    from app.models.audit_log import AuditLog
     from app.models.shipment import Shipment
     from app.models.shipment_event import ShipsagarRetryJob, ShipsagarWebhookFailure
     from app.services import shipsagar_service as ss
@@ -147,7 +156,11 @@ def shipsagar_health(db: Session = Depends(get_db), u: dict = Depends(get_curren
     unregistered = db.query(_func.count(Shipment.id)).filter(
         Shipment.shipsagar_tracking_id.is_(None),
         Shipment.carrier_code.in_(list(ss.SUPPORTED_COURIERS))).scalar() or 0
-    healthy = (failed_jobs == 0 and pending_jobs == 0)
+    rejected_pushes = db.query(_func.count(_func.distinct(AuditLog.entity_id))).filter(
+        AuditLog.business_id == u.get("business_id"),
+        AuditLog.entity_type == "shipment",
+        AuditLog.action == "SHIPSAGAR_PUSH_REJECTED").scalar() or 0
+    healthy = (failed_jobs == 0 and pending_jobs == 0 and rejected_pushes == 0)
     return {"success": True, "data": {
         "provider": "SHIPSAGAR", "configured": ss.is_configured(),
         "status": "healthy" if healthy else "warning",
@@ -155,4 +168,5 @@ def shipsagar_health(db: Session = Depends(get_db), u: dict = Depends(get_curren
         "failed_jobs": failed_jobs,
         "pending_jobs": pending_jobs,
         "unregistered_shipments": unregistered,
+        "rejected_pushes": rejected_pushes,
     }}
