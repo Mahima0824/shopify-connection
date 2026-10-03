@@ -336,14 +336,41 @@ def push_shipment(*, tracking_no: str, courier_code: str, order) -> dict:
     return {"ok": _is_ok(data), "message": _message_of(data)}
 
 
+# ShipSagar sends English month names ('16-May-2023'). strptime's %b/%B resolve
+# those through the C library locale, so on a non-English host they fail to
+# parse and the event is silently misdated as "now" while its id stays stable —
+# worse than an obvious failure. Month names are therefore looked up here and
+# rewritten to a number before parsing. Both the abbreviated ('Sep') and the
+# full ('September') spelling are accepted, case-insensitively.
+_MONTH_NUMBERS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_EVENT_TIME_FORMATS = ("%d-%m-%Y %H:%M", "%d-%m-%Y %I:%M %p")
+
+
+def _numeric_month_date(raw: str) -> str:
+    """Rewrite a leading English month name to a number; leave anything else."""
+    parts = str(raw or "").strip().split("-", 2)
+    if len(parts) != 3:
+        return str(raw or "").strip()
+    month = _MONTH_NUMBERS.get(parts[1].strip().lower())
+    if month is None:
+        return str(raw or "").strip()
+    return f"{parts[0].strip()}-{month:02d}-{parts[2].strip()}"
+
+
 def _parse_event_time(date_str, time_str):
     """ShipSagar splits the timestamp into '16-May-2023' and '12:27'."""
     from datetime import datetime as _dt
     raw = f"{str(date_str or '').strip()} {str(time_str or '').strip()}".strip()
     if raw:
-        for fmt in ("%d-%b-%Y %H:%M", "%d-%b-%Y %I:%M %p", "%d-%B-%Y %H:%M"):
+        normalized = _numeric_month_date(raw)
+        for fmt in _EVENT_TIME_FORMATS:
             try:
-                return _dt.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+                return _dt.strptime(normalized, fmt).replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
     return _now()

@@ -563,6 +563,11 @@ def test_is_configured_keys_off_token_and_client_code(monkeypatch):
     assert ss.is_configured() is False
     _configured(monkeypatch)
     assert ss.is_configured() is True
+    # The base URL is deliberately NOT consulted. It ships with a non-empty
+    # default, so keying off it would make stub mode unreachable and every
+    # stub-mode test would attempt a live network call.
+    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    assert ss.is_configured() is True
 
 
 def test_is_configured_accepts_deprecated_api_key_as_token(monkeypatch):
@@ -602,6 +607,47 @@ def test_post_sends_token_and_client_code_in_the_body(monkeypatch):
     assert seen["json"]["TrackingNo"] == "EG080960145IN"
     assert not (seen["headers"] or {}).get("Authorization")
     assert out["status"] == "success"
+
+
+def test_post_raises_api_error_on_http_error_status(monkeypatch):
+    """HTTP >= 400 is a transport/API failure the retry queue must see."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+
+    class _Resp:
+        status_code = 500
+        text = "upstream exploded"
+
+    import httpx
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Resp())
+    try:
+        ss._post("/PushShipment", {"TrackingNo": "T1"})
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_API_ERROR"
+        assert "500" in exc.message
+
+
+def test_post_raises_bad_response_on_non_json(monkeypatch):
+    """A 200 HTML maintenance page is a malformed response, not a result."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+
+    class _Resp:
+        status_code = 200
+        text = "<html>maintenance</html>"
+
+        @staticmethod
+        def json():
+            raise ValueError("not json")
+
+    import httpx
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Resp())
+    try:
+        ss._post("/TrackShipment", {"TrackingNo": "T1"})
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_BAD_RESPONSE"
 
 
 def test_build_push_payload_maps_every_business_field():
@@ -740,3 +786,18 @@ def test_track_shipment_handles_empty_tracking_details(monkeypatch):
     monkeypatch.setattr(ss, "_post", lambda path, pl: {
         "status": "SUCCESS", "message": "0 Record Found", "TrackingDetails": []})
     assert ss.track_shipment("NOPE") == {"awb": "NOPE", "events": []}
+
+
+def test_parse_event_time_accepts_english_month_spellings():
+    """Month names are looked up in a fixed map, not the C locale's calendar."""
+    from datetime import datetime, timezone
+    from app.services.shipsagar_service import _parse_event_time
+    may = datetime(2023, 5, 16, 12, 27, tzinfo=timezone.utc)
+    assert _parse_event_time("16-May-2023", "12:27") == may
+    assert _parse_event_time("16-may-2023", "12:27") == may
+    # Full month names, which a locale-dependent %b cannot parse at all.
+    assert _parse_event_time("16-September-2023", "12:27") == datetime(
+        2023, 9, 16, 12, 27, tzinfo=timezone.utc)
+    assert _parse_event_time("16-September-2023", "09:05 PM") == datetime(
+        2023, 9, 16, 21, 5, tzinfo=timezone.utc)
+    assert _parse_event_time("", "") is not None
