@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from datetime import datetime, timedelta, timezone
 
 from app.config import settings
@@ -124,22 +125,32 @@ _MATRIX: list[tuple[str, str, str]] = [
 
 # Fallback for every courier outside INDIA_POST / DTDC (ShipSagar aggregates many
 # carriers and GetCourier is not integrated, so codes arrive unvalidated).
-# Same ordering rule as _MATRIX: negative/attempt and return rows precede the
-# generic "delivered" row because "undelivered" contains "delivered".
+# Rows match on whole words only (see _GENERIC_MATCHERS), otherwise "rto" would
+# also match "carton" and "attempt" would also match "reattempt".
+# Plan #15's ordering rule applies in full: every negative/attempt and return row
+# precedes every positive row, because "undelivered" contains "delivered" and
+# "out for delivery - undelivered" contains both.
 _GENERIC_MATRIX: list[tuple[str, str]] = [
-    ("out for delivery", "OUT_FOR_DELIVERY"),
-    ("ofd", "OUT_FOR_DELIVERY"),
     ("undelivered", "FAILED_ATTEMPT"),
     ("not delivered", "FAILED_ATTEMPT"),
     ("delivery attempted", "FAILED_ATTEMPT"),
     ("delivery failed", "FAILED_ATTEMPT"),
-    ("consignee", "FAILED_ATTEMPT"),
+    ("attempted", "FAILED_ATTEMPT"),
+    ("attempts", "FAILED_ATTEMPT"),
     ("attempt", "FAILED_ATTEMPT"),
+    ("consignee absent", "FAILED_ATTEMPT"),
+    ("consignee not available", "FAILED_ATTEMPT"),
+    ("consignee unavailable", "FAILED_ATTEMPT"),
+    ("consignee refused", "FAILED_ATTEMPT"),
     ("returned to sender", "RETURNED"),
     ("item returned", "RETURNED"),
+    ("returning to sender", "RETURNED"),
     ("returned", "RETURNED"),
     ("rto", "RTO"),
     ("return to origin", "RTO"),
+    ("returning to origin", "RTO"),
+    ("out for delivery", "OUT_FOR_DELIVERY"),
+    ("ofd", "OUT_FOR_DELIVERY"),
     ("booked", "READY_TO_SHIP"),
     ("label created", "READY_TO_SHIP"),
     ("picked up", "READY_TO_SHIP"),
@@ -159,6 +170,11 @@ _GENERIC_MATRIX: list[tuple[str, str]] = [
     ("received", "IN_TRANSIT"),
 ]
 
+_GENERIC_MATCHERS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (re.compile(rf"\b{re.escape(keyword)}\b"), status)
+    for keyword, status in _GENERIC_MATRIX
+)
+
 
 def normalize_shipsagar_status(courier: str, raw: str) -> str:
     """Normalize a courier raw status to the plan #15 vocabulary.
@@ -176,8 +192,8 @@ def normalize_shipsagar_status(courier: str, raw: str) -> str:
             if courier_key == code and keyword in text:
                 return status
         return "EXCEPTION"
-    for keyword, status in _GENERIC_MATRIX:
-        if keyword in text:
+    for pattern, status in _GENERIC_MATCHERS:
+        if pattern.search(text):
             return status
     return "EXCEPTION"
 

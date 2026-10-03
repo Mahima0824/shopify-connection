@@ -164,6 +164,77 @@ def test_generic_matrix_does_not_shadow_courier_specific_rows():
     assert norm("DTDC", "Not delivered") == "FAILED_ATTEMPT"
 
 
+# --- generic fallback: no false positives from substring collisions ---
+
+def test_generic_matrix_rto_does_not_match_carton():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "Packed in carton") != "RTO"
+    assert norm("FEDEX", "Carton sealed") != "RTO"
+    assert norm("IP", "Carton sealed and shipped") == "IN_TRANSIT"
+
+
+def test_generic_matrix_rto_still_matches_real_rto_phrasings():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    cases = ["RTO", "RTO initiated", "RTO in transit", "RTO Delivered back to shipper",
+             "Return to origin", "Returning to origin"]
+    for raw in cases:
+        assert norm("FEDEX", raw) == "RTO", raw
+
+
+def test_generic_matrix_redirected_is_not_caught_by_rto():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "Redirected to another address") != "RTO"
+
+
+def test_generic_matrix_consignee_only_fails_on_failure_phrasings():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "Delivered to consignee") == "DELIVERED"
+    assert norm("FEDEX", "Handed over to consignee") != "FAILED_ATTEMPT"
+    assert norm("FEDEX", "Redelivered to consignee") != "FAILED_ATTEMPT"
+    for raw in ("Consignee absent at delivery", "Consignee not available",
+                "Consignee unavailable", "Consignee refused"):
+        assert norm("FEDEX", raw) == "FAILED_ATTEMPT", raw
+
+
+def test_generic_matrix_negative_phrasings_beat_positive_wrappers():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    cases = [
+        ("Out for delivery - undelivered", "FAILED_ATTEMPT"),
+        ("Out for delivery - delivery attempted", "FAILED_ATTEMPT"),
+        ("Out for delivery - consignee absent", "FAILED_ATTEMPT"),
+        ("OFD - undelivered", "FAILED_ATTEMPT"),
+        ("Out for delivery - returning to sender", "RETURNED"),
+    ]
+    for raw, expected in cases:
+        assert norm("FEDEX", raw) == expected, raw
+    assert norm("FEDEX", "Out for delivery") == "OUT_FOR_DELIVERY"
+
+
+def test_generic_matrix_orders_negative_rows_before_positive_rows():
+    """Structural pin: every negative/return row precedes every positive row."""
+    from app.services.shipsagar_service import _GENERIC_MATRIX
+    statuses = [status for _, status in _GENERIC_MATRIX]
+    negatives = {"FAILED_ATTEMPT", "RETURNED", "RTO"}
+    positives = {"DELIVERED", "OUT_FOR_DELIVERY", "IN_TRANSIT", "READY_TO_SHIP"}
+    last_negative = max(i for i, s in enumerate(statuses) if s in negatives)
+    first_positive = min(i for i, s in enumerate(statuses) if s in positives)
+    assert last_negative < first_positive, _GENERIC_MATRIX
+
+
+def test_generic_matrix_attempt_narrowed_to_fresh_attempts():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "Address corrected, reattempt") != "FAILED_ATTEMPT"
+    for raw in ("Delivery attempted", "Attempted delivery", "1 delivery attempt",
+                "Attempt failed", "2 delivery attempts"):
+        assert norm("FEDEX", raw) == "FAILED_ATTEMPT", raw
+
+
+def test_generic_matrix_covers_returning_ing_forms():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "Returning to sender") == "RETURNED"
+    assert norm("FEDEX", "Returning to origin") == "RTO"
+
+
 # --- webhook security ---
 
 def test_bad_signature_rejected_and_stored(monkeypatch):
