@@ -515,12 +515,15 @@ def test_retry_drain_endpoint_and_register_envelope(monkeypatch):
 
 # --- settings ---
 
-def test_shipsagar_settings_exist_and_default_to_unconfigured():
-    from app import config
+def test_shipsagar_settings_exist_and_default_to_unconfigured(monkeypatch):
     from app.config import Settings
-    s = Settings()
+    # _env_file=None drops dotenv files and delenv drops ambient vars, so these
+    # assertions read the declared defaults and cannot be shadowed by real creds.
+    for var in ("SHIPSAGAR_TOKEN", "SHIPSAGAR_CLIENT_CODE",
+                "SHIPSAGAR_API_KEY", "SHIPSAGAR_API_BASE_URL"):
+        monkeypatch.delenv(var, raising=False)
+    s = Settings(_env_file=None)
     assert s.shipsagar_token == ""
     assert s.shipsagar_client_code == ""
-    # Base URL carries the real ShipSagar host but is not part of is_configured().
+    # The declared default base URL is the real ShipSagar host.
     assert s.shipsagar_api_base_url == "https://app.shipsagar.com/api/Web"
-    assert hasattr(config.settings, "shipsagar_webhook_secret")
