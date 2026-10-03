@@ -896,6 +896,177 @@ def test_track_shipment_handles_empty_tracking_details(monkeypatch):
     assert ss.track_shipment("NOPE") == {"awb": "NOPE", "events": []}
 
 
+# --- ShipsagarProvider wiring ---
+
+def test_registry_exposes_shipsagar_provider():
+    from app.carriers.registry import PROVIDERS, get_provider
+    assert "SHIPSAGAR" in PROVIDERS
+    p = get_provider("SHIPSAGAR")
+    assert p.code == "SHIPSAGAR"
+    assert "TRACKING" in p.capabilities()
+
+
+def test_provider_for_shipment_routes_on_shipsagar_tracking_id():
+    from app.carriers.registry import (normalize_for_shipment,
+                                       provider_code_for_shipment,
+                                       provider_for_shipment)
+
+    class _Pushed:
+        carrier_code = "IP"
+        shipsagar_tracking_id = "SS-EG080960145IN"
+
+    assert provider_code_for_shipment(_Pushed()) == "SHIPSAGAR"
+    assert provider_for_shipment(_Pushed()).code == "SHIPSAGAR"
+    assert normalize_for_shipment(_Pushed(), "Item Delivered") == "DELIVERED"
+
+    class _Direct:
+        carrier_code = "INDIA_POST"
+        shipsagar_tracking_id = None
+
+    assert provider_code_for_shipment(_Direct()) == "INDIA_POST"
+    assert provider_for_shipment(_Direct()).code == "INDIA_POST"
+    assert normalize_for_shipment(_Direct(), "Item Delivered") == "DELIVERED"
+
+
+def test_shipsagar_provider_get_tracking_delegates(monkeypatch):
+    from app.carriers import shipsagar as ssmod
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    p = ssmod.ShipsagarProvider(courier="IP")
+    monkeypatch.setattr(ss, "track_shipment", lambda awb, courier_code="": {
+        "awb": awb, "events": [{
+            "event_id": "e1", "status_raw": "Item Delivered",
+            "normalized_status": "DELIVERED", "message": "Item Delivered",
+            "location": "Delhi", "event_time": "2023-05-16T19:43:00+00:00"}]})
+    out = p.get_tracking("EG080960145IN")
+    assert out["awb"] == "EG080960145IN"
+    assert out["events"][0]["normalized_status"] == "DELIVERED"
+
+
+def test_shipsagar_provider_normalize_uses_its_courier():
+    from app.carriers.shipsagar import ShipsagarProvider
+    assert ShipsagarProvider(courier="FEDEX").normalize_status("Delivered") == "DELIVERED"
+    assert ShipsagarProvider(courier="IP").normalize_status("Item Booked") == "READY_TO_SHIP"
+
+
+def test_shipsagar_provider_raises_carrier_error_when_unconfigured(monkeypatch):
+    from app import config
+    from app.carriers.base import CarrierError
+    from app.carriers.shipsagar import ShipsagarProvider
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    try:
+        ShipsagarProvider(courier="IP").get_tracking("EG1")
+        raise AssertionError("expected CarrierError")
+    except CarrierError as exc:
+        assert exc.code == "CARRIER_NOT_CONNECTED"
+
+
+def test_shipsagar_provider_raises_carrier_error_without_tracking_number(monkeypatch):
+    from app.carriers.base import CarrierError
+    from app.carriers.shipsagar import ShipsagarProvider
+    _configured(monkeypatch)
+    try:
+        ShipsagarProvider(courier="IP").get_tracking("   ")
+        raise AssertionError("expected CarrierError")
+    except CarrierError as exc:
+        assert exc.code == "CARRIER_NOT_CONNECTED"
+
+
+def _seed_pushed_shipment(mk, awb="EG080960145IN", courier="IP", status="READY_TO_SHIP",
+                          business_id=None):
+    """A shipment pushed through ShipSagar: courier code in carrier_code, id on the row.
+
+    business_id is passed in so the shipment belongs to the tenant _authed logged
+    into; without it the endpoint tests would seed a second, invisible tenant.
+    """
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    db = mk()
+    if business_id is None:
+        b = Business(name="B", email="b@t.in")
+        db.add(b)
+        db.commit()
+        db.refresh(b)
+        business_id = b.id
+    s = Shipment(business_id=business_id, order_id="o1", parcel_id="p1",
+                 carrier_code=courier, awb_number=awb, tracking_status=status,
+                 shipsagar_tracking_id=f"SS-{awb}")
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    sid = s.id
+    db.close()
+    return sid, business_id
+
+
+def test_sync_endpoint_pulls_shipsagar_history(monkeypatch):
+    """A pushed shipment's sync hits TrackShipment and rolls the status up."""
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        sid, _ = _seed_pushed_shipment(mk, business_id=bid)
+        _configured(monkeypatch)
+        calls = []
+
+        def _fake_track(tracking_no, courier_code=""):
+            calls.append((tracking_no, courier_code))
+            from datetime import datetime as _dt, timezone as _tz
+            return {"awb": tracking_no, "events": [{
+                "event_id": "ss-EG080960145IN-16-May-2023-19:43-0",
+                "status_raw": "Out for delivery",
+                "normalized_status": "OUT_FOR_DELIVERY",
+                "message": "Out for delivery", "location": "New Delhi",
+                "event_time": _dt.now(_tz.utc)}]}
+
+        monkeypatch.setattr(ss, "track_shipment", _fake_track)
+        r = c.post(f"/api/v1/shipments/{sid}/sync", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["synced"] is True
+        assert calls == [("EG080960145IN", "IP")]
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            assert s.tracking_status == "OUT_FOR_DELIVERY"
+            assert s.current_location == "New Delhi"
+            assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 1
+        finally:
+            db.close()
+        # A second sync inside the 60s cooldown is refused, not double-counted.
+        r = c.post(f"/api/v1/shipments/{sid}/sync", headers=h)
+        assert r.status_code == 429, r.text
+        assert r.json()["error"]["code"] == "REFRESH_COOLDOWN"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_poll_sweep_includes_shipsagar_shipments(monkeypatch):
+    from datetime import datetime as _dt, timezone as _tz
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        _seed_pushed_shipment(mk, awb="EG080960000IN", status="READY_TO_SHIP",
+                              business_id=bid)
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "track_shipment", lambda awb, courier_code="": {
+            "awb": awb, "events": [{
+                "event_id": f"ss-{awb}-0", "status_raw": "Delivered",
+                "normalized_status": "DELIVERED", "message": "Delivered",
+                "location": "Pune", "event_time": _dt.now(_tz.utc)}]})
+        r = c.post("/api/v1/shipments/poll-sweep", headers=h)
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["checked"] == 1
+        assert data["synced"] == 1
+        assert data["skipped"] == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_parse_event_time_accepts_english_month_spellings():
     """Month names are looked up in a fixed map, not the C locale's calendar."""
     from datetime import datetime, timezone

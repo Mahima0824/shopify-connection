@@ -208,7 +208,7 @@ def sync_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get
     from fastapi.responses import JSONResponse
     from app.models.shipment import Shipment
     from app.services.shipment_service import TERMINAL, ingest_event
-    from app.carriers.registry import get_provider
+    from app.carriers.registry import provider_for_shipment
     from app.carriers.base import CarrierError
     s = db.query(Shipment).filter_by(id=sid, business_id=u.get('business_id')).first()
     if s is None:
@@ -231,7 +231,7 @@ def sync_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get
                 headers={"X-Error-Code": "REFRESH_COOLDOWN", "Retry-After": str(retry_after)},
             )
     try:
-        provider = get_provider(s.carrier_code)
+        provider = provider_for_shipment(s)
         data = provider.get_tracking(s.awb_number)
     except CarrierError as e:
         s.last_synced_at = now
@@ -278,7 +278,7 @@ def poll_sweep(limit: int = 100, db: Session = Depends(get_db), u: dict = Depend
     from datetime import datetime, timezone
     from app.models.shipment import Shipment, CarrierConnection
     from app.services.shipment_service import TERMINAL, ingest_event
-    from app.carriers.registry import get_provider
+    from app.carriers.registry import provider_for_shipment
     from app.carriers.base import CarrierError
     if u.get('role') != 'ADMIN':
         raise HTTPException(403, 'Admin role required')
@@ -295,7 +295,7 @@ def poll_sweep(limit: int = 100, db: Session = Depends(get_db), u: dict = Depend
             skipped += 1
             continue
         try:
-            provider = get_provider(s.carrier_code)
+            provider = provider_for_shipment(s)
             data = provider.get_tracking(s.awb_number)
         except CarrierError as e:
             errors += 1
