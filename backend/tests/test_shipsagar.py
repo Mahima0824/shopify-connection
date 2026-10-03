@@ -933,13 +933,16 @@ def test_shipsagar_provider_get_tracking_delegates(monkeypatch):
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     p = ssmod.ShipsagarProvider(courier="IP")
+    # The provider returns track_shipment's result unchanged, so any top-level
+    # key the API adds later survives instead of being silently dropped.
     monkeypatch.setattr(ss, "track_shipment", lambda awb, courier_code="": {
-        "awb": awb, "events": [{
+        "awb": awb, "courier_code": "IP", "events": [{
             "event_id": "e1", "status_raw": "Item Delivered",
             "normalized_status": "DELIVERED", "message": "Item Delivered",
             "location": "Delhi", "event_time": "2023-05-16T19:43:00+00:00"}]})
     out = p.get_tracking("EG080960145IN")
     assert out["awb"] == "EG080960145IN"
+    assert out["courier_code"] == "IP"
     assert out["events"][0]["normalized_status"] == "DELIVERED"
 
 
@@ -1080,3 +1083,108 @@ def test_parse_event_time_accepts_english_month_spellings():
     assert _parse_event_time("16-September-2023", "09:05 PM") == datetime(
         2023, 9, 16, 21, 5, tzinfo=timezone.utc)
     assert _parse_event_time("", "") is not None
+
+
+# --- JSON-safe event payloads (provider-agnostic, enforced in ingest_event) ---
+
+def test_ingest_event_coerces_datetime_payloads_once():
+    """A provider payload carrying real datetimes must flush and round-trip.
+
+    raw_payload is a JSON column, and sync/poll-sweep hand it the provider's own
+    event dict verbatim. Timestamps must survive as ISO 8601 (timezone kept),
+    not be dropped or stringified into something lossy.
+    """
+    import json
+    from datetime import datetime, timezone
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    sid, _ = _seed_pushed_shipment(mk, awb="EG-JSON-1")
+    when = datetime(2023, 5, 16, 19, 43, tzinfo=timezone.utc)
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        ev, created = ingest_event(
+            db, s, "Item Delivered", "Delivered", "Delhi", when, "ss-json-1",
+            "API", {"event_time": when, "status_raw": "Item Delivered",
+                    "nested": [{"at": when}]})
+        db.commit()
+        assert created is True
+        row = db.query(ShipmentEvent).filter_by(id=ev.id).first()
+        stored = json.loads(json.dumps(row.raw_payload))
+        assert stored["event_time"] == when.isoformat()
+        assert stored["nested"][0]["at"] == when.isoformat()
+        assert stored["status_raw"] == "Item Delivered"
+        # The event_time column itself keeps a real datetime, as before.
+        assert row.event_time is not None
+    finally:
+        db.close()
+
+
+def test_india_post_stub_payload_flushes_through_ingest_event(monkeypatch):
+    """The India Post stub branch returns datetimes; ingest_event absorbs them.
+
+    This is the same latent bug ShipSagar would have hit, in a provider that
+    predates it — the coercion must not be ShipSagar-specific.
+    """
+    import json
+    from datetime import datetime
+    from app import config
+    from app.carriers import india_post
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services.shipment_service import ingest_event
+    monkeypatch.setattr(india_post, "httpx", None)
+    monkeypatch.setattr(config.settings, "india_post_client_id", "cid")
+    data = india_post.IndiaPostProvider().get_tracking("IP-JSON-1")
+    assert any(isinstance(e["event_time"], datetime) for e in data["events"])
+    mk = _mk()
+    sid, _ = _seed_shipment(mk, awb="IP-JSON-1")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        for raw_ev in data["events"]:
+            ingest_event(db, s, raw_ev.get("status_raw"), raw_ev.get("message"),
+                         raw_ev.get("location"), raw_ev.get("event_time"),
+                         raw_ev.get("event_id", ""), "API", raw_ev)
+        db.commit()
+        rows = db.query(ShipmentEvent).filter_by(shipment_id=sid).all()
+        assert len(rows) == 2
+        for row in rows:
+            json.dumps(row.raw_payload)
+    finally:
+        db.close()
+
+
+# --- the instance courier selects the matrix, not just the registry key ---
+
+def test_shipment_routing_threads_the_instance_courier_into_normalization():
+    """Provider key alone is not enough: the per-shipment courier picks the matrix.
+
+    'Redirected to another address' is a disagreement case on purpose — the
+    India-Post rows map 'redirected' to RTO, the generic matrix has no such row
+    and falls through to EXCEPTION, and the India Post provider itself has no
+    keyword for it and returns UNKNOWN. Reverting the instance courier to ''
+    would collapse the first two and fail this test.
+    """
+    from app.carriers.registry import (get_provider, normalize_for_shipment,
+                                       provider_for_shipment)
+    from app.services.shipsagar_service import normalize_shipsagar_status
+    raw = "Redirected to another address"
+    assert normalize_shipsagar_status("INDIA_POST", raw) == "RTO"
+    assert normalize_shipsagar_status("FEDEX", raw) == "EXCEPTION"
+
+    class _Pushed:
+        carrier_code = "INDIA_POST"
+        shipsagar_tracking_id = "SS-ROUTING-1"
+
+    assert normalize_for_shipment(_Pushed(), raw) == "RTO"
+    assert provider_for_shipment(_Pushed()).normalize_status(raw) == "RTO"
+    # The registry singleton is courier-less, so it can only reach the generic
+    # matrix — which is exactly why the resolver builds a per-shipment instance.
+    assert get_provider("SHIPSAGAR").normalize_status(raw) == "EXCEPTION"
+
+    class _Direct:
+        carrier_code = "INDIA_POST"
+        shipsagar_tracking_id = None
+
+    assert normalize_for_shipment(_Direct(), raw) == "UNKNOWN"

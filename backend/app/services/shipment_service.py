@@ -1,8 +1,29 @@
-from datetime import datetime, timezone
+import json
+from datetime import date, datetime, timezone
 
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _json_default(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
+
+
+def _json_safe(value):
+    """Round-trip a provider event payload into JSON-safe values.
+
+    Endpoints hand the provider's own event dict straight to the ``raw_payload``
+    JSON column, and providers are free to carry real ``datetime`` objects in it.
+    Doing the conversion once here keeps every provider working instead of each
+    one having to remember, and keeps the timestamps — ISO 8601, timezone
+    included — rather than dropping them.
+    """
+    if value is None:
+        return None
+    return json.loads(json.dumps(value, default=_json_default))
 
 
 TERMINAL = ("DELIVERED", "RETURNED", "RTO_DELIVERED", "LOST", "CLOSED")
@@ -45,7 +66,7 @@ def ingest_event(db, shipment, raw: str | None, message: str | None = None,
         business_id=shipment.business_id, shipment_id=shipment.id,
         carrier_event_id=carrier_event_id or "", carrier_status_raw=raw,
         normalized_status=norm, message=message, location=location,
-        event_time=event_time, source=source, raw_payload=raw_payload)
+        event_time=event_time, source=source, raw_payload=_json_safe(raw_payload))
     db.add(ev)
     db.flush()
     shipment.carrier_status_raw = raw

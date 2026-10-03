@@ -4,13 +4,7 @@ ShipSagar proxies tracking for many carriers, so the registry key is
 ``SHIPSAGAR`` while the underlying courier (``IP``, ``FEDEX``, ``DTDC``, ...)
 lives on the shipment. The courier is supplied per instance so status
 normalization can pick the right matrix.
-
-``track_shipment`` hands back ``datetime`` timestamps; the endpoints store each
-event dict verbatim as JSON ``raw_payload``, so they are re-emitted as ISO
-strings here — the same shape ``IndiaPostProvider`` already returns.
 """
-
-from datetime import datetime
 
 from .base import CarrierError, CarrierProvider
 from app.services import shipsagar_service as ss
@@ -41,13 +35,6 @@ class ShipsagarProvider(CarrierProvider):
                                "ShipSagar is not connected. Set SHIPSAGAR_TOKEN "
                                "and SHIPSAGAR_CLIENT_CODE.")
         try:
-            data = ss.track_shipment(str(awb).strip(), self.courier)
+            return ss.track_shipment(str(awb).strip(), self.courier)
         except ss.ShipsagarError as exc:
             raise CarrierError(exc.code, exc.message) from exc
-        events = []
-        for raw in data.get("events") or []:
-            ev = dict(raw or {})
-            if isinstance(ev.get("event_time"), datetime):
-                ev["event_time"] = ev["event_time"].isoformat()
-            events.append(ev)
-        return {"awb": data.get("awb") or str(awb).strip(), "events": events}
