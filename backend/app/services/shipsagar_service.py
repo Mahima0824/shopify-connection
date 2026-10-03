@@ -470,12 +470,15 @@ def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
 
 
 def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
-    """Register a shipment's courier tracking number with ShipSagar (plan #18).
+    """Register a shipment with ShipSagar via PushShipment.
 
-    Validates courier, creates the local READY_TO_SHIP checkpoint semantics
-    by persisting the returned shipsagar_tracking_id on the shipment, and
-    queues a bounded retry job when the provider call fails.
-    Returns {"shipsagar_tracking_id": ..., "stubbed": bool}.
+    Validates the courier, maps the shipment's Order onto the PushShipment
+    body, and persists the resulting shipsagar_tracking_id. A provider-level
+    ERROR is reported in the return value rather than raised, because the
+    Shipment already exists; a transport failure queues a bounded retry job
+    and raises so the retry queue picks it up.
+
+    Returns {"shipsagar_tracking_id", "stubbed", "pushed", "message"}.
     """
     code = ((courier or getattr(shipment, "carrier_code", "")) or "").upper()
     if code not in SUPPORTED_COURIERS:
@@ -484,30 +487,35 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     awb = (getattr(shipment, "awb_number", "") or "").strip()
     if not awb:
         raise ShipsagarError("MISSING_TRACKING_NUMBER", "courier_tracking_number is required.")
-    try:
-        data = _post("/trackings", {"courier": code, "tracking_number": awb})
-        tracking_id = str(data.get("tracking_id") or data.get("id") or "").strip()
-        if not tracking_id:
-            raise ShipsagarError("SHIPSAGAR_BAD_RESPONSE", "ShipSagar omitted the tracking id.")
-        stubbed = False
-    except ShipsagarError as exc:
-        if exc.code == "SHIPSAGAR_NOT_CONFIGURED":
-            # Deterministic local placeholder so the identity chain stays
-            # intact; replaced by the real id once creds land.
-            tracking_id = f"SS-STUB-{code}-{awb}"
-            stubbed = True
-        else:
-            schedule_retry(db, business_id=getattr(shipment, "business_id", None),
-                           operation="register_tracking", shipment_id=getattr(shipment, "id", None),
-                           error=f"{exc.code}: {exc.message}",
-                           payload={"courier": code, "tracking_number": awb})
-            db.flush()
-            raise
-    shipment.shipsagar_tracking_id = tracking_id
-    if (getattr(shipment, "tracking_status", "") or "") in ("", "NOT_CREATED"):
+
+    if (getattr(shipment, "tracking_status", "") or "") in ("", "NOT_CREATED", "BOOKED"):
         shipment.tracking_status = "READY_TO_SHIP"
+
+    if not is_configured():
+        # Deterministic local placeholder so the identity chain stays intact;
+        # replaced by the real id once credentials land.
+        tracking_id = f"SS-STUB-{code}-{awb}"
+        shipment.shipsagar_tracking_id = tracking_id
+        db.flush()
+        return {"shipsagar_tracking_id": tracking_id, "stubbed": True,
+                "pushed": False, "message": SHIPSAGAR_NOT_CONFIGURED_MESSAGE}
+
+    from app.models.order import Order
+    order = db.query(Order).filter_by(id=shipment.order_id).first()
+    try:
+        result = push_shipment(tracking_no=awb, courier_code=code, order=order)
+    except ShipsagarError as exc:
+        schedule_retry(db, business_id=getattr(shipment, "business_id", None),
+                       operation="register_tracking", shipment_id=getattr(shipment, "id", None),
+                       error=f"{exc.code}: {exc.message}",
+                       payload={"courier": code, "tracking_number": awb})
+        db.flush()
+        raise
+    tracking_id = f"SS-{awb}"
+    shipment.shipsagar_tracking_id = tracking_id
     db.flush()
-    return {"shipsagar_tracking_id": tracking_id, "stubbed": stubbed}
+    return {"shipsagar_tracking_id": tracking_id, "stubbed": False,
+            "pushed": bool(result.get("ok")), "message": result.get("message", "")}
 
 
 # ---------------------------------------------------------------------------

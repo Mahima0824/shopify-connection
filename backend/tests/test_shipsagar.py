@@ -1188,3 +1188,125 @@ def test_shipment_routing_threads_the_instance_courier_into_normalization():
         shipsagar_tracking_id = None
 
     assert normalize_for_shipment(_Direct(), raw) == "UNKNOWN"
+
+
+# --- register_tracking on the real PushShipment path ---
+
+def _seed_shipment_with_order(mk, awb, courier="DTDC", status="READY_TO_SHIP",
+                              order_no="MAN-R1"):
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.shipment import Shipment
+    db = mk()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    o = Order(business_id=b.id, internal_order_number=order_no,
+              shopify_order_id=f"MANUAL-{order_no}",
+              order_date=datetime.now(timezone.utc),
+              receiver_name="Dileep", receiver_email="r@e.com",
+              receiver_mobile="9963026645", receiver_company="Reshamgath")
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    s = Shipment(business_id=b.id, order_id=o.id, parcel_id="p1",
+                 carrier_code=courier, awb_number=awb, tracking_status=status)
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    s_id = s.id
+    db.close()
+    return s_id
+
+
+def test_register_tracking_calls_push_shipment_when_configured(monkeypatch):
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-CFG-1")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        seen = {}
+
+        def _fake_push(*, tracking_no, courier_code, order):
+            seen["awb"] = tracking_no
+            seen["courier"] = courier_code
+            seen["order_no"] = order.internal_order_number
+            return {"ok": True, "message": "Data has been recorded successfully"}
+
+        monkeypatch.setattr(ss, "push_shipment", _fake_push)
+        out = ss.register_tracking(db, s)
+        assert out["pushed"] is True
+        assert out["stubbed"] is False
+        assert out["shipsagar_tracking_id"] == "SS-D-CFG-1"
+        assert seen == {"awb": "D-CFG-1", "courier": "DTDC", "order_no": "MAN-R1"}
+        assert s.shipsagar_tracking_id == "SS-D-CFG-1"
+    finally:
+        db.close()
+
+
+def test_register_tracking_reports_provider_error_without_raising(monkeypatch):
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-ERR-1", order_no="MAN-R2")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "please try again later"})
+        out = ss.register_tracking(db, s)
+        assert out["pushed"] is False
+        assert out["message"] == "please try again later"
+        assert out["shipsagar_tracking_id"] == "SS-D-ERR-1"
+    finally:
+        db.close()
+
+
+def test_register_tracking_stub_when_unconfigured(monkeypatch):
+    from app import config
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-STUB", order_no="MAN-R3")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        out = ss.register_tracking(db, s)
+        assert out["stubbed"] is True
+        assert out["pushed"] is False
+        assert out["shipsagar_tracking_id"] == "SS-STUB-DTDC-D-STUB"
+        assert s.tracking_status == "READY_TO_SHIP"
+    finally:
+        db.close()
+
+
+def test_register_tracking_still_rejects_unsupported_courier(monkeypatch):
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    s = Shipment(business_id=b.id, order_id="o1", parcel_id="p1",
+                 carrier_code="MANUAL", awb_number="M-1", tracking_status="BOOKED")
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    try:
+        ss.register_tracking(db, s)
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "UNSUPPORTED_COURIER"
+    finally:
+        db.close()
