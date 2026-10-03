@@ -511,3 +511,16 @@ def test_retry_drain_endpoint_and_register_envelope(monkeypatch):
         assert r.json()["error"]["code"] == "FORBIDDEN"
     finally:
         app.dependency_overrides.clear()
+
+
+# --- settings ---
+
+def test_shipsagar_settings_exist_and_default_to_unconfigured():
+    from app import config
+    from app.config import Settings
+    s = Settings()
+    assert s.shipsagar_token == ""
+    assert s.shipsagar_client_code == ""
+    # Base URL carries the real ShipSagar host but is not part of is_configured().
+    assert s.shipsagar_api_base_url == "https://app.shipsagar.com/api/Web"
+    assert hasattr(config.settings, "shipsagar_webhook_secret")

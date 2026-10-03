@@ -35,10 +35,12 @@ class Settings(BaseSettings):
     dtdc_customer_code: str = ""
 
     # ShipSagar Aggregation Provider (India Post + DTDC tracking via ShipSagar).
-    # Real API spec/creds are ABSENT — adapter runs stubbed until configured.
-    # Secrets stay server-side (env only), never exposed to frontend.
-    shipsagar_api_base_url: str = ""
-    shipsagar_api_key: str = ""
+    # Credentials come from the ShipSagar client profile page: "api key" -> token,
+    # "client code" -> client code. Both travel in the JSON body, not as headers.
+    shipsagar_api_base_url: str = "https://app.shipsagar.com/api/Web"
+    shipsagar_token: str = ""
+    shipsagar_client_code: str = ""
+    shipsagar_api_key: str = ""  # deprecated alias for shipsagar_token
     shipsagar_webhook_secret: str = ""
 
 
