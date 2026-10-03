@@ -8,6 +8,8 @@ from app.database import get_db
 
 router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
 
+PARCEL_BARCODE_MAX_LEN = 32
+
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
     """Envelope error (ledger pattern): {success:false, error:{code,message}}."""
@@ -102,9 +104,22 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     """Create the Parcel + Shipment for an order and register it with ShipSagar.
 
     Tracking numbers come from the India Post worker and are typed in by the
-    user. The Parcel is auto-created so the NOT NULL parcel_id FK is satisfied.
+    user. The Parcel is auto-created so the NOT NULL parcel_id FK is satisfied,
+    which makes parcels.barcode_value (String(32)) the narrowest column the
+    tracking number touches; a longer one is rejected up front rather than
+    raising inside MySQL, which SQLite would never catch. Both the shipments and
+    the parcels uniqueness probes are kept: create_shipment can leave a Shipment
+    owning an AWB whose Parcel carries an unrelated barcode, which only the
+    shipment probe sees, and correct_awb can leave a Parcel holding a freed
+    barcode, which only the parcel probe sees.
+
     A provider-level ERROR still persists both records and reports pushed=false;
-    a transport failure queues a retry job and returns 502.
+    a transport failure queues a retry job and returns 502. That job is queued
+    as "register_tracking" because it is the only operation drain_retry_queue
+    dispatches, and register_tracking rebuilds the whole PushShipment call from
+    the committed Shipment row. Any other operation dead-letters as
+    UNKNOWN_OPERATION, which would lose a registration that only a transient
+    outage had blocked.
     """
     from datetime import datetime, timezone
     from app.models.order import Order
@@ -116,9 +131,13 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     bid = u.get("business_id")
     tracking_no = (body.tracking_no or "").strip()
     courier_code = (body.courier_code or "").strip().upper()
-    if not tracking_no or not courier_code:
-        return _err(400, "DUPLICATE_TRACKING",
-                    "Tracking number and courier code are required.")
+    if not tracking_no:
+        return _err(400, "MISSING_TRACKING_NUMBER", "Tracking number is required.")
+    if not courier_code:
+        return _err(400, "MISSING_COURIER", "Courier code is required.")
+    if len(tracking_no) > PARCEL_BARCODE_MAX_LEN:
+        return _err(400, "INVALID_TRACKING_NUMBER_LENGTH",
+                    f"Tracking number must be {PARCEL_BARCODE_MAX_LEN} characters or fewer.")
     order = db.query(Order).filter_by(id=body.order_id, business_id=bid).first()
     if order is None:
         return _err(404, "ORDER_NOT_FOUND", "Order not found in this business.")
@@ -135,7 +154,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
                     f"Tracking number {tracking_no} already has a parcel.")
 
     parcel = Parcel(business_id=bid, order_id=order.id,
-                    parcel_code=tracking_no[:32], barcode_value=tracking_no,
+                    parcel_code=tracking_no, barcode_value=tracking_no,
                     status="CREATED")
     db.add(parcel)
     db.flush()
@@ -162,7 +181,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
             db.refresh(shipment)
             return {"success": True, "data": {**_sdict(shipment), "pushed": False,
                                               "message": exc.message}}
-        ss.schedule_retry(db, business_id=bid, operation="push_shipment",
+        ss.schedule_retry(db, business_id=bid, operation="register_tracking",
                           shipment_id=shipment.id,
                           error=f"{exc.code}: {exc.message}",
                           payload={"courier": courier_code, "tracking_number": tracking_no})

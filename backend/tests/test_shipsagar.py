@@ -1660,6 +1660,7 @@ def test_push_when_unconfigured_creates_records_with_stub_id(monkeypatch):
 
 def test_push_provider_error_still_persists_and_reports(monkeypatch):
     from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
     from app.services import shipsagar_service as ss
     mk = _mk()
     c, h, bid, oid = _authed_with_order(monkeypatch, mk)
@@ -1675,7 +1676,12 @@ def test_push_provider_error_still_persists_and_reports(monkeypatch):
         assert data["message"] == "please try again later"
         db = mk()
         try:
-            assert db.query(Shipment).filter_by(business_id=bid).count() == 1
+            s = db.query(Shipment).filter_by(business_id=bid).first()
+            assert s is not None
+            # A refusal is deterministic: repeating it cannot succeed, so the
+            # provider-ERROR path must queue nothing at all.
+            assert db.query(ShipsagarRetryJob).filter_by(
+                shipment_id=s.id).count() == 0
         finally:
             db.close()
     finally:
@@ -1689,12 +1695,17 @@ def test_push_validation_errors(monkeypatch):
         r = c.post("/api/v1/shipments/push", headers=h, json={
             "order_id": oid, "tracking_no": "   ", "courier_code": "IP"})
         assert r.status_code == 400, r.text
-        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+        assert r.json()["error"]["code"] == "MISSING_TRACKING_NUMBER"
 
         r = c.post("/api/v1/shipments/push", headers=h, json={
             "order_id": oid, "tracking_no": "EG1", "courier_code": "  "})
         assert r.status_code == 400, r.text
-        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+        assert r.json()["error"]["code"] == "MISSING_COURIER"
+
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "", "courier_code": ""})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "MISSING_TRACKING_NUMBER"
 
         r = c.post("/api/v1/shipments/push", headers=h, json={
             "order_id": "nope", "tracking_no": "EG1", "courier_code": "IP"})
@@ -1708,6 +1719,47 @@ def test_push_validation_errors(monkeypatch):
             "order_id": oid, "tracking_no": "EG-SECOND", "courier_code": "IP"})
         assert r.status_code == 400, r.text
         assert r.json()["error"]["code"] == "SHIPMENT_EXISTS"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_rejects_tracking_number_too_long_for_the_barcode_column(monkeypatch):
+    """parcels.barcode_value is String(32); SQLite never enforces it, MySQL does."""
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    try:
+        at_limit = "E" * 32
+        over_limit = "E" * 33
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": at_limit, "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["awb_number"] == at_limit
+        db = mk()
+        try:
+            from app.models.order import Order
+            o2 = Order(business_id=bid, internal_order_number="MAN-LONG",
+                       shopify_order_id="MANUAL-LONG",
+                       order_date=datetime.now(timezone.utc))
+            db.add(o2)
+            db.commit()
+            db.refresh(o2)
+            oid2 = o2.id
+        finally:
+            db.close()
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid2, "tracking_no": over_limit, "courier_code": "IP"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "INVALID_TRACKING_NUMBER_LENGTH"
+        assert "32" in r.json()["error"]["message"]
+        db = mk()
+        try:
+            assert db.query(Parcel).filter_by(business_id=bid).count() == 1
+            assert db.query(Shipment).filter_by(business_id=bid).count() == 1
+            assert db.query(Shipment).filter_by(order_id=oid2).count() == 0
+        finally:
+            db.close()
     finally:
         app.dependency_overrides.clear()
 
@@ -1735,6 +1787,79 @@ def test_push_rejects_awb_already_used_for_that_courier(monkeypatch):
             "order_id": oid2, "tracking_no": "EG-DUP", "courier_code": "IP"})
         assert r.status_code == 400, r.text
         assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_rejects_awb_clash_owned_by_the_shipment_constraint(monkeypatch):
+    """A pre-existing shipment can own the AWB with an unrelated parcel barcode.
+
+    create_shipment lets a Parcel carry any barcode while the Shipment takes the
+    AWB, so the parcels probe has nothing to match here and only the
+    (business_id, carrier_code, awb_number) probe can reject the push.
+    """
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    try:
+        db = mk()
+        try:
+            p = Parcel(business_id=bid, order_id=oid, parcel_code="UNRELATED-1",
+                       barcode_value="UNRELATED-1", status="CREATED")
+            db.add(p)
+            db.commit()
+            db.refresh(p)
+            pid = p.id
+            o2 = Order(business_id=bid, internal_order_number="MAN-P3",
+                       shopify_order_id="MANUAL-P3",
+                       order_date=datetime.now(timezone.utc))
+            db.add(o2)
+            db.commit()
+            db.refresh(o2)
+            oid2 = o2.id
+        finally:
+            db.close()
+        r = c.post("/api/v1/shipments", headers=h, json={
+            "parcel_id": pid, "carrier_code": "INDIA_POST",
+            "awb_number": "EG-COLLIDE"})
+        assert r.status_code == 200, r.text
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid2, "tracking_no": "EG-COLLIDE",
+            "courier_code": "INDIA_POST"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+        db = mk()
+        try:
+            # The parcels probe had nothing to match; the shipment probe fired.
+            assert db.query(Parcel).filter_by(
+                business_id=bid, barcode_value="EG-COLLIDE").count() == 0
+            assert db.query(Shipment).filter_by(business_id=bid).count() == 1
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_cannot_attach_to_another_tenants_order(monkeypatch):
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    mk = _mk()
+    _, _, bid_a, oid_a = _authed_with_order(monkeypatch, mk)
+    c2, h2, bid_b = _authed(monkeypatch, mk, role="ADMIN", email="other@t.in")
+    try:
+        r = c2.post("/api/v1/shipments/push", headers=h2, json={
+            "order_id": oid_a, "tracking_no": "EG-XTENANT", "courier_code": "IP"})
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "ORDER_NOT_FOUND"
+        db = mk()
+        try:
+            assert db.query(Parcel).filter_by(order_id=oid_a).count() == 0
+            assert db.query(Shipment).filter_by(business_id=bid_a).count() == 0
+            assert db.query(Shipment).filter_by(business_id=bid_b).count() == 0
+        finally:
+            db.close()
     finally:
         app.dependency_overrides.clear()
 
@@ -1784,9 +1909,67 @@ def test_push_queues_retry_when_provider_transport_fails(monkeypatch):
         assert r.json()["error"]["code"] == "SHIPSAGAR_API_ERROR"
         db = mk()
         try:
-            job = db.query(ShipsagarRetryJob).filter_by(operation="push_shipment").first()
+            jobs = db.query(ShipsagarRetryJob).filter_by(
+                business_id=bid, status="PENDING").all()
+            assert len(jobs) == 1
+            # drain_retry_queue only dispatches register_tracking; a
+            # push_shipment job would dead-letter as UNKNOWN_OPERATION and the
+            # registration would never be retried.
+            assert jobs[0].operation == "register_tracking"
+            assert jobs[0].shipment_id is not None
+            assert "connection reset" in jobs[0].last_error
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_queued_retry_is_actually_drained(monkeypatch):
+    """The job the 502 path queues must reach ShipSagar on a later drain."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+
+    def _boom(**kw):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "push_shipment", _boom)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-DRAIN",
+            "courier_code": "INDIA_POST"})
+        assert r.status_code == 502, r.text
+        db = mk()
+        try:
+            job = db.query(ShipsagarRetryJob).filter_by(
+                business_id=bid, status="PENDING").first()
             assert job is not None
-            assert job.status == "PENDING"
+            job.next_retry_at = datetime.now(timezone.utc) - _td(seconds=5)
+            db.commit()
+            reached = {}
+
+            def _recovered(*, tracking_no, courier_code, order):
+                reached["awb"] = tracking_no
+                reached["courier"] = courier_code
+                reached["order_no"] = order.internal_order_number
+                return {"ok": True, "message": "Data has been recorded successfully"}
+
+            monkeypatch.setattr(ss, "push_shipment", _recovered)
+            out = ss.drain_retry_queue(db)
+            db.commit()
+            assert reached == {"awb": "EG-DRAIN", "courier": "INDIA_POST",
+                               "order_no": "MAN-P1"}
+            assert out == {"checked": 1, "succeeded": 1, "requeued": 0,
+                           "dead_lettered": 0}
+            done = db.query(ShipsagarRetryJob).filter_by(
+                business_id=bid, status="DONE").all()
+            assert len(done) == 1
+            s = db.query(Shipment).filter_by(business_id=bid).first()
+            assert s.shipsagar_tracking_id == "SS-EG-DRAIN"
         finally:
             db.close()
     finally:
