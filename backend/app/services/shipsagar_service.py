@@ -122,21 +122,63 @@ _MATRIX: list[tuple[str, str, str]] = [
 ]
 
 
+# Fallback for every courier outside INDIA_POST / DTDC (ShipSagar aggregates many
+# carriers and GetCourier is not integrated, so codes arrive unvalidated).
+# Same ordering rule as _MATRIX: negative/attempt and return rows precede the
+# generic "delivered" row because "undelivered" contains "delivered".
+_GENERIC_MATRIX: list[tuple[str, str]] = [
+    ("out for delivery", "OUT_FOR_DELIVERY"),
+    ("ofd", "OUT_FOR_DELIVERY"),
+    ("undelivered", "FAILED_ATTEMPT"),
+    ("not delivered", "FAILED_ATTEMPT"),
+    ("delivery attempted", "FAILED_ATTEMPT"),
+    ("delivery failed", "FAILED_ATTEMPT"),
+    ("consignee", "FAILED_ATTEMPT"),
+    ("attempt", "FAILED_ATTEMPT"),
+    ("returned to sender", "RETURNED"),
+    ("item returned", "RETURNED"),
+    ("returned", "RETURNED"),
+    ("rto", "RTO"),
+    ("return to origin", "RTO"),
+    ("booked", "READY_TO_SHIP"),
+    ("label created", "READY_TO_SHIP"),
+    ("picked up", "READY_TO_SHIP"),
+    ("manifested", "READY_TO_SHIP"),
+    ("delivered", "DELIVERED"),
+    ("lost", "LOST"),
+    ("damaged", "EXCEPTION"),
+    ("exception", "EXCEPTION"),
+    ("on hold", "EXCEPTION"),
+    ("detained", "EXCEPTION"),
+    ("in transit", "IN_TRANSIT"),
+    ("transit", "IN_TRANSIT"),
+    ("shipped", "IN_TRANSIT"),
+    ("dispatched", "IN_TRANSIT"),
+    ("arrived", "IN_TRANSIT"),
+    ("reached", "IN_TRANSIT"),
+    ("received", "IN_TRANSIT"),
+]
+
+
 def normalize_shipsagar_status(courier: str, raw: str) -> str:
     """Normalize a courier raw status to the plan #15 vocabulary.
 
-    Unknown couriers / unrecognized strings -> EXCEPTION (visible, never
-    silently swallowed). Empty string -> NOT_CREATED (nothing known yet).
+    Courier-specific rows win for INDIA_POST and DTDC; every other courier
+    falls through to _GENERIC_MATRIX. Unrecognized strings -> EXCEPTION
+    (visible, never silently swallowed). Empty string -> NOT_CREATED.
     """
     text = (raw or "").strip().lower()
     if not text:
         return "NOT_CREATED"
     code = (courier or "").upper()
-    for courier_key, keyword, status in _MATRIX:
-        if courier_key == code and keyword in text:
-            return status
-    if code not in SUPPORTED_COURIERS:
+    if code in SUPPORTED_COURIERS:
+        for courier_key, keyword, status in _MATRIX:
+            if courier_key == code and keyword in text:
+                return status
         return "EXCEPTION"
+    for keyword, status in _GENERIC_MATRIX:
+        if keyword in text:
+            return status
     return "EXCEPTION"
 
 

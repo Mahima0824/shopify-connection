@@ -121,10 +121,47 @@ def test_normalization_matrix():
         ("DTDC", "On Hold - Exception", "EXCEPTION"),
         ("DTDC", "Some future unknown phrase xyz", "EXCEPTION"),
         ("INDIA_POST", "", "NOT_CREATED"),
-        ("UNKNOWN_COURIER", "delivered", "EXCEPTION"),
+        ("UNKNOWN_COURIER", "delivered", "DELIVERED"),
     ]
     for courier, raw, expected in cases:
         assert norm(courier, raw) == expected, (courier, raw)
+
+
+# --- generic courier fallback matrix ---
+
+def test_generic_matrix_covers_non_india_post_couriers():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    cases = [
+        ("FEDEX", "Delivered", "DELIVERED"),
+        ("FEDEX", "Out for delivery", "OUT_FOR_DELIVERY"),
+        ("FEDEX", "In transit", "IN_TRANSIT"),
+        ("FEDEX", "Package picked up", "READY_TO_SHIP"),
+        ("FEDEX", "Arrived at facility", "IN_TRANSIT"),
+        ("FEDEX", "Delivery attempted", "FAILED_ATTEMPT"),
+        ("FEDEX", "Returned to sender", "RETURNED"),
+        ("FEDEX", "RTO", "RTO"),
+        ("FEDEX", "Package lost", "LOST"),
+        ("FEDEX", "Damaged", "EXCEPTION"),
+        ("IP", "Item Delivered", "DELIVERED"),
+        ("IP", "Item Booked", "READY_TO_SHIP"),
+        ("IP", "Undelivered", "FAILED_ATTEMPT"),
+    ]
+    for courier, raw, expected in cases:
+        assert norm(courier, raw) == expected, f"{courier}/{raw}"
+
+
+def test_generic_matrix_still_falls_back_to_exception():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("FEDEX", "some future unknown phrase xyz") == "EXCEPTION"
+    assert norm("FEDEX", "") == "NOT_CREATED"
+
+
+def test_generic_matrix_does_not_shadow_courier_specific_rows():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    # "undelivered" must win over "delivered" for every courier.
+    assert norm("FEDEX", "Undelivered") == "FAILED_ATTEMPT"
+    assert norm("INDIA_POST", "Undelivered") == "FAILED_ATTEMPT"
+    assert norm("DTDC", "Not delivered") == "FAILED_ATTEMPT"
 
 
 # --- webhook security ---
