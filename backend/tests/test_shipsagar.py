@@ -1561,3 +1561,233 @@ def test_register_tracking_still_rejects_unsupported_courier(monkeypatch):
         assert exc.code == "UNSUPPORTED_COURIER"
     finally:
         db.close()
+
+
+# --- POST /api/v1/shipments/push ---
+
+def _authed_with_order(monkeypatch, mk, role="ADMIN", email="a@t.in"):
+    """Business + user + one Order. Returns (client, headers, business_id, order_id)."""
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    db = mk()
+    b = Business(name="B", email=email)
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    o = Order(business_id=b.id, internal_order_number="MAN-P1",
+              shopify_order_id="MANUAL-P1",
+              order_date=datetime.now(timezone.utc),
+              receiver_name="Dileep Kumar", receiver_email="rahul@example.com",
+              receiver_mobile="9963026645", receiver_company="Reshamgath",
+              receiver_city="Nashik", receiver_pincode="422001")
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    u = User(business_id=b.id, name="A", email=email,
+             password_hash=hash_password("x"), role=role)
+    db.add(u)
+    db.commit()
+    bid, oid = b.id, o.id
+    db.close()
+    c = _client(monkeypatch, mk)
+    tok = c.post("/api/v1/auth/login",
+                 json={"email": email, "password": "x"}).json()["data"]["token"]
+    return c, {"Authorization": f"Bearer {tok}"}, bid, oid
+
+
+def test_push_creates_parcel_and_shipment_and_calls_shipsagar(monkeypatch):
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    seen = {}
+
+    def _fake_push(*, tracking_no, courier_code, order):
+        seen["awb"] = tracking_no
+        seen["courier"] = courier_code
+        seen["order_no"] = order.internal_order_number
+        return {"ok": True, "message": "Data has been recorded successfully"}
+
+    monkeypatch.setattr(ss, "push_shipment", _fake_push)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG080960145IN", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["pushed"] is True
+        assert data["awb_number"] == "EG080960145IN"
+        assert data["carrier_code"] == "IP"
+        assert data["tracking_status"] == "READY_TO_SHIP"
+        assert data["shipsagar_tracking_id"] == "SS-EG080960145IN"
+        assert seen == {"awb": "EG080960145IN", "courier": "IP", "order_no": "MAN-P1"}
+        db = mk()
+        try:
+            p = db.query(Parcel).filter_by(business_id=bid).first()
+            assert p is not None
+            assert p.barcode_value == "EG080960145IN"
+            assert p.order_id == oid
+            s = db.query(Shipment).filter_by(business_id=bid).first()
+            assert s.parcel_id == p.id
+            assert s.order_id == oid
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_when_unconfigured_creates_records_with_stub_id(monkeypatch):
+    from app import config
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG080960999IN", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["pushed"] is False
+        assert data["shipsagar_tracking_id"] == "SS-STUB-IP-EG080960999IN"
+        assert "SHIPSAGAR_TOKEN" in data["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_provider_error_still_persists_and_reports(monkeypatch):
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+        "ok": False, "message": "please try again later"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG080960777IN", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["pushed"] is False
+        assert data["message"] == "please try again later"
+        db = mk()
+        try:
+            assert db.query(Shipment).filter_by(business_id=bid).count() == 1
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_validation_errors(monkeypatch):
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "   ", "courier_code": "IP"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG1", "courier_code": "  "})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": "nope", "tracking_no": "EG1", "courier_code": "IP"})
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "ORDER_NOT_FOUND"
+
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-FIRST", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-SECOND", "courier_code": "IP"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "SHIPMENT_EXISTS"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_rejects_awb_already_used_for_that_courier(monkeypatch):
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-DUP", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        db = mk()
+        try:
+            from app.models.order import Order
+            o2 = Order(business_id=bid, internal_order_number="MAN-P2",
+                       shopify_order_id="MANUAL-P2",
+                       order_date=datetime.now(timezone.utc))
+            db.add(o2)
+            db.commit()
+            db.refresh(o2)
+            oid2 = o2.id
+        finally:
+            db.close()
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid2, "tracking_no": "EG-DUP", "courier_code": "IP"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_is_tenant_scoped(monkeypatch):
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-T1", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        sid = r.json()["data"]["id"]
+        c2, h2, _ = _authed(monkeypatch, mk, role="ADMIN", email="other@t.in")
+        r = c2.get(f"/api/v1/shipments/{sid}", headers=h2)
+        assert r.status_code == 404, r.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_forbidden_for_viewer(monkeypatch):
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk, role="VIEWER")
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-V1", "courier_code": "IP"})
+        assert r.status_code == 403, r.text
+        assert r.json()["error"]["code"] == "FORBIDDEN"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_queues_retry_when_provider_transport_fails(monkeypatch):
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+
+    def _boom(**kw):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "push_shipment", _boom)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-BOOM", "courier_code": "IP"})
+        assert r.status_code == 502, r.text
+        assert r.json()["error"]["code"] == "SHIPSAGAR_API_ERROR"
+        db = mk()
+        try:
+            job = db.query(ShipsagarRetryJob).filter_by(operation="push_shipment").first()
+            assert job is not None
+            assert job.status == "PENDING"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()

@@ -53,6 +53,12 @@ class ShipmentIn(BaseModel):
     awb_number: str
 
 
+class PushShipmentIn(BaseModel):
+    order_id: str
+    tracking_no: str
+    courier_code: str
+
+
 class CorrectAwbIn(BaseModel):
     awb_number: str
     reason: str
@@ -88,6 +94,86 @@ def create_shipment(body: ShipmentIn, db: Session = Depends(get_db), u: dict = D
         raise HTTPException(400, "AWB already linked")
     db.refresh(s)
     return {"success": True, "data": _sdict(s)}
+
+
+@router.post("/push")
+def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
+                  u: dict = Depends(get_current_user)):
+    """Create the Parcel + Shipment for an order and register it with ShipSagar.
+
+    Tracking numbers come from the India Post worker and are typed in by the
+    user. The Parcel is auto-created so the NOT NULL parcel_id FK is satisfied.
+    A provider-level ERROR still persists both records and reports pushed=false;
+    a transport failure queues a retry job and returns 502.
+    """
+    from datetime import datetime, timezone
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    if u.get("role") not in ("ADMIN", "WAREHOUSE"):
+        return _err(403, "FORBIDDEN", "Warehouse role required")
+    bid = u.get("business_id")
+    tracking_no = (body.tracking_no or "").strip()
+    courier_code = (body.courier_code or "").strip().upper()
+    if not tracking_no or not courier_code:
+        return _err(400, "DUPLICATE_TRACKING",
+                    "Tracking number and courier code are required.")
+    order = db.query(Order).filter_by(id=body.order_id, business_id=bid).first()
+    if order is None:
+        return _err(404, "ORDER_NOT_FOUND", "Order not found in this business.")
+    if db.query(Shipment).filter_by(order_id=order.id).first() is not None:
+        return _err(400, "SHIPMENT_EXISTS", "This order already has a shipment.")
+    if db.query(Shipment).filter_by(
+            business_id=bid, carrier_code=courier_code,
+            awb_number=tracking_no).first() is not None:
+        return _err(400, "DUPLICATE_TRACKING",
+                    f"Tracking number {tracking_no} is already used for {courier_code}.")
+    if db.query(Parcel).filter_by(
+            business_id=bid, barcode_value=tracking_no).first() is not None:
+        return _err(400, "DUPLICATE_TRACKING",
+                    f"Tracking number {tracking_no} already has a parcel.")
+
+    parcel = Parcel(business_id=bid, order_id=order.id,
+                    parcel_code=tracking_no[:32], barcode_value=tracking_no,
+                    status="CREATED")
+    db.add(parcel)
+    db.flush()
+    shipment = Shipment(business_id=bid, order_id=order.id, parcel_id=parcel.id,
+                        carrier_code=courier_code, awb_number=tracking_no,
+                        tracking_status="READY_TO_SHIP",
+                        shipped_at=datetime.now(timezone.utc))
+    db.add(shipment)
+    db.flush()
+
+    if not ss.is_configured():
+        shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
+        db.commit()
+        db.refresh(shipment)
+        return {"success": True, "data": {**_sdict(shipment), "pushed": False,
+                                          "message": ss.SHIPSAGAR_NOT_CONFIGURED_MESSAGE}}
+    try:
+        result = ss.push_shipment(tracking_no=tracking_no,
+                                  courier_code=courier_code, order=order)
+    except ss.ShipsagarError as exc:
+        if exc.code == "SHIPSAGAR_NOT_CONFIGURED":
+            shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
+            db.commit()
+            db.refresh(shipment)
+            return {"success": True, "data": {**_sdict(shipment), "pushed": False,
+                                              "message": exc.message}}
+        ss.schedule_retry(db, business_id=bid, operation="push_shipment",
+                          shipment_id=shipment.id,
+                          error=f"{exc.code}: {exc.message}",
+                          payload={"courier": courier_code, "tracking_number": tracking_no})
+        db.commit()
+        return _err(502, exc.code, exc.message)
+    shipment.shipsagar_tracking_id = f"SS-{tracking_no}"
+    db.commit()
+    db.refresh(shipment)
+    return {"success": True, "data": {**_sdict(shipment),
+                                      "pushed": bool(result.get("ok")),
+                                      "message": result.get("message", "")}}
 
 
 @router.get("")
