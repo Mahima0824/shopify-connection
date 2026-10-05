@@ -50,6 +50,15 @@ export default function PushShipmentDialog({
 
   useEffect(() => {
     if (!open) return;
+    setOrderId(defaultOrderId ?? "");
+    setTrackingNo("");
+    setCourier("IP");
+    setCustomCourier("");
+    setErrors({});
+    setSubmitError(null);
+    setNotice(null);
+    setRetrying(false);
+    setSubmitting(false);
     listOrdersForPush()
       .then((rows) => {
         const pushable = rows.filter((r) => !r.shipment_id);
@@ -57,7 +66,7 @@ export default function PushShipmentDialog({
         setOrderId((cur) => cur || pushable[0]?.id || "");
       })
       .catch(() => setOrders([]));
-  }, [open]);
+  }, [open, defaultOrderId]);
 
   if (!open) return null;
 
@@ -144,7 +153,12 @@ export default function PushShipmentDialog({
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          <form id="push-shipment-form" onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form
+            id="push-shipment-form"
+            onSubmit={handleSubmit}
+            noValidate
+            className="flex flex-col gap-5"
+          >
             {submitError && (
               <div
                 role="alert"
@@ -164,8 +178,8 @@ export default function PushShipmentDialog({
               >
                 {retrying && (
                   <span className="block font-semibold mb-1">
-                    Shipment saved. ShipSagar could not be reached, so tracking registration is queued
-                    and will retry automatically.
+                    Shipment saved, but ShipSagar could not confirm the registration. A retry is
+                    queued and will run automatically.
                   </span>
                 )}
                 {notice}
@@ -202,6 +216,7 @@ export default function PushShipmentDialog({
                 id="push-tracking"
                 className={inputClass}
                 placeholder="e.g. EG080960145IN"
+                required
                 value={trackingNo}
                 onChange={(e) => setTrackingNo(e.target.value)}
               />
@@ -257,7 +272,7 @@ export default function PushShipmentDialog({
                   {order?.receiver_city ? ` · ${order.receiver_city}` : ""}
                 </dd>
                 <dt className="text-slate-500">Company Name</dt>
-                <dd className="text-slate-900">(empty)</dd>
+                <dd className="text-slate-900">{order?.receiver_company || "—"}</dd>
                 <dt className="text-slate-500">Country</dt>
                 <dd className="text-slate-900">India</dd>
                 <dt className="text-slate-500">Shipment Type</dt>

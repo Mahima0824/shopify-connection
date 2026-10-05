@@ -568,6 +568,7 @@ export type PushOrderOption = {
   customer_name?: string | null;
   receiver_city?: string | null;
   receiver_pincode?: string | null;
+  receiver_company?: string | null;
   shipment_id?: string | null;
 };
 
