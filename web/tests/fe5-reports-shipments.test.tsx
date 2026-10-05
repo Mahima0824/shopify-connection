@@ -151,19 +151,27 @@ test("shipments page shows provider badge, health line, ADMIN retry-drain with c
       expect(init?.method).toBe("POST");
       return { ok: true, json: async () => ({ success: true, data: { checked: 4, succeeded: 3, requeued: 1, dead_lettered: 0 } }) };
     }
-    return {
-      ok: true,
-      json: async () => ({ success: true, data: { items: [{ id: "s1", order_id: "o1", carrier_code: "DELHIVERY", shipsagar_tracking_id: "ss-9", awb_number: "AWB1", tracking_status: "IN_TRANSIT", location: "Mumbai" }], total: 1 } }),
-    };
+    if (String(url).includes("/api/v1/shipments?")) {
+      return { ok: true, json: async () => ({ success: true, data: {
+        items: [{ id: "s1", order_id: "o1", carrier_code: "IP", shipsagar_tracking_id: "ss-9",
+                   awb_number: "AWB1", tracking_status: "IN_TRANSIT", order_no: "MAN-1",
+                   customer_name: "Dileep Kumar", customer_email: "rahul@example.com",
+                   customer_mobile: "9963026645", company_name: "Reshamgath",
+                   shipment_type: "Road", country_name: "India",
+                   entry_datetime: "2026-10-03T15:16:05+00:00" }],
+        total: 1, page: 1, page_size: 20,
+        facets: { carriers: [{ code: "IP", count: 1 }], statuses: [{ code: "IN_TRANSIT", count: 1 }] } } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: { synced: true, new_events: 1 } }) };
   }));
   renderShipments();
-  await waitFor(() => expect(screen.getByText("ShipSagar")).toBeTruthy());
-  expect(screen.getByText(/2 failed webhooks/)).toBeTruthy();
-  expect(screen.getByText(/3 pending retries/)).toBeTruthy();
+  await waitFor(() => expect(screen.getByText("AWB1")).toBeTruthy());
+  expect(screen.getByText("ShipSagar health: 2 failed webhooks · 3 pending retries")).toBeTruthy();
   const btn = screen.getByText("Retry drain", { selector: "button" });
   fireEvent.click(btn);
-  await waitFor(() => expect(screen.getByText(/Retry drain complete/)).toBeTruthy());
-  expect(screen.getByText(/3 drained, 1 requeued, 0 dead-lettered \(4 checked\)/)).toBeTruthy();
+  await waitFor(() =>
+    expect(screen.getByText("Retry drain complete: 3 drained, 1 requeued, 0 dead-lettered (4 checked)")).toBeTruthy(),
+  );
   expect(drainShipsagarRetries).toBeDefined();
 });
 
@@ -173,9 +181,16 @@ test("non-ADMIN sees no retry-drain button", async () => {
     if (String(url).includes("/shipsagar/health")) {
       return { ok: true, json: async () => ({ success: true, data: { provider: "SHIPSAGAR", status: "healthy", failed_webhooks: 0, pending_jobs: 0 } }) };
     }
-    return { ok: true, json: async () => ({ success: true, data: { items: [], total: 0 } }) };
+    if (String(url).includes("/api/v1/shipments?")) {
+      return { ok: true, json: async () => ({ success: true, data: {
+        items: [], total: 0, page: 1, page_size: 20,
+        facets: { carriers: [], statuses: [] } } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: {} }) };
   }));
   renderShipments();
-  await waitFor(() => expect(screen.getByText(/0 failed webhooks/)).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText("ShipSagar health: 0 failed webhooks · 0 pending retries")).toBeTruthy(),
+  );
   expect(screen.queryByText("Retry drain", { selector: "button" })).toBeNull();
 });
