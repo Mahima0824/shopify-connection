@@ -1,26 +1,27 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   canDrainRetries,
   drainShipsagarRetries,
   getShipsagarHealth,
   listShipments,
-  ShipmentListResult,
-  ShipmentRow,
   shipmentProvider,
   syncShipment,
 } from "../lib/api";
+import type { ShipmentListResult, ShipmentRow } from "../lib/api";
 import {
   carrierLabel,
   formatEntryDate,
   isTerminal,
   SHIPMENT_STATUSES,
   statusTone,
-  Tone,
 } from "../lib/shipments";
+import type { Tone } from "../lib/shipments";
 import PushShipmentDialog from "../components/PushShipmentDialog";
 import { IconAlert, IconTruck } from "../components/icons";
 
 const REFRESH_MS = 25000;
+const PAGE_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
   success: "bg-emerald-100 text-emerald-800",
@@ -38,6 +39,10 @@ const inputClass =
   "w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition shadow-xs";
 const labelClass =
   "block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5";
+const pagerClass =
+  "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition disabled:opacity-40";
+const linkButtonClass =
+  "px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition";
 
 function providerBadge(s: ShipmentRow): string {
   const p = shipmentProvider(s);
@@ -59,12 +64,13 @@ function StatusPill({ status }: { status: string }) {
 
 export default function ShipmentsPage() {
   const [data, setData] = useState<ShipmentListResult | null>(null);
+  const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [tracking, setTracking] = useState("");
-  const [orderNo, setOrderNo] = useState("");
   const [status, setStatus] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [draft, setDraft] = useState({ q: "", orderNo: "" });
+  const [applied, setApplied] = useState({ q: "", orderNo: "" });
   const [live, setLive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<{
@@ -76,6 +82,7 @@ export default function ShipmentsPage() {
   const [drainMsg, setDrainMsg] = useState<string | null>(null);
   const [showPush, setShowPush] = useState(false);
   const reqRef = useRef(0);
+  const cyclingRef = useRef(false);
 
   const fetchList = useCallback(
     (silent = false) => {
@@ -84,15 +91,17 @@ export default function ShipmentsPage() {
       listShipments({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        q: tracking || undefined,
-        order_no: orderNo || undefined,
+        q: applied.q || undefined,
+        order_no: applied.orderNo || undefined,
         status: status || undefined,
         carrier: carrier || undefined,
-        page_size: 20,
+        page,
+        page_size: PAGE_SIZE,
       })
         .then((res) => {
           if (reqRef.current !== req) return;
           setData(res);
+          setError(null);
         })
         .catch((err: unknown) => {
           if (reqRef.current !== req) return;
@@ -101,7 +110,7 @@ export default function ShipmentsPage() {
           }
         });
     },
-    [dateFrom, dateTo, tracking, orderNo, status, carrier],
+    [dateFrom, dateTo, applied.q, applied.orderNo, status, carrier, page],
   );
 
   useEffect(() => {
@@ -121,16 +130,39 @@ export default function ShipmentsPage() {
   }, []);
 
   useEffect(() => {
-    if (!live || !data) return;
+    if (!live) return;
     const tick = async () => {
-      const targets = data.items.filter((s) => !isTerminal(s.tracking_status));
-      if (targets.length === 0) return;
-      await Promise.allSettled(targets.map((s) => syncShipment(s.id)));
-      fetchList(true);
+      if (cyclingRef.current) return;
+      cyclingRef.current = true;
+      try {
+        const targets = (data?.items ?? []).filter((s) => !isTerminal(s.tracking_status));
+        await Promise.allSettled(targets.map((s) => syncShipment(s.id)));
+        fetchList(true);
+      } finally {
+        cyclingRef.current = false;
+      }
     };
     const t = setInterval(() => void tick(), REFRESH_MS);
     return () => clearInterval(t);
   }, [live, data, fetchList]);
+
+  const items = data?.items ?? [];
+  const facets = data?.facets ?? { carriers: [], statuses: [] };
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const applyDraft = () => {
+    if (draft.q === applied.q && draft.orderNo === applied.orderNo) {
+      fetchList();
+      return;
+    }
+    setApplied({ q: draft.q, orderNo: draft.orderNo });
+    setPage(1);
+  };
 
   const handleDrain = async () => {
     if (!window.confirm("Drain due ShipSagar retries now?")) return;
@@ -138,10 +170,10 @@ export default function ShipmentsPage() {
     setDrainMsg(null);
     try {
       const out = await drainShipsagarRetries(50);
-      const checked = out.checked ?? 0;
       const succeeded = out.succeeded ?? out.drained ?? 0;
       const requeued = out.requeued ?? out.remaining ?? 0;
       const dead = out.dead_lettered ?? out.moved_to_dead_letter ?? 0;
+      const checked = out.checked ?? succeeded + requeued + dead;
       setDrainMsg(
         `Retry drain complete: ${succeeded} drained, ${requeued} requeued, ${dead} dead-lettered (${checked} checked)`,
       );
@@ -154,28 +186,43 @@ export default function ShipmentsPage() {
     }
   };
 
-  const handleApply = () => fetchList();
+  const pickCarrier = (code: string) => {
+    setCarrier((c) => (c === code ? "" : code));
+    setPage(1);
+  };
+
+  const pickStatus = (code: string) => {
+    setStatus((s) => (s === code ? "" : code));
+    setPage(1);
+  };
 
   const clearFilters = () => {
     setDateFrom("");
     setDateTo("");
-    setTracking("");
-    setOrderNo("");
     setStatus("");
     setCarrier("");
+    setDraft({ q: "", orderNo: "" });
+    setApplied({ q: "", orderNo: "" });
+    setPage(1);
   };
 
-  const items = data?.items ?? [];
-  const facets = data?.facets ?? { carriers: [], statuses: [] };
-  const total = data?.total ?? 0;
+  const filtersDirty = [
+    dateFrom, dateTo, status, carrier,
+    applied.q, applied.orderNo, draft.q, draft.orderNo,
+  ].some(Boolean);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-6">
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Shipments</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Push tracking numbers to ShipSagar and follow every parcel location live.
-        </p>
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Shipments</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Push tracking numbers to ShipSagar and follow every parcel location live.
+          </p>
+        </div>
+        <Link to="/shipments/outstanding" className={linkButtonClass}>
+          Outstanding board
+        </Link>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
@@ -195,14 +242,16 @@ export default function ShipmentsPage() {
           <div>
             <label htmlFor="f-tracking" className={labelClass}>Tracking No.</label>
             <input id="f-tracking" aria-label="Tracking No." className={inputClass}
-              placeholder="Enter Tracking No." value={tracking}
-              onChange={(e) => setTracking(e.target.value)} />
+              placeholder="Enter Tracking No." value={draft.q}
+              onChange={(e) => setDraft((d) => ({ ...d, q: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") applyDraft(); }} />
           </div>
           <div>
             <label htmlFor="f-order" className={labelClass}>Order No.</label>
             <input id="f-order" aria-label="Order No." className={inputClass}
-              placeholder="Enter Order No." value={orderNo}
-              onChange={(e) => setOrderNo(e.target.value)} />
+              placeholder="Enter Order No." value={draft.orderNo}
+              onChange={(e) => setDraft((d) => ({ ...d, orderNo: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") applyDraft(); }} />
           </div>
           <div>
             <label htmlFor="f-status" className={labelClass}>Status</label>
@@ -226,12 +275,12 @@ export default function ShipmentsPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 mt-4">
-          <button type="button" onClick={handleApply}
+          <button type="button" onClick={applyDraft}
             className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 shadow-xs transition">
             APPLY
           </button>
-          <button type="button" onClick={clearFilters}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+          <button type="button" onClick={clearFilters} disabled={!filtersDirty}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition disabled:opacity-40">
             Clear filters
           </button>
           <label className="flex items-center gap-2 text-sm text-slate-600 ml-auto">
@@ -248,13 +297,13 @@ export default function ShipmentsPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={carrier ? CHIP_IDLE : CHIP_ACTIVE}
-            onClick={() => setCarrier("")}>
+            onClick={() => { setCarrier(""); setPage(1); }}>
             All Records
           </button>
           {facets.carriers.map((c) => (
             <button key={c.code} type="button"
               className={carrier === c.code ? CHIP_ACTIVE : CHIP_IDLE}
-              onClick={() => setCarrier(carrier === c.code ? "" : c.code)}>
+              onClick={() => pickCarrier(c.code)}>
               {carrierLabel(c.code)}({c.count})
             </button>
           ))}
@@ -264,13 +313,13 @@ export default function ShipmentsPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={status ? CHIP_IDLE : CHIP_ACTIVE}
-            onClick={() => setStatus("")}>
+            onClick={() => { setStatus(""); setPage(1); }}>
             All Records
           </button>
           {facets.statuses.map((s) => (
             <button key={s.code} type="button"
               className={status === s.code ? CHIP_ACTIVE : CHIP_IDLE}
-              onClick={() => setStatus(status === s.code ? "" : s.code)}>
+              onClick={() => pickStatus(s.code)}>
               {s.code}({s.count})
             </button>
           ))}
@@ -300,56 +349,99 @@ export default function ShipmentsPage() {
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <th className="text-left px-4 py-3">Order No</th>
-              <th className="text-left px-4 py-3">Tracking Number</th>
-              <th className="text-left px-4 py-3">Current Status</th>
-              <th className="text-left px-4 py-3">Customer</th>
-              <th className="text-left px-4 py-3">Shipment Type</th>
-              <th className="text-left px-4 py-3">Country Name</th>
-              <th className="text-left px-4 py-3">Company Name</th>
-              <th className="text-left px-4 py-3">Entry Date &amp; Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
-                  No shipments match these filters.
-                </td>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-4 py-3">Order No</th>
+                <th className="text-left px-4 py-3">Tracking Number</th>
+                <th className="text-left px-4 py-3">Current Status</th>
+                <th className="text-left px-4 py-3">Customer</th>
+                <th className="text-left px-4 py-3">Shipment Type</th>
+                <th className="text-left px-4 py-3">Country Name</th>
+                <th className="text-left px-4 py-3">Company Name</th>
+                <th className="text-left px-4 py-3">Entry Date &amp; Time</th>
+                <th className="text-right px-4 py-3">Action</th>
               </tr>
-            ) : (
-              items.map((s) => (
-                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-slate-900">
-                    {s.order_no ?? s.order_id}
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                    <p>No shipments match these filters.</p>
+                    <Link
+                      to="/scan/dispatch"
+                      className="inline-block mt-3 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 shadow-xs transition"
+                    >
+                      Dispatch a parcel
+                    </Link>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="block font-semibold text-slate-900">{s.awb_number}</span>
-                    <span className="text-xs text-slate-500">
-                      {carrierLabel(s.carrier_code)} · {providerBadge(s)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={s.tracking_status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="block text-slate-900">{s.customer_name ?? "—"}</span>
-                    <span className="block text-xs text-slate-500">{s.customer_email ?? ""}</span>
-                    <span className="block text-xs text-slate-500">{s.customer_mobile ?? ""}</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{s.shipment_type ?? "Road"}</td>
-                  <td className="px-4 py-3 text-slate-700">{s.country_name ?? "India"}</td>
-                  <td className="px-4 py-3 text-slate-700">{s.company_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-700">{formatEntryDate(s.entry_datetime)}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                items.map((s) => (
+                  <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-slate-900">
+                      {s.order_no ?? s.order_id}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="block font-semibold text-slate-900">{s.awb_number}</span>
+                      <span className="text-xs text-slate-500">
+                        {carrierLabel(s.carrier_code)} · {providerBadge(s)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusPill status={s.tracking_status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="block text-slate-900">{s.customer_name ?? "—"}</span>
+                      <span className="block text-xs text-slate-500">{s.customer_email ?? ""}</span>
+                      <span className="block text-xs text-slate-500">{s.customer_mobile ?? ""}</span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{s.shipment_type ?? "Road"}</td>
+                    <td className="px-4 py-3 text-slate-700">{s.country_name ?? "India"}</td>
+                    <td className="px-4 py-3 text-slate-700">{s.company_name ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{formatEntryDate(s.entry_datetime)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        to={`/shipments/${s.id}`}
+                        aria-label={`Open ${s.awb_number}`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+          <span className="text-xs text-slate-500">
+            Page {page} of {totalPages} &middot; {items.length} entries
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Previous page"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className={pagerClass}
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              aria-label="Next page"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className={pagerClass}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
