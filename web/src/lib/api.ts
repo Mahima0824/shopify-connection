@@ -1,4 +1,6 @@
-export const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const API = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
+
+
 
 export async function api<T>(p: string, init?: RequestInit, token?: string): Promise<T> {
   const path = p.startsWith("/") ? p : `/${p}`;
@@ -511,4 +513,106 @@ export function shipmentProvider(s: {
   if (s.shipsagar_tracking_id) return "SHIPSAGAR";
   if ((s.carrier_code ?? "").toUpperCase() === "MANUAL") return "MANUAL";
   return "DIRECT";
+}
+
+// --- Shipments: list, push, sync ---
+
+export type ShipmentRow = {
+  id: string;
+  business_id: string;
+  order_id: string;
+  parcel_id: string;
+  carrier_code: string;
+  awb_number: string;
+  shipsagar_tracking_id?: string | null;
+  tracking_status: string;
+  carrier_status_raw?: string | null;
+  current_location?: string | null;
+  last_checkpoint_message?: string | null;
+  last_checkpoint_at?: string | null;
+  last_synced_at?: string | null;
+  entry_datetime?: string | null;
+  shipment_type?: string | null;
+  country_name?: string | null;
+  order_no?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  customer_mobile?: string | null;
+  company_name?: string | null;
+};
+
+export type ShipmentFacets = {
+  carriers: { code: string; count: number }[];
+  statuses: { code: string; count: number }[];
+};
+
+export type ShipmentListResult = {
+  items: ShipmentRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  facets: ShipmentFacets;
+};
+
+export type PushShipmentResult = ShipmentRow & { pushed: boolean; message: string };
+
+export type ShipmentSyncResult = {
+  synced: boolean;
+  new_events?: number;
+  reason?: string;
+};
+
+export type PushOrderOption = {
+  id: string;
+  order_no?: string | null;
+  customer_name?: string | null;
+  receiver_city?: string | null;
+  receiver_pincode?: string | null;
+  shipment_id?: string | null;
+};
+
+export function listShipments(
+  params: {
+    date_from?: string;
+    date_to?: string;
+    q?: string;
+    order_no?: string;
+    status?: string;
+    carrier?: string;
+    page?: number;
+    page_size?: number;
+  } = {},
+  token?: string,
+): Promise<ShipmentListResult> {
+  const p = new URLSearchParams();
+  if (params.date_from) p.set("date_from", params.date_from);
+  if (params.date_to) p.set("date_to", params.date_to);
+  if (params.q?.trim()) p.set("q", params.q.trim());
+  if (params.order_no?.trim()) p.set("order_no", params.order_no.trim());
+  if (params.status) p.set("status", params.status.toUpperCase());
+  if (params.carrier) p.set("carrier", params.carrier.toUpperCase());
+  if (params.page && params.page > 1) p.set("page", String(params.page));
+  if (params.page_size) p.set("page_size", String(params.page_size));
+  const qs = p.toString();
+  return api<ShipmentListResult>(`/api/v1/shipments${qs ? `?${qs}` : ""}`, {}, token);
+}
+
+export function pushShipment(
+  payload: { order_id: string; tracking_no: string; courier_code: string },
+  token?: string,
+): Promise<PushShipmentResult> {
+  return api<PushShipmentResult>(
+    "/api/v1/shipments/push",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function syncShipment(id: string, token?: string): Promise<ShipmentSyncResult> {
+  return api<ShipmentSyncResult>(`/api/v1/shipments/${id}/sync`, { method: "POST" }, token);
+}
+
+export function listOrdersForPush(token?: string): Promise<PushOrderOption[]> {
+  return api<any>("/api/v1/orders?page_size=100", {}, token).then((data: any) =>
+    Array.isArray(data) ? data : (data?.items ?? []));
 }
