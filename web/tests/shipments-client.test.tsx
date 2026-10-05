@@ -39,9 +39,20 @@ test("status tone covers the whole vocabulary", () => {
 });
 
 test("terminal statuses are the non-refreshing ones", () => {
-  expect([...TERMINAL_STATUSES]).toEqual(["DELIVERED", "RETURNED", "RTO", "LOST"]);
+  // DELIBERATE UPDATE (final review, minor 2). The page and the backend
+  // disagreed: RTO was terminal to the page but not to the backend, so a
+  // ShipSagar RTO parcel stopped refreshing and could never reach RETURNED,
+  // while RTO_DELIVERED and CLOSED were terminal to the backend and not to the
+  // page. The page now mirrors backend/app/services/shipment_service.py
+  // TERMINAL exactly; test_terminal_status_vocabulary_is_shared_by_the_backend
+  // _and_the_page in backend/tests/test_shipsagar.py pins the other half.
+  expect([...TERMINAL_STATUSES]).toEqual([
+    "DELIVERED", "RETURNED", "LOST", "RTO_DELIVERED", "CLOSED",
+  ]);
   expect(isTerminal("DELIVERED")).toBe(true);
   expect(isTerminal("IN_TRANSIT")).toBe(false);
+  // RTO is forward-progressible (RTO -> RETURNED), so it keeps refreshing.
+  expect(isTerminal("RTO")).toBe(false);
 });
 
 test("courier options include IP, DTDC and FEDEX", () => {

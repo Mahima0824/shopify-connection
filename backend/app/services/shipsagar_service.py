@@ -204,6 +204,18 @@ _GENERIC_MATCHERS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     for keyword, status in _GENERIC_MATRIX
 )
 
+# Courier-specific rows match on whole words too, for the same reason: plain
+# substring matching made "rto" match "carton". That looseness was frozen on
+# purpose while no row could reach it, but COURIER_ALIASES routes IP - the push
+# dialog's default courier - straight into the India Post rows, so it is live
+# now. Row order is unchanged, so "undelivered" still beats "delivered".
+_COURIER_MATCHERS: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
+    courier: tuple(
+        (re.compile(rf"\b{re.escape(keyword)}\b"), status)
+        for row_courier, keyword, status in _MATRIX if row_courier == courier)
+    for courier in dict.fromkeys(row[0] for row in _MATRIX)
+}
+
 
 def normalize_shipsagar_status(courier: str, raw: str) -> str:
     """Normalize a courier raw status to the plan #15 vocabulary.
@@ -219,8 +231,8 @@ def normalize_shipsagar_status(courier: str, raw: str) -> str:
         return "NOT_CREATED"
     code = resolve_courier(courier)
     if code in SUPPORTED_COURIERS:
-        for courier_key, keyword, status in _MATRIX:
-            if courier_key == code and keyword in text:
+        for pattern, status in _COURIER_MATCHERS.get(code, ()):
+            if pattern.search(text):
                 return status
         return "EXCEPTION"
     for pattern, status in _GENERIC_MATCHERS:
@@ -693,10 +705,10 @@ def find_shipment_event(db, shipment_id: str, event_id: str):
     carrier_event_id, and the same checkpoint can arrive by either route. A
     probe that only knew about its own column let the two paths record the same
     checkpoint twice on one shipment, and a probe keyed on (provider,
-    provider_event_id) alone could see no row at all for a shipment the other
-    path had already written.
+    provider_event_id) alone could not see a row the other path had written at
+    all - so the two paths had two different dedupe scopes.
 
-    Returns the existing ShipmentEvent, or None.
+    Returns the existing ShipmentEvent for this shipment, or None.
     """
     if not event_id:
         return None
@@ -706,6 +718,29 @@ def find_shipment_event(db, shipment_id: str, event_id: str):
         ShipmentEvent.shipment_id == shipment_id,
         or_(ShipmentEvent.carrier_event_id == event_id,
             ShipmentEvent.provider_event_id == event_id)).first()
+
+
+def find_provider_event(db, event_id: str):
+    """Any row already holding this ShipSagar event id, whatever its shipment.
+
+    shipment_events carries UniqueConstraint(provider, provider_event_id) from
+    plan #20/#53, which is global: the same ShipSagar event id cannot be stored
+    against a second shipment at all, and inserting one would raise
+    IntegrityError instead of the current silent no-op. So the global probe
+    still has to exist, but only as a second line of defence after the
+    per-shipment one - it now runs after the shared probe rather than instead
+    of it, and it is reached only for a genuine id collision.
+
+    Lifting the constraint to (shipment_id, provider_event_id) would make the
+    second line unnecessary. That needs an alembic revision, and the current
+    head (0019_india_post_order_fields) is another feature's uncommitted work,
+    so it cannot be chained here.
+    """
+    if not event_id:
+        return None
+    from app.models.shipment import ShipmentEvent
+    return db.query(ShipmentEvent).filter_by(
+        provider=PROVIDER, provider_event_id=event_id).first()
 
 
 def _stale_reason(shipment, normalized: str, event_time) -> str | None:
@@ -739,6 +774,12 @@ def ingest_shipsagar_event(db, shipment, *, event_id: str, courier: str,
     """
     from app.models.shipment import ShipmentEvent
     dup = find_shipment_event(db, shipment.id, event_id)
+    if dup is None:
+        # Global id collision: the same ShipSagar event id is already stored
+        # against another shipment. The (provider, provider_event_id) unique
+        # constraint makes a second row impossible, so this is a mis-delivery
+        # rather than a second copy of the checkpoint. See find_provider_event.
+        dup = find_provider_event(db, event_id)
     if dup is not None:
         return dup, False, False
     parsed_time = _as_aware(event_time) if isinstance(event_time, str) else event_time

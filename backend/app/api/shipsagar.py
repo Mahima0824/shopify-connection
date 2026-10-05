@@ -136,30 +136,59 @@ def retry_drain(limit: int = 50, db: Session = Depends(get_db),
 def shipsagar_health(db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     """Integration health counters (plan #75).
 
-    rejected_pushes counts distinct shipments ShipSagar refused at
-    PushShipment. Such a shipment still carries its SS-{awb} id, so it is
-    absent from unregistered_shipments, and a refusal is not retried (it
-    would not become success), so no retry job exists either. Without this
-    counter a permanently-rejected parcel reads as healthy forever. The trace
-    is an audit_logs row written by register_tracking — no schema change.
+    Every counter answers for the caller's business only. The four pre-existing
+    counters were global while rejected_pushes was scoped, so one response mixed
+    a tenant's own refusals with every other tenant's failures and backlog.
+
+    rejected_pushes counts shipments ShipSagar refused at PushShipment that are
+    still unresolved. Such a shipment still carries its SS-{awb} id, so it is
+    absent from unregistered_shipments, and a refusal is not retried (it would
+    not become success), so no retry job exists either. Without this counter a
+    permanently-rejected parcel reads as healthy forever. The trace is an
+    audit_logs row written by register_tracking — no schema change.
+
+    "Unresolved" is what keeps the signal honest: the audit trail is append-only,
+    so counting rows pinned the tenant to warning forever even after the parcel
+    was registered successfully. A refusal is resolved by a later
+    SHIPSAGAR_PUSH_ACCEPTED audit row for the same shipment, or by a DONE retry
+    job for it (a queued retry that eventually landed).
     """
     from sqlalchemy import func as _func
     from app.models.audit_log import AuditLog
     from app.models.shipment import Shipment
     from app.models.shipment_event import ShipsagarRetryJob, ShipsagarWebhookFailure
     from app.services import shipsagar_service as ss
-    failed_webhooks = db.query(_func.count(ShipsagarWebhookFailure.id)).scalar() or 0
+    bid = u.get("business_id")
+    failed_webhooks = db.query(_func.count(ShipsagarWebhookFailure.id)).filter(
+        ShipsagarWebhookFailure.business_id == bid).scalar() or 0
     failed_jobs = db.query(_func.count(ShipsagarRetryJob.id)).filter(
+        ShipsagarRetryJob.business_id == bid,
         ShipsagarRetryJob.status == "DEAD_LETTER").scalar() or 0
     pending_jobs = db.query(_func.count(ShipsagarRetryJob.id)).filter(
+        ShipsagarRetryJob.business_id == bid,
         ShipsagarRetryJob.status == "PENDING").scalar() or 0
     unregistered = db.query(_func.count(Shipment.id)).filter(
+        Shipment.business_id == bid,
         Shipment.shipsagar_tracking_id.is_(None),
         Shipment.carrier_code.in_(list(ss.ACCEPTED_COURIER_CODES))).scalar() or 0
-    rejected_pushes = db.query(_func.count(_func.distinct(AuditLog.entity_id))).filter(
-        AuditLog.business_id == u.get("business_id"),
+    rejected = {row[0] for row in db.query(AuditLog.entity_id).filter(
+        AuditLog.business_id == bid,
         AuditLog.entity_type == "shipment",
-        AuditLog.action == "SHIPSAGAR_PUSH_REJECTED").scalar() or 0
+        AuditLog.action == "SHIPSAGAR_PUSH_REJECTED",
+        AuditLog.entity_id.isnot(None)).distinct()}
+    if rejected:
+        resolved = {row[0] for row in db.query(AuditLog.entity_id).filter(
+            AuditLog.business_id == bid,
+            AuditLog.entity_type == "shipment",
+            AuditLog.action == "SHIPSAGAR_PUSH_ACCEPTED",
+            AuditLog.entity_id.in_(rejected)).distinct()}
+        resolved |= {row[0] for row in db.query(ShipsagarRetryJob.shipment_id).filter(
+            ShipsagarRetryJob.business_id == bid,
+            ShipsagarRetryJob.status == "DONE",
+            ShipsagarRetryJob.shipment_id.in_(rejected)).distinct()}
+        rejected_pushes = len(rejected - resolved)
+    else:
+        rejected_pushes = 0
     healthy = (failed_jobs == 0 and pending_jobs == 0 and rejected_pushes == 0)
     return {"success": True, "data": {
         "provider": "SHIPSAGAR", "configured": ss.is_configured(),

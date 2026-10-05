@@ -82,9 +82,9 @@ function stubPage(
   });
 }
 
-function renderPage() {
+function renderPage(entry = "/shipments") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <ShipmentsPage />
     </MemoryRouter>,
   );
@@ -217,6 +217,34 @@ test("the push dialog opens from the page", async () => {
   );
 });
 
+test("the push dialog defaults to the order named in the URL", async () => {
+  // Spec section 6.1: the dialog defaults to the order the user navigated from.
+  // The page never passed defaultOrderId at all, so the prop existed only in
+  // tests.
+  const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+    if (String(url).includes("/api/v1/orders")) {
+      return { ok: true, json: async () => ({ success: true, data: {
+        items: [
+          { id: "oA", order_no: "MAN-A", customer_name: "Alpha",
+            receiver_city: "Delhi", receiver_pincode: "110001", shipment_id: null },
+          { id: "oB", order_no: "MAN-B", customer_name: "Bravo",
+            receiver_city: "Pune", receiver_pincode: "411001", shipment_id: null },
+        ],
+        total: 2, page: 1 } }) };
+    }
+    return stubPage()(String(url));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage("/shipments?order_id=oB");
+  await waitFor(() => expect(screen.getByText("Push Shipment")).toBeTruthy());
+  fireEvent.click(screen.getByText("Push Shipment", { selector: "button" }));
+  const order = await screen.findByLabelText("Order") as HTMLSelectElement;
+  await waitFor(() => expect(order.value).toBe("oB"));
+  // The default really is the linked order, not merely the first option.
+  // index 0 is the "Choose an order…" placeholder.
+  expect((order.options[2]?.text ?? "")).toContain("MAN-B");
+});
+
 test("a list error surfaces a retry affordance", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: false, status: 500,
@@ -274,20 +302,33 @@ test("a REFRESH_COOLDOWN 429 during auto refresh is absorbed silently", async ()
   }
 });
 
-test("a 502 on push leaves the dialog open with its values and does not refetch", async () => {
+test("a 502 on push keeps the dialog open and the saved shipment appears on the page", async () => {
+  // DELIBERATE UPDATE (final review, important 10). This test used to assert
+  // that a 502 issued NO list refetch. That pinned the defect: the push route
+  // commits the Parcel and the Shipment before returning 502, so onPushed never
+  // fired, the page never refetched, the dialog said a retry was queued, and
+  // re-pushing that order then returned SHIPMENT_EXISTS - the user was stuck
+  // until a manual reload. The page now recovers on a 502.
+  const pushed = row(9, { awb_number: "EG080960149IN", order_no: "MAN-9" });
+  let committed = false;
   const fetchMock = vi.fn().mockImplementation(async (url: string) => {
     const u = String(url);
     if (u.includes("/api/v1/shipments/push")) {
+      committed = true;
       return { ok: false, status: 502, json: async () => ({
         success: false,
         error: { code: "SHIPSAGAR_UNAVAILABLE", message: "ShipSagar is unavailable" },
       }) };
     }
     if (u.includes("/api/v1/orders")) {
-      return { ok: true, json: async () => ({ success: true, data: [
-        { id: "o1", order_no: "MAN-1", customer_name: "Dileep Kumar",
-          receiver_city: "Delhi", receiver_pincode: "110001" },
-      ] }) };
+      return { ok: true, json: async () => ({ success: true, data: {
+        items: [{ id: "o1", order_no: "MAN-1", customer_name: "Dileep Kumar",
+          receiver_city: "Delhi", receiver_pincode: "110001", shipment_id: null }],
+        total: 1, page: 1 } }) };
+    }
+    if (u.includes("/api/v1/shipments?")) {
+      const items = committed ? [row(0), row(1), row(2), pushed] : [row(0), row(1), row(2)];
+      return { ok: true, json: async () => ({ success: true, data: listPayload(items) }) };
     }
     return stubPage()(String(url));
   });
@@ -314,12 +355,42 @@ test("a 502 on push leaves the dialog open with its values and does not refetch"
   );
   await waitFor(() => expect(screen.getByText(/A retry is queued/)).toBeTruthy());
 
+  // The dialog stays open with its typed values, and the page recovered.
   expect(screen.getByRole("dialog", { name: "Push Shipment" })).toBeTruthy();
   expect((screen.getByLabelText("Tracking No") as HTMLInputElement).value).toBe(
     "EG080960149IN",
   );
-  expect((screen.getByLabelText("Order") as HTMLSelectElement).value).toBe("o1");
-  expect(listCalls(fetchMock)).toHaveLength(0);
+  expect(listCalls(fetchMock).length).toBeGreaterThanOrEqual(1);
+  await waitFor(() => expect(screen.getByText("EG080960149IN")).toBeTruthy());
+  expect(screen.getByText("Total : 4 Shipments")).toBeTruthy();
+});
+
+test("unresolved ShipSagar push refusals are surfaced next to the health line", async () => {
+  const withRefusals = vi.fn().mockImplementation(async (url: string) => {
+    if (String(url).includes("/shipsagar/health")) {
+      return { ok: true, json: async () => ({ success: true, data: {
+        ...HEALTH, rejected_pushes: 2 } }) };
+    }
+    return stubPage()(String(url));
+  });
+  vi.stubGlobal("fetch", withRefusals);
+  renderPage();
+  await waitFor(() =>
+    expect(screen.getByText("2 unresolved ShipSagar push refusals")).toBeTruthy(),
+  );
+  // The pre-existing health sentence is untouched.
+  expect(
+    screen.getByText("ShipSagar health: 2 failed webhooks · 3 pending retries"),
+  ).toBeTruthy();
+});
+
+test("a healthy integration shows no refusal line", async () => {
+  vi.stubGlobal("fetch", stubPage());
+  renderPage();
+  await waitFor(() =>
+    expect(screen.getByText("ShipSagar health: 2 failed webhooks · 3 pending retries")).toBeTruthy(),
+  );
+  expect(screen.queryByTestId("shipsagar-rejected")).toBeNull();
 });
 
 test("the drain summary derives the checked total when the backend omits it", async () => {

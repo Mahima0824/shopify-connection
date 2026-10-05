@@ -10,14 +10,64 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-const ORDERS = [
-  { id: "o1", order_no: "MAN-1", customer_name: "Dileep Kumar",
-    receiver_city: "Nashik", receiver_pincode: "422001", shipment_id: null },
-  { id: "o2", order_no: "MAN-2", customer_name: "Rahul Sharma",
-    receiver_city: "Pune", receiver_pincode: "411001", shipment_id: "s9" },
-  { id: "o3", order_no: "MAN-3", customer_name: "Sunita Rao",
-    receiver_city: "Mumbai", receiver_pincode: "400001", shipment_id: null },
+// Shaped exactly as backend/app/api/orders.py::get_orders answers:
+// {success:true, data:{items:[...], total, page}}. Every field below comes from
+// the real serializer, so a stub that invents a shape the backend cannot produce
+// (which is what these rows used to do) fails here.
+const ORDER_ROWS = [
+  {
+    id: "o1",
+    business_id: "b1",
+    internal_order_number: "MAN-1",
+    shopify_order_name: "#1001",
+    receiver_name: "Dileep Kumar",
+    receiver_email: "d@example.com",
+    receiver_mobile: "9963026645",
+    receiver_city: "Nashik",
+    receiver_pincode: "422001",
+    order_no: "MAN-1",
+    customer_name: "Dileep Kumar",
+    shipment_id: null,
+  },
+  {
+    id: "o2",
+    business_id: "b1",
+    internal_order_number: "MAN-2",
+    shopify_order_name: "#1002",
+    receiver_name: "Rahul Sharma",
+    receiver_email: "r@example.com",
+    receiver_mobile: "9963026646",
+    receiver_city: "Pune",
+    receiver_pincode: "411001",
+    order_no: "MAN-2",
+    customer_name: "Rahul Sharma",
+    shipment_id: "s9",
+  },
+  {
+    id: "o3",
+    business_id: "b1",
+    internal_order_number: "MAN-3",
+    shopify_order_name: "#1003",
+    receiver_name: "Sunita Rao",
+    receiver_email: "s@example.com",
+    receiver_mobile: "9963026647",
+    receiver_city: "Mumbai",
+    receiver_pincode: "400001",
+    order_no: "MAN-3",
+    customer_name: "Sunita Rao",
+    shipment_id: null,
+  },
 ];
+
+function ordersResponse() {
+  return {
+    ok: true,
+    json: async () => ({
+      success: true,
+      data: { items: ORDER_ROWS, total: ORDER_ROWS.length, page: 1 },
+    }),
+  };
+}
 
 function stubFetch() {
   return vi.fn().mockImplementation(async (url: string, init?: any) => {
@@ -33,7 +83,7 @@ function stubFetch() {
           shipsagar_tracking_id: `SS-${body.tracking_no}` } }),
       };
     }
-    return { ok: true, json: async () => ({ success: true, data: ORDERS }) };
+    return ordersResponse();
   });
 }
 
@@ -46,7 +96,7 @@ function pushError(status: number, code: string, message: string) {
         json: async () => ({ success: false, error: { code, message } }),
       };
     }
-    return { ok: true, json: async () => ({ success: true, data: ORDERS }) };
+    return ordersResponse();
   });
 }
 
@@ -153,7 +203,7 @@ test("a provider rejection is surfaced as a banner, not a field error", async ()
           id: "s1", pushed: false, message: "please try again later" } }),
       };
     }
-    return { ok: true, json: async () => ({ success: true, data: ORDERS }) };
+    return { ok: true, json: async () => ({ success: true, data: { items: ORDER_ROWS, total: 3, page: 1 } }) };
   });
   vi.stubGlobal("fetch", fetchMock);
   const onPushed = vi.fn();
@@ -199,14 +249,25 @@ test("a validation code from the backend lands on the field it belongs to", asyn
   expect(onPushed).not.toHaveBeenCalled();
 });
 
-test("a 502 says the shipment was saved and will retry, and does not call onPushed", async () => {
+test("a 502 says the shipment was saved and will retry, and recovers the page", async () => {
+  // A 502 commits the Parcel and the Shipment before it returns, so onPushed
+  // does not fire and the page would never refetch: the parcel exists on the
+  // server and is invisible until a manual reload, and re-pushing the order
+  // returns SHIPMENT_EXISTS.
   vi.stubGlobal(
     "fetch",
     pushError(502, "SHIPSAGAR_TIMEOUT", "ShipSagar request timed out."),
   );
   const onPushed = vi.fn();
+  const onRecovered = vi.fn();
   render(
-    <PushShipmentDialog open onClose={() => {}} onPushed={onPushed} defaultOrderId="o1" />,
+    <PushShipmentDialog
+      open
+      onClose={() => {}}
+      onPushed={onPushed}
+      onRecovered={onRecovered}
+      defaultOrderId="o1"
+    />,
   );
   await waitFor(() => expect(screen.getByLabelText("Tracking No")).toBeTruthy());
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
@@ -221,6 +282,7 @@ test("a 502 says the shipment was saved and will retry, and does not call onPush
   expect(notice).not.toContain("could not be reached");
   expect(screen.queryAllByRole("alert")).toHaveLength(0);
   expect(onPushed).not.toHaveBeenCalled();
+  await waitFor(() => expect(onRecovered).toHaveBeenCalled());
 });
 
 test("an unrecognised code still shows the server message in a banner", async () => {

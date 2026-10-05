@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   listOrdersForPush,
   pushShipment,
@@ -13,6 +13,13 @@ export type PushShipmentDialogProps = {
   defaultOrderId?: string | null;
   onClose: () => void;
   onPushed: (result: PushShipmentResult) => void;
+  /**
+   * Fired when the push committed the shipment server-side but could not be
+   * confirmed: a 502. onPushed deliberately does not fire for that case, so
+   * without this the shipment exists and is invisible until a manual reload,
+   * and re-pushing the same order now returns SHIPMENT_EXISTS.
+   */
+  onRecovered?: () => void;
 };
 
 const FIELD_BY_CODE: Record<string, string> = {
@@ -36,6 +43,7 @@ export default function PushShipmentDialog({
   defaultOrderId,
   onClose,
   onPushed,
+  onRecovered,
 }: PushShipmentDialogProps) {
   const [orders, setOrders] = useState<PushOrderOption[]>([]);
   const [orderId, setOrderId] = useState(defaultOrderId ?? "");
@@ -48,6 +56,18 @@ export default function PushShipmentDialog({
   const [retrying, setRetrying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const loadOrders = useCallback(() => {
+    return listOrdersForPush()
+      .then((rows) => {
+        // shipment_id is the backend's "already pushed" marker; the picker is
+        // only offering orders that can still take a tracking number.
+        const pushable = rows.filter((r) => !r.shipment_id);
+        setOrders(pushable);
+        setOrderId((cur) => cur || pushable[0]?.id || "");
+      })
+      .catch(() => setOrders([]));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     setOrderId(defaultOrderId ?? "");
@@ -59,14 +79,8 @@ export default function PushShipmentDialog({
     setNotice(null);
     setRetrying(false);
     setSubmitting(false);
-    listOrdersForPush()
-      .then((rows) => {
-        const pushable = rows.filter((r) => !r.shipment_id);
-        setOrders(pushable);
-        setOrderId((cur) => cur || pushable[0]?.id || "");
-      })
-      .catch(() => setOrders([]));
-  }, [open, defaultOrderId]);
+    void loadOrders();
+  }, [open, defaultOrderId, loadOrders]);
 
   if (!open) return null;
 
@@ -104,6 +118,9 @@ export default function PushShipmentDialog({
       } else if (apiErr?.status === 502) {
         setRetrying(true);
         setNotice(message);
+        // The shipment was committed before the 502, so the page must show it.
+        onRecovered?.();
+        void loadOrders();
       } else {
         setSubmitError(message);
       }

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   canDrainRetries,
   drainShipsagarRetries,
@@ -63,6 +63,12 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default function ShipmentsPage() {
+  const [searchParams] = useSearchParams();
+  // Spec section 6.1: the dialog defaults to the order the user navigated from.
+  const deepLinkedOrderId = useMemo(
+    () => searchParams.get("order_id")?.trim() || null,
+    [searchParams],
+  );
   const [data, setData] = useState<ShipmentListResult | null>(null);
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState("");
@@ -76,6 +82,7 @@ export default function ShipmentsPage() {
   const [health, setHealth] = useState<{
     failed_webhooks: number;
     pending_jobs: number;
+    rejected_pushes?: number;
     configured: boolean;
   } | null>(null);
   const [draining, setDraining] = useState(false);
@@ -450,6 +457,15 @@ export default function ShipmentsPage() {
             ? `ShipSagar health: ${health.failed_webhooks} failed webhooks · ${health.pending_jobs} pending retries`
             : "ShipSagar health: unavailable"}
         </p>
+        {health && (health.rejected_pushes ?? 0) > 0 && (
+          <span
+            role="status"
+            data-testid="shipsagar-rejected"
+            className="text-sm font-medium text-amber-700"
+          >
+            {health.rejected_pushes} unresolved ShipSagar push refusals
+          </span>
+        )}
         <div className="flex items-center gap-3">
           {drainMsg && (
             <span role="status" className="text-sm text-slate-600">{drainMsg}</span>
@@ -465,9 +481,17 @@ export default function ShipmentsPage() {
 
       <PushShipmentDialog
         open={showPush}
+        defaultOrderId={deepLinkedOrderId}
         onClose={() => setShowPush(false)}
         onPushed={() => {
           setShowPush(false);
+          refreshHealth();
+          fetchList(true);
+        }}
+        onRecovered={() => {
+          // A 502 still commits the Parcel and the Shipment, so the parcel is on
+          // the server and must appear on the page without a manual reload.
+          refreshHealth();
           fetchList(true);
         }}
       />

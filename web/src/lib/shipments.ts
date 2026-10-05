@@ -13,7 +13,19 @@ export const SHIPMENT_STATUSES = [
   "EXCEPTION",
 ] as const;
 
-export const TERMINAL_STATUSES = ["DELIVERED", "RETURNED", "RTO", "LOST"] as const;
+// Mirrors backend/app/services/shipment_service.py TERMINAL, which is the set
+// the sync and poll-sweep endpoints stop on. The page and the backend used to
+// disagree: RTO was terminal here but not there, so a ShipSagar RTO parcel
+// stopped refreshing and could never progress to RETURNED, and RTO_DELIVERED /
+// CLOSED were terminal there but not here. RTO is forward-progressible
+// (RTO -> RETURNED), so it must not be terminal on either side.
+export const TERMINAL_STATUSES = [
+  "DELIVERED",
+  "RETURNED",
+  "LOST",
+  "RTO_DELIVERED",
+  "CLOSED",
+] as const;
 
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 

@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -36,6 +37,15 @@ def _order_fields(o) -> dict:
     }
 
 
+# Exactly YYYY-MM-DD, or that with a time component after a space or a T.
+# datetime.fromisoformat also accepts the ISO 8601 basic and week-date spellings
+# ("20261003", "2026-W40-1") on 3.11+, and neither is 10 characters, so the
+# whole-day branch below was skipped and a bare date_to silently meant midnight -
+# dropping the row it was supposed to include. Those spellings are rejected.
+_DATE_ONLY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_DATE_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}[T ].+")
+
+
 def _day_bounds(value: str, is_end: bool):
     """UTC bound for a date filter, covering the whole day at the end.
 
@@ -44,15 +54,20 @@ def _day_bounds(value: str, is_end: bool):
     semantics as the orders list filter, so the two date pickers cannot
     disagree about what a single day includes.
 
-    Raises ValueError on unparseable input. The params are declared as plain
-    str, so FastAPI never validates them and list_shipments maps the error to a
-    400 rather than letting it become a 500.
+    Raises ValueError on any spelling that is not an extended ISO date or
+    timestamp. The params are declared as plain str, so FastAPI never validates
+    them and list_shipments maps the error to a 400 rather than letting it
+    become a 500.
     """
     from datetime import datetime, timezone
-    dt = datetime.fromisoformat(value)
+    text = (value or "").strip()
+    date_only = bool(_DATE_ONLY_RE.fullmatch(text))
+    if not (date_only or _DATE_TIME_RE.fullmatch(text)):
+        raise ValueError(f"unrecognised date spelling: {value!r}")
+    dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    if len(value) == 10:
+    if date_only:
         if is_end:
             dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         else:

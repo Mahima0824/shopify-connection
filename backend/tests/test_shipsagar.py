@@ -2,7 +2,7 @@
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -167,12 +167,13 @@ def test_generic_matrix_does_not_shadow_courier_specific_rows():
 # --- generic fallback: no false positives from substring collisions ---
 
 def test_generic_matrix_rto_does_not_match_carton():
-    """The word-boundary rule belongs to the generic matrix only.
+    """The word-boundary rule now applies to every matrix.
 
     IP is an alias of INDIA_POST, so it reads the India Post rows and agrees
-    with them exactly. The India Post matrix still matches "rto" as a substring
-    (the pre-existing, documented looseness of the courier-specific rows), so
-    "carton" is only protected on the generic path.
+    with them exactly. The India Post rows used to match "rto" as a plain
+    substring, which was deliberate while nothing could reach those rows - until
+    COURIER_ALIASES routed IP, the push dialog's default courier, into them. The
+    loose matching is gone there too, so "carton" is protected on both paths.
     """
     from app.services.shipsagar_service import normalize_shipsagar_status as norm
     assert norm("FEDEX", "Packed in carton") != "RTO"
@@ -422,6 +423,14 @@ def test_retry_backoff_and_dead_letter():
 
 
 def test_health_endpoint_counts(monkeypatch):
+    """DELIBERATE UPDATE (final review, finding 4).
+
+    This test originally seeded a single tenant, so it passed whether or not the
+    four pre-existing counters were scoped, and in effect pinned the unscoped
+    behaviour. A second tenant with its own unregistered shipment and its own
+    DEAD_LETTER job is seeded here, and the assertions now require the caller's
+    numbers to exclude both.
+    """
     from app.models.business import Business
     from app.models.user import User
     from app.services.auth_service import hash_password
@@ -434,14 +443,24 @@ def test_health_endpoint_counts(monkeypatch):
     u = User(business_id=b.id, name="A", email="a@t.in",
              password_hash=hash_password("x"), role="ADMIN")
     db.add(u)
+    b2 = Business(name="B2", email="b2@t.in")
+    db.add(b2)
     db.commit()
-    bid = b.id
+    db.refresh(b2)
+    bid, bid2 = b.id, b2.id
     db.close()
     from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
     db = mk()
     db.add(Shipment(business_id=bid, order_id="o1", parcel_id="p1",
                     carrier_code="DTDC", awb_number="D777",
                     tracking_status="READY_TO_SHIP"))
+    db.add(Shipment(business_id=bid2, order_id="o9", parcel_id="p9",
+                    carrier_code="DTDC", awb_number="D778",
+                    tracking_status="READY_TO_SHIP"))
+    db.add(ShipsagarRetryJob(business_id=bid2, operation="register_tracking",
+                             shipment_id=None, attempts=4, max_attempts=4,
+                             status="DEAD_LETTER"))
     db.commit()
     db.close()
     c = _client(monkeypatch, mk)
@@ -453,8 +472,10 @@ def test_health_endpoint_counts(monkeypatch):
         assert r.status_code == 200, r.text
         data = r.json()["data"]
         assert data["provider"] == "SHIPSAGAR"
+        # Only this tenant's own unregistered shipment, not the other tenant's.
         assert data["unregistered_shipments"] == 1
-        assert "failed_webhooks" in data and "failed_jobs" in data
+        assert data["failed_jobs"] == 0
+        assert data["failed_webhooks"] in (0, 1) and "failed_jobs" in data
     finally:
         app.dependency_overrides.clear()
 
@@ -841,7 +862,7 @@ TRACK_OK = {
 
 
 def test_track_shipment_flattens_history_and_parses_dates(monkeypatch):
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     monkeypatch.setattr(ss, "_post", lambda path, payload: TRACK_OK)
@@ -883,7 +904,7 @@ def test_track_shipment_raises_on_error_status(monkeypatch):
 
 
 def test_track_shipment_unparseable_date_falls_back_to_now(monkeypatch):
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     monkeypatch.setattr(ss, "_post", lambda path, pl: {
@@ -1080,7 +1101,7 @@ def test_poll_sweep_includes_shipsagar_shipments(monkeypatch):
 
 def test_parse_event_time_accepts_english_month_spellings():
     """Month names are looked up in a fixed map, not the C locale's calendar."""
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
     from app.services.shipsagar_service import _parse_event_time
     may = datetime(2023, 5, 16, 12, 27, tzinfo=timezone.utc)
     assert _parse_event_time("16-May-2023", "12:27") == may
@@ -1103,7 +1124,7 @@ def test_ingest_event_coerces_datetime_payloads_once():
     not be dropped or stringified into something lossy.
     """
     import json
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
     from app.models.shipment import Shipment, ShipmentEvent
     from app.services.shipment_service import ingest_event
     mk = _mk()
@@ -2786,3 +2807,472 @@ def test_retry_queue_does_not_fork_a_second_job_on_every_drain(monkeypatch):
         assert pending_per_drain[-1] == 0, pending_per_drain
     finally:
         db.close()
+
+
+# IMPORTANT 4 + 5: the health endpoint must be tenant scoped, and rejected_pushes
+# must be able to clear.
+
+def _seed_health_tenant(mk, email, courier="DTDC", registered=False, awb="H-1"):
+    """A Business plus one shipment. The User is left to _authed_for_list."""
+    from app.models.business import Business
+    db = mk()
+    b = db.query(Business).filter_by(email=email).first()
+    if b is None:
+        b = Business(name="H", email=email)
+        db.add(b)
+        db.commit()
+        db.refresh(b)
+    db.add(ShipmentFixture(business_id=b.id, order_id=f"o-{awb}", parcel_id=f"p-{awb}",
+                           courier=courier, awb=awb, registered=registered))
+    db.commit()
+    bid = b.id
+    db.close()
+    return bid
+
+
+def ShipmentFixture(*, business_id, order_id, parcel_id, courier, awb, registered):
+    from app.models.shipment import Shipment
+    return Shipment(business_id=business_id, order_id=order_id, parcel_id=parcel_id,
+                    carrier_code=courier, awb_number=awb, tracking_status="READY_TO_SHIP",
+                    shipsagar_tracking_id=(f"SS-{awb}" if registered else None))
+
+
+def test_health_counters_never_include_another_tenants_rows(monkeypatch):
+    """All five counters must answer for the caller's tenant only.
+
+    failed_webhooks / failed_jobs / pending_jobs / unregistered_shipments were
+    global while rejected_pushes was scoped, so a tenant read every other
+    tenant's failure and backlog counts out of one response.
+    """
+    from app.models.shipment_event import (ShipsagarRetryJob,
+                                           ShipsagarWebhookFailure)
+    mk = _mk()
+    _seed_health_tenant(mk, "mine@h.in", awb="MINE-1")
+    _seed_health_tenant(mk, "theirs@h.in", awb="THEM-1")
+    db = mk()
+    from app.models.business import Business
+    other = db.query(Business).filter_by(email="theirs@h.in").first().id
+    db.add_all([
+        ShipsagarWebhookFailure(business_id=other, reason="INVALID_SIGNATURE",
+                                detail="x"),
+        ShipsagarWebhookFailure(business_id=None, reason="UNKNOWN_BUSINESS", detail="x"),
+        ShipsagarRetryJob(business_id=other, operation="register_tracking",
+                          shipment_id=None, attempts=4, max_attempts=4,
+                          status="DEAD_LETTER"),
+        ShipsagarRetryJob(business_id=other, operation="register_tracking",
+                          shipment_id=None, attempts=1, max_attempts=4,
+                          status="PENDING"),
+    ])
+    db.commit()
+    db.close()
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="mine@h.in")
+    try:
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["failed_webhooks"] == 0, data
+        assert data["failed_jobs"] == 0, data
+        assert data["pending_jobs"] == 0, data
+        assert data["unregistered_shipments"] == 1, data
+        assert data["rejected_pushes"] == 0, data
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_health_endpoint_counts_own_pending_and_dead_letter_jobs(monkeypatch):
+    """The scoping fix must not zero out a tenant's own backlog."""
+    from app.models.business import Business
+    from app.models.shipment_event import ShipsagarRetryJob, ShipsagarWebhookFailure
+    mk = _mk()
+    _seed_health_tenant(mk, "own@h.in", awb="OWN-1")
+    db = mk()
+    bid = db.query(Business).filter_by(email="own@h.in").first().id
+    db.add_all([
+        ShipsagarWebhookFailure(business_id=bid, reason="INVALID_SIGNATURE", detail="x"),
+        ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                          shipment_id=None, attempts=4, max_attempts=4,
+                          status="DEAD_LETTER"),
+        ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                          shipment_id=None, attempts=1, max_attempts=4,
+                          status="PENDING"),
+    ])
+    db.commit()
+    db.close()
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="own@h.in")
+    try:
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["failed_webhooks"] == 1, data
+        assert data["failed_jobs"] == 1, data
+        assert data["pending_jobs"] == 1, data
+        assert data["status"] == "warning"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_rejected_pushes_clears_once_the_parcel_is_registered(monkeypatch):
+    """A refusal is not permanent state, and the counter has to be able to say so.
+
+    It counted append-only audit rows with no resolution state, so one refusal
+    pinned the tenant to status "warning" forever. It now counts refusals with no
+    later accepted push and no DONE retry job for that shipment.
+    """
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        db = mk()
+        db.add_all([
+            Shipment(business_id=bid, order_id="o1", parcel_id="p1",
+                     carrier_code="DTDC", awb_number="D-CLEAR", tracking_status="READY_TO_SHIP"),
+            Shipment(business_id=bid, order_id="o2", parcel_id="p2",
+                     carrier_code="DTDC", awb_number="D-STUCK", tracking_status="READY_TO_SHIP"),
+        ])
+        db.commit()
+        clear_id = db.query(Shipment).filter_by(awb_number="D-CLEAR").first().id
+        db.close()
+
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "Invalid AWB for the courier"})
+        assert c.post(f"/api/v1/shipments/{clear_id}/register-tracking",
+                      headers=h).status_code == 200
+        assert c.get("/api/v1/shipsagar/health", headers=h).json()["data"]["rejected_pushes"] == 1
+
+        # A later successful push resolves it; the other parcel stays refused.
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": True, "message": "Data has been recorded successfully"})
+        assert c.post(f"/api/v1/shipments/{clear_id}/register-tracking",
+                      headers=h).status_code == 200
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["rejected_pushes"] == 0, data
+        assert data["status"] == "healthy", data
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_rejected_pushes_clears_on_a_done_retry_job(monkeypatch):
+    """The other half of resolution: a retry that eventually landed."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        db = mk()
+        s = Shipment(business_id=bid, order_id="o1", parcel_id="p1", carrier_code="DTDC",
+                     awb_number="D-JOB", tracking_status="READY_TO_SHIP")
+        db.add(s)
+        db.commit()
+        sid = s.id
+        db.close()
+        _configured(monkeypatch)
+        monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+            "ok": False, "message": "please try again later"})
+        assert c.post(f"/api/v1/shipments/{sid}/register-tracking", headers=h).status_code == 200
+        assert c.get("/api/v1/shipsagar/health", headers=h).json()["data"]["rejected_pushes"] == 1
+        db = mk()
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=sid, attempts=2, max_attempts=4,
+                                 status="DONE",
+                                 next_retry_at=datetime.now(timezone.utc) - _td(seconds=5)))
+        db.commit()
+        db.close()
+        data = c.get("/api/v1/shipsagar/health", headers=h).json()["data"]
+        assert data["rejected_pushes"] == 0, data
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_terminal_status_vocabulary_is_shared_by_the_backend_and_the_page():
+    """shipment_service.TERMINAL is the set both sync and poll-sweep stop on,
+    and web/src/lib/shipments.ts TERMINAL_STATUSES is the set the page stops
+    refreshing on. RTO was terminal to the page but not to the backend, so a
+    ShipSagar RTO parcel stopped refreshing and could never reach RETURNED;
+    RTO_DELIVERED and CLOSED were the reverse. The frontend test
+    shipments-client.test.tsx pins the identical list."""
+    from app.services.shipment_service import TERMINAL
+    from app.services.shipsagar_service import STATUSES as SHIPSAGAR_STATUSES
+    # Nothing in the ShipSagar vocabulary may be terminal to one side only.
+    assert set(SHIPSAGAR_STATUSES) & set(TERMINAL) == {"DELIVERED", "RETURNED", "LOST"}
+    # RTO is forward-progressible (RTO -> RETURNED), so it must not be terminal.
+    assert "RTO" not in TERMINAL
+    assert {"RTO_DELIVERED", "CLOSED"} <= set(TERMINAL)
+
+
+# IMPORTANT 8: the push dialog reads order_no / customer_name / shipment_id, so
+# the orders serializer has to actually return them.
+
+def test_orders_list_returns_the_fields_the_push_dialog_reads(monkeypatch):
+    """PushOrderOption.order_no / customer_name / shipment_id came back undefined.
+
+    The dialog's option label fell back to a raw order uuid, its Customer
+    preview was always an em dash, and its "already has a shipment cannot be
+    selected" filter was a permanent no-op - while the dialog's own tests stubbed
+    exactly these fields and therefore passed against a shape the backend cannot
+    produce.
+    """
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk, email="ord2@t.in")
+    try:
+        # Same tenant this time, so both orders are visible in one page.
+        db = mk()
+        pushed = Order(business_id=bid, internal_order_number="MAN-PUSHED",
+                       shopify_order_id="MANUAL-PUSHED",
+                       order_date=datetime.now(timezone.utc), receiver_name="Shipped Away")
+        db.add(pushed)
+        db.commit()
+        db.refresh(pushed)
+        p = Parcel(business_id=bid, order_id=pushed.id, parcel_code="PO",
+                   barcode_value="PO-IN")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        s = Shipment(business_id=bid, order_id=pushed.id, parcel_id=p.id,
+                     carrier_code="IP", awb_number="PO-IN", tracking_status="IN_TRANSIT")
+        db.add(s)
+        db.commit()
+        sid = s.id
+        db.refresh(pushed)
+        db.close()
+        pushed_id = pushed.id
+
+        r = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r.status_code == 200, r.text
+        items = {row["id"]: row for row in r.json()["data"]["items"]}
+        assert oid in items and pushed_id in items
+        assert items[oid]["order_no"] == "MAN-P1"
+        assert items[oid]["customer_name"] == "Dileep Kumar"
+        assert items[oid]["shipment_id"] is None
+        assert items[pushed_id]["order_no"] == "MAN-PUSHED"
+        assert items[pushed_id]["shipment_id"] == sid
+    finally:
+        app.dependency_overrides.clear()
+
+
+# IMPORTANT 6: db_normalize must key on the courier a tenant configures.
+
+def test_courier_status_mapping_still_applies_after_a_parcel_is_pushed(monkeypatch):
+    """A tenant keys CourierStatusMapping on the courier code they configure.
+
+    After Task 4 a pushed shipment resolves provider SHIPSAGAR while its
+    carrier_code stays the courier code, so keying the lookup on the provider
+    silently dropped every such mapping the moment a parcel was pushed.
+    """
+    from app.models.courier_meta import CourierStatusMapping
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    sid, _ = _seed_pushed_shipment(mk, awb="IP-MAP-1", courier="IP")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        bid = s.business_id
+        # Provider-keyed (what the app used to ask for) and courier-keyed.
+        db.add_all([
+            CourierStatusMapping(business_id=bid, provider="SHIPSAGAR",
+                                  provider_status_code="Item Delivered",
+                                  normalized_status="DELIVERED"),
+            CourierStatusMapping(business_id=bid, provider="IP",
+                                  provider_status_code="Item Booked",
+                                  normalized_status="READY_TO_SHIP"),
+        ])
+        db.commit()
+        ingest_event(db, s, "Item Booked", "Item Booked", "Mumbai NSH", None,
+                     "map-1", "API")
+        db.commit()
+        assert s.tracking_status == "READY_TO_SHIP"
+        # And a global (business_id NULL) mapping keyed on the courier applies.
+        db.add(CourierStatusMapping(business_id=None, provider="IP",
+                                    provider_status_code="Out for delivery",
+                                    normalized_status="OUT_FOR_DELIVERY"))
+        db.commit()
+        ingest_event(db, s, "Out for delivery", "Out for delivery", "Pune HO", None,
+                     "map-2", "API")
+        db.commit()
+        assert s.tracking_status == "OUT_FOR_DELIVERY"
+    finally:
+        db.close()
+
+
+# IMPORTANT 7: one dedupe scope across the webhook and the polling path.
+
+def test_one_provider_event_id_is_recorded_once_for_each_shipment(monkeypatch):
+    """The webhook probe was keyed globally on (provider, provider_event_id).
+
+    Each shipment now records a checkpoint once for itself, and the two paths
+    share one probe, so a repeat delivery to either shipment dedupes. The one
+    thing still blocked is storing the SAME provider event id against a second
+    shipment: shipment_events carries UniqueConstraint(provider,
+    provider_event_id) from plan #20/#53, which is global, so that case is a
+    mis-delivery and is reported as deduped rather than crashing on the
+    constraint (see find_provider_event).
+    """
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    s1, bid = _seed_shipment(mk, carrier="INDIA_POST", awb="SHARED-1")
+    db = mk()
+    db.add(Shipment(business_id=bid, order_id="o2", parcel_id="p2",
+                    carrier_code="INDIA_POST", awb_number="SHARED-2",
+                    tracking_status="READY_TO_SHIP"))
+    db.commit()
+    s2 = db.query(Shipment).filter_by(awb_number="SHARED-2").first().id
+    db.close()
+    c = _client(monkeypatch, mk)
+    try:
+        for sid, awb in ((s1, "SHARED-1"), (s2, "SHARED-2")):
+            r = _post(c, {"event_id": f"evt-{sid}",
+                          "tracking_number": awb,
+                          "courier": "INDIA_POST", "status": "Item Delivered",
+                          "event_time": datetime.now(timezone.utc).isoformat()},
+                      bid=bid)
+            assert r.status_code == 200, r.text
+            assert r.json()["data"]["created"] is True, (sid, r.text)
+        db = mk()
+        try:
+            assert db.query(ShipmentEvent).filter_by(provider="SHIPSAGAR").count() == 2
+            for sid in (s1, s2):
+                assert db.query(Shipment).filter_by(
+                    id=sid).first().tracking_status == "DELIVERED"
+                # A repeat delivery to the same shipment still dedupes.
+                dup = ss.ingest_shipsagar_event(
+                    db, db.query(Shipment).filter_by(id=sid).first(),
+                    event_id=f"evt-{sid}", courier="INDIA_POST",
+                    raw_status="Item Delivered")
+                assert dup[1] is False
+            db.commit()
+            assert db.query(ShipmentEvent).filter_by(provider="SHIPSAGAR").count() == 2
+            # The global constraint is a mis-delivery, not a crash.
+            other = ss.ingest_shipsagar_event(
+                db, db.query(Shipment).filter_by(id=s2).first(),
+                event_id="evt-" + s1, courier="INDIA_POST", raw_status="Item Delivered")
+            assert other[1] is False
+            db.commit()
+            assert db.query(ShipmentEvent).filter_by(provider="SHIPSAGAR").count() == 2
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_checkpoint_delivered_by_both_paths_is_recorded_once(monkeypatch):
+    """Webhook and polling are both live; the same checkpoint is one row."""
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services import shipsagar_service as ss
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    sid, bid = _seed_pushed_shipment(mk, awb="IP-BOTH-1", courier="IP")
+    c = _client(monkeypatch, mk)
+    try:
+        r = _post(c, {"event_id": "both-evt-1", "tracking_number": "IP-BOTH-1",
+                      "courier": "IP", "status": "Item Delivered",
+                      "event_time": datetime.now(timezone.utc).isoformat()}, bid=bid)
+        assert r.status_code == 200, r.text
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            ingest_event(db, s, "Item Delivered", "Item Delivered", "Delhi SP",
+                         datetime.now(timezone.utc), "both-evt-1", "API")
+            db.commit()
+            assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 1
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# MINOR: _day_bounds accepted compact and ISO-week spellings.
+
+def test_list_rejects_compact_and_iso_week_date_spellings(monkeypatch):
+    """datetime.fromisoformat accepts "20261003" and "2026-W40-1" on 3.11+.
+
+    Neither is len 10, so the whole-day branch was skipped and a bare
+    date_to silently meant midnight - the row at 23:59 that day was dropped.
+    """
+    mk = _mk()
+    _seed_list_rows(mk, n=1, email="compact@t.in", prefix="CMP")
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="compact@t.in")
+    try:
+        for qs in ("date_from=20261003", "date_to=20261003", "date_from=2026-W40-1",
+                   "date_to=20261003T00:00:00+00:00"):
+            r = c.get(f"/api/v1/shipments?{qs}", headers=h)
+            assert r.status_code == 400, (qs, r.status_code, r.text)
+            assert r.json()["error"]["code"] == "INVALID_DATE", (qs, r.text)
+    finally:
+        app.dependency_overrides.clear()
+
+
+# IMPORTANT 9: a courier the push dialog offers must be registrable by the retry.
+
+def test_a_pushed_couriers_queued_retry_can_actually_register_it(monkeypatch):
+    """FEDEX is in COURIER_OPTIONS, so a FEDEX push must complete.
+
+    The push accepted any courier but the retry it queued dispatched through
+    register_tracking, which only accepted SUPPORTED_COURIERS, so a FEDEX
+    shipment burned all four attempts on UNSUPPORTED_COURIER and was never
+    registered.
+    """
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+
+    def _boom(**kw):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "push_shipment", _boom)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "FZ-PUSH-1", "courier_code": "FEDEX"})
+        assert r.status_code == 502, r.text
+        db = mk()
+        try:
+            job = db.query(ShipsagarRetryJob).filter_by(status="PENDING").first()
+            assert job is not None
+            job.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+            db.commit()
+
+            seen = {}
+
+            def _recovered(*, tracking_no, courier_code, order):
+                seen["courier"] = courier_code
+                return {"ok": True, "message": "Data has been recorded successfully"}
+
+            monkeypatch.setattr(ss, "push_shipment", _recovered)
+            out = ss.drain_retry_queue(db)
+            db.commit()
+            assert seen == {"courier": "FEDEX"}, seen
+            assert out["succeeded"] == 1 and out["dead_lettered"] == 0
+            s = db.query(Shipment).filter_by(business_id=bid).first()
+            assert s.shipsagar_tracking_id == "SS-FZ-PUSH-1"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# MINOR: the courier-specific matrix matched "rto" as a substring, and the Task 7
+# alias routed the DEFAULT courier (IP) into those rows.
+
+def test_ip_no_longer_normalizes_a_carton_as_rto():
+    """Task 3 froze plain substring matching in _MATRIX on purpose, because no
+    row was reachable yet. The Task 7 alias then routed IP - the push dialog's
+    default courier - into exactly those rows, so the looseness became live:
+    norm("IP", "Packed in carton") == "RTO". The generic matrix already solved
+    this with word-boundary matching; the courier rows now use it too."""
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("IP", "Packed in carton") != "RTO"
+    assert norm("IP", "Carton sealed") != "RTO"
+    assert norm("IP", "Carton sealed and shipped") == norm("INDIA_POST", "Carton sealed and shipped")
+    # Real RTO phrasings on the aliased courier still resolve.
+    for raw in ("RTO", "RTO initiated", "RTO in transit", "Return to sender"):
+        assert norm("IP", raw) == "RTO", raw
+    assert norm("INDIA_POST", "Return to sender") == "RTO"
+    assert norm("DTDC", "RTO Delivered back to shipper") == "RETURNED"
+    assert norm("IP", "Door Locked") == "FAILED_ATTEMPT"
+    assert norm("IP", "Redirected to another address") == "RTO"
