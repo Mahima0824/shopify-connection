@@ -2272,13 +2272,26 @@ def test_courier_alias_tolerates_case_and_surrounding_whitespace():
     assert ss.normalize_shipsagar_status("FEDEX", "Door Locked") == "EXCEPTION"
 
 
-def test_register_tracking_accepts_the_ip_alias_and_still_rejects_the_unknown(monkeypatch):
+def test_register_tracking_accepts_the_ip_alias_and_any_real_courier_code(monkeypatch):
+    """DELIBERATE UPDATE (final review, finding 9).
+
+    This test used to assert that a FEDEX shipment raised UNSUPPORTED_COURIER.
+    The whole-branch review found that inconsistent with the push dialog, which
+    offers FEDEX and a free-text courier in COURIER_OPTIONS: the push accepted
+    such a shipment, queued a retry, and that retry could only ever dead-letter
+    with UNSUPPORTED_COURIER, so the parcel was never registered. ShipSagar
+    aggregates many carriers while SUPPORTED_COURIERS only lists the ones this
+    app has hand-written status matrices for, so registration now accepts any
+    real courier and refuses only the internal MANUAL placeholder. Status
+    normalization still routes an unlisted courier to the generic matrix.
+    """
     from app.models.shipment import Shipment
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     mk = _mk()
     ip_id = _seed_shipment_with_order(mk, "IP-REG-1", courier="IP", order_no="MAN-IP1")
     fedex_id = _seed_shipment_with_order(mk, "FZ-REG-1", courier="FEDEX", order_no="MAN-FZ1")
+    manual_id = _seed_shipment_with_order(mk, "MN-REG-1", courier="MANUAL", order_no="MAN-MN1")
     db = mk()
     try:
         s = db.query(Shipment).filter_by(id=ip_id).first()
@@ -2298,7 +2311,22 @@ def test_register_tracking_accepts_the_ip_alias_and_still_rejects_the_unknown(mo
         assert s.carrier_code == "IP"
         assert s.shipsagar_tracking_id == "SS-IP-REG-1"
 
-        bad = db.query(Shipment).filter_by(id=fedex_id).first()
+        # The courier the push dialog offers and the retry used to refuse.
+        fz = db.query(Shipment).filter_by(id=fedex_id).first()
+        seen.clear()
+        out = ss.register_tracking(db, fz)
+        assert out["pushed"] is True
+        assert seen == {"awb": "FZ-REG-1", "courier": "FEDEX"}
+        assert fz.shipsagar_tracking_id == "SS-FZ-REG-1"
+        # And it normalizes through the generic matrix, not to EXCEPTION-blind.
+        from app.services.shipment_service import ingest_event
+        ingest_event(db, fz, "Delivered to consignee", "Delivered to consignee",
+                     "Mumbai", None, "fz-evt-1", "API")
+        db.commit()
+        assert fz.tracking_status == "DELIVERED"
+
+        # MANUAL is the absence of a courier, not a courier.
+        bad = db.query(Shipment).filter_by(id=manual_id).first()
         try:
             ss.register_tracking(db, bad)
             raise AssertionError("expected ShipsagarError")
@@ -2557,3 +2585,204 @@ def test_every_courier_alias_target_is_a_supported_courier():
         assert target in ss.ACCEPTED_COURIER_CODES
     assert (set(ss.ACCEPTED_COURIER_CODES)
             == set(ss.SUPPORTED_COURIERS) | set(ss.COURIER_ALIASES))
+
+
+# ---------------------------------------------------------------------------
+# Final whole-branch review, round 1
+# ---------------------------------------------------------------------------
+
+def _hist(action_date, action_time, description, location=""):
+    return {"ActionDate": action_date, "ActionTime": action_time,
+            "ActionLocation": location, "ActionDescription": description}
+
+
+def _track_response(history, awb="AWB-PRE", courier="IP"):
+    return {"status": "SUCCESS", "message": "Data has been recorded successfully",
+            "TrackingDetails": [{"ClientCode": "C1001", "TrackingNo": awb,
+                                 "CourierCode": courier,
+                                 "TrackingHistory": history}]}
+
+
+# CRITICAL 1: the synthesized event id must not encode position in the array.
+
+def test_track_shipment_event_ids_do_not_move_when_a_scan_is_prepended(monkeypatch):
+    """ShipSagar documents no ordering for TrackingHistory, so the id may not
+    be derived from position at all: one prepended scan shifts every index and
+    used to re-derive every historical id."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    booked = _hist("16-May-2023", "12:27", "Item Booked", "Mumbai NSH")
+    ofd = _hist("16-May-2023", "15:51", "Out for Delivery", "Pune HO")
+    delivered = _hist("17-May-2023", "09:05", "Item Delivered", "Delhi SP")
+    newest = _hist("17-May-2023", "19:43", "Item Delivered", "Delhi SP")
+
+    monkeypatch.setattr(ss, "_post", lambda p, pl: _track_response([booked, ofd, delivered]))
+    before = ss.track_shipment("AWB-PRE")
+    monkeypatch.setattr(ss, "_post",
+lambda p, pl: _track_response([newest, booked, ofd, delivered]))
+    after = ss.track_shipment("AWB-PRE")
+
+    def _key(ev):
+        return (ev["status_raw"], ev["location"])
+
+    assert [_key(e) for e in after["events"]] == (
+        [_key(after["events"][0])] + [_key(e) for e in before["events"]])
+    ids_before = {e["event_id"] for e in before["events"]}
+    ids_after = {e["event_id"] for e in after["events"]}
+    assert ids_before <= ids_after, "a prepended scan must not re-key the history"
+    assert len(ids_after) == 4, "the new scan must add exactly one id"
+
+
+def test_track_shipment_event_ids_separate_two_scans_at_the_same_instant(monkeypatch):
+    """Two genuinely distinct scans sharing a timestamp still get two ids."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda p, pl: _track_response([
+        _hist("16-May-2023", "12:27", "Out for Delivery", "Mumbai NSH"),
+        _hist("16-May-2023", "12:27", "Out for Delivery", "Thane HO"),
+    ]))
+    ids = [e["event_id"] for e in ss.track_shipment("AWB-PRE")["events"]]
+    assert len(set(ids)) == 2, ids
+
+
+def test_polling_a_prepended_scan_does_not_re_ingest_the_history(monkeypatch):
+    """End-to-end shape of the defect: 4 checkpoints must yield 4 rows, not 7."""
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services import shipsagar_service as ss
+    from app.services.shipment_service import ingest_event
+    _configured(monkeypatch)
+    mk = _mk()
+    sid, _ = _seed_pushed_shipment(mk, awb="AWB-PRE")
+    booked = _hist("16-May-2023", "12:27", "Item Booked", "Mumbai NSH")
+    ofd = _hist("16-May-2023", "15:51", "Out for Delivery", "Pune HO")
+    delivered = _hist("17-May-2023", "09:05", "Item Delivered", "Delhi SP")
+    newest = _hist("17-May-2023", "19:43", "Item Delivered", "Delhi SP")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        for history in ([booked, ofd, delivered], [newest, booked, ofd, delivered]):
+            monkeypatch.setattr(ss, "_post", lambda p, pl, h=history: _track_response(h))
+            for ev in ss.track_shipment("AWB-PRE")["events"]:
+                ingest_event(db, s, ev["status_raw"], ev["message"], ev["location"],
+                             ev["event_time"], ev["event_id"], "API", ev)
+            db.commit()
+        assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 4
+        assert s.tracking_status == "DELIVERED"
+    finally:
+        db.close()
+
+
+# CRITICAL 2: the polling path needs the same terminal/rank guard as the webhook.
+
+def test_polled_checkpoint_never_regresses_a_delivered_shipment(monkeypatch):
+    """Spec section 8: an out-of-order history entry cannot regress a delivery."""
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    sid, _ = _seed_pushed_shipment(mk, awb="IP-REG-1", status="DELIVERED")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        stamp = datetime.now(timezone.utc)
+        ingest_event(db, s, "Item Booked", "Item Booked", "Mumbai NSH", stamp,
+                     "poll-late-booked", "API")
+        db.commit()
+        assert s.tracking_status == "DELIVERED"
+        # The regressing checkpoint is still recorded as history.
+        assert db.query(Shipment).filter_by(id=sid).first().tracking_status == "DELIVERED"
+        from app.models.shipment import ShipmentEvent
+        assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 1
+    finally:
+        db.close()
+
+
+def test_polled_newest_first_history_still_ends_on_the_final_state(monkeypatch):
+    """A newest-first history must land on DELIVERED, not on its first entry."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    history = [
+        ("Item Delivered", "DELIVERED"),
+        ("Out for Delivery", "OUT_FOR_DELIVERY"),
+        ("Item Booked", "READY_TO_SHIP"),
+    ]
+    for order in ("newest-first", "oldest-first"):
+        sid, _ = _seed_pushed_shipment(mk, awb=f"IP-ORDER-{order}", status="READY_TO_SHIP")
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            rows = list(history)
+            if order == "oldest-first":
+                rows.reverse()
+            base = datetime.now(timezone.utc) - _td(hours=6)
+            for i, (raw, _) in enumerate(rows):
+                ingest_event(db, s, raw, raw, "Delhi SP", base + _td(hours=i),
+                             f"poll-{order}-{i}", "API")
+            db.commit()
+            assert s.tracking_status == "DELIVERED", (order, s.tracking_status)
+            assert s.delivered_at is not None, order
+        finally:
+            db.close()
+
+
+def test_polled_rank_regress_with_a_newer_timestamp_is_not_rolled_up(monkeypatch):
+    """The rank guard holds even when the regressing scan claims to be newer."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ingest_event
+    mk = _mk()
+    sid, _ = _seed_pushed_shipment(mk, awb="IP-RANK-1", status="DELIVERED")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=sid).first()
+        ingest_event(db, s, "Out for Delivery", "Out for Delivery", "Delhi SP",
+                     datetime.now(timezone.utc) + _td(hours=1), "poll-rank-1", "API")
+        db.commit()
+        assert s.tracking_status == "DELIVERED"
+    finally:
+        db.close()
+
+
+# CRITICAL 3: one failed operation must leave exactly one job advancing.
+
+def test_retry_queue_does_not_fork_a_second_job_on_every_drain(monkeypatch):
+    """register_tracking scheduled a NEW job and re-raised; the drain then
+    advanced the ORIGINAL job, so every failure left two PENDING rows."""
+    from datetime import timedelta as _td
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    mk = _mk()
+    sid = _seed_shipment_with_order(mk, "D-FORK", order_no="MAN-FORK")
+    db = mk()
+    s = db.query(Shipment).filter_by(id=sid).first()
+    bid = s.business_id
+    db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                             shipment_id=sid, attempts=1, max_attempts=4,
+                             status="PENDING",
+                             next_retry_at=datetime.now(timezone.utc) - _td(seconds=5)))
+    db.commit()
+
+    def _boom(**kw):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "push_shipment", _boom)
+    try:
+        pending_per_drain = []
+        for _ in range(6):
+            for job in db.query(ShipsagarRetryJob).filter_by(status="PENDING").all():
+                job.next_retry_at = datetime.now(timezone.utc) - _td(seconds=5)
+            db.commit()
+            ss.drain_retry_queue(db)
+            db.commit()
+            pending_per_drain.append(
+                db.query(ShipsagarRetryJob).filter_by(status="PENDING").count())
+        assert max(pending_per_drain) == 1, pending_per_drain
+        assert db.query(ShipsagarRetryJob).count() == 1, "the queue forked"
+        dead = db.query(ShipsagarRetryJob).filter_by(status="DEAD_LETTER").all()
+        assert len(dead) == 1 and dead[0].attempts == 4
+        assert pending_per_drain[-1] == 0, pending_per_drain
+    finally:
+        db.close()

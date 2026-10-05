@@ -51,6 +51,12 @@ def resolve_courier(code: str | None) -> str:
 # resolve_courier cannot help with inside SQL.
 ACCEPTED_COURIER_CODES = tuple(dict.fromkeys((*SUPPORTED_COURIERS, *COURIER_ALIASES)))
 
+# Codes that name the absence of a courier rather than a courier. register_tracking
+# refuses these and accepts every other code, because ShipSagar aggregates many
+# carriers while SUPPORTED_COURIERS only lists the ones this app has hand-written
+# status matrices for.
+NON_COURIER_CODES = ("", "MANUAL")
+
 # Plan #15 shipment statuses.
 STATUSES = (
     "NOT_CREATED",
@@ -459,13 +465,35 @@ def _parse_event_time(date_str, time_str):
     return _now()
 
 
+def _event_id(awb: str, at_date: str, at_time: str, description: str,
+              location: str) -> str:
+    """Stable identity for one ShipSagar scan, derived only from the scan.
+
+    ShipSagar sends no event identifier, so one has to be synthesized, and
+    TrackingHistory's ordering is undocumented: a single new scan can arrive
+    prepended, appended, or in the middle. An id built from the scan's index
+    therefore changes identity for every historical scan the moment one is
+    added, and the whole history re-ingests as new rows on the next poll.
+
+    So the id is built from what belongs to the scan itself: the AWB, its own
+    ActionDate and ActionTime, and a digest of its own ActionDescription and
+    ActionLocation. Two scans that genuinely differ have to differ on at least
+    one of those, and two that agree on all of them are indistinguishable to a
+    reader anyway. Nothing positional can enter it.
+    """
+    digest = hashlib.sha1(
+        f"{description}\x00{location}".encode("utf-8")).hexdigest()[:12]
+    return f"ss-{awb}-{at_date}-{at_time}-{digest}"
+
+
 def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
     """Fetch tracking history for one AWB. Returns {"awb", "events"}.
 
     ShipSagar returns a TrackingDetails array for a single TrackingNo and no
     event identifier, so event_id is synthesized from the AWB, the event's own
-    timestamp and its index. That makes repeated polls dedupe cleanly through
-    shipment_service.ingest_event.
+    timestamp and a digest of its own text (see _event_id). That makes repeated
+    polls dedupe cleanly through shipment_service.ingest_event, and it keeps
+    doing so when a new scan is prepended to the array.
     """
     awb = (tracking_no or "").strip()
     data = _post(TRACK_SHIPMENT_PATH, {"TrackingNo": awb})
@@ -478,36 +506,53 @@ def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
     detail = details[0] or {}
     resolved_courier = str(detail.get("CourierCode") or courier_code or "").strip()
     events = []
-    for idx, raw_ev in enumerate(detail.get("TrackingHistory") or []):
+    for raw_ev in detail.get("TrackingHistory") or []:
         raw_ev = raw_ev or {}
         at_date = str(raw_ev.get("ActionDate") or "").strip()
         at_time = str(raw_ev.get("ActionTime") or "").strip()
         description = str(raw_ev.get("ActionDescription") or "").strip()
+        location = str(raw_ev.get("ActionLocation") or "").strip()
         events.append({
-            "event_id": f"ss-{awb}-{at_date}-{at_time}-{idx}",
+            "event_id": _event_id(awb, at_date, at_time, description, location),
             "status_raw": description,
             "normalized_status": normalize_shipsagar_status(resolved_courier, description),
             "message": description,
-            "location": str(raw_ev.get("ActionLocation") or "").strip(),
+            "location": location,
             "event_time": _parse_event_time(at_date, at_time),
         })
     return {"awb": awb, "events": events}
 
 
-def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
+def register_tracking(db, shipment, *, courier: str | None = None,
+                      queue_retry: bool = True) -> dict:
     """Register a shipment with ShipSagar via PushShipment.
 
-    Validates the courier, maps the shipment's Order onto the PushShipment
-    body, and persists the resulting shipsagar_tracking_id. A provider-level
-    ERROR is reported in the return value rather than raised, because the
-    Shipment already exists; a transport failure queues a bounded retry job
-    and raises so the retry queue picks it up.
+    Any real courier code is accepted, not only the two in SUPPORTED_COURIERS:
+    that tuple is the set this app has hand-written status matrices for, not
+    the set ShipSagar aggregates, and the push dialog lets the user pick a
+    ShipSagar courier code. Refusing a code the user was allowed to pick meant
+    the queued retry could only ever dead-letter with UNSUPPORTED_COURIER, so
+    the parcel was never registered at all. Only the internal "MANUAL"
+    placeholder (and a blank code) is refused — it is not a courier. Status
+    normalization already routes an unlisted courier to the generic matrix.
+
+    Maps the shipment's Order onto the PushShipment body and persists the
+    resulting shipsagar_tracking_id. A provider-level ERROR is reported in the
+    return value rather than raised, because the Shipment already exists; a
+    transport failure queues a bounded retry job and raises so the retry queue
+    picks it up.
 
     A refusal queues no retry, because repeating it will not turn it into
     success. The tracking id is persisted all the same, which drops the parcel
     out of the health endpoint's unregistered_shipments count, so a refusal is
     recorded as a SHIPSAGAR_PUSH_REJECTED audit row; without that durable trace
     a permanently-rejected parcel would read as healthy forever.
+
+    ``queue_retry`` is the side that gives up the duplicate. register_tracking
+    creates its retry job when it fails, and drain_retry_queue advances the job
+    it is already draining — so when the drain calls this function a failure
+    must queue nothing, or one failed operation would leave two PENDING jobs,
+    each of which forks two more on its own failure.
 
     Courier validation goes through resolve_courier, so an "IP" shipment is
     accepted, while the wire payload keeps the stored spelling because "IP" is
@@ -516,9 +561,9 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     Returns {"shipsagar_tracking_id", "stubbed", "pushed", "message"}.
     """
     code = ((courier or getattr(shipment, "carrier_code", "")) or "").strip().upper()
-    if resolve_courier(code) not in SUPPORTED_COURIERS:
+    if code in NON_COURIER_CODES or resolve_courier(code) in NON_COURIER_CODES:
         raise ShipsagarError("UNSUPPORTED_COURIER",
-                             f"ShipSagar supports {', '.join(SUPPORTED_COURIERS)}; got '{code}'.")
+                             f"'{code}' is not a ShipSagar courier code.")
     awb = (getattr(shipment, "awb_number", "") or "").strip()
     if not awb:
         raise ShipsagarError("MISSING_TRACKING_NUMBER", "courier_tracking_number is required.")
@@ -540,25 +585,32 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     try:
         result = push_shipment(tracking_no=awb, courier_code=code, order=order)
     except ShipsagarError as exc:
-        schedule_retry(db, business_id=getattr(shipment, "business_id", None),
-                       operation="register_tracking", shipment_id=getattr(shipment, "id", None),
-                       error=f"{exc.code}: {exc.message}")
-        db.flush()
+        if queue_retry:
+            schedule_retry(db, business_id=getattr(shipment, "business_id", None),
+                           operation="register_tracking",
+                           shipment_id=getattr(shipment, "id", None),
+                           error=f"{exc.code}: {exc.message}")
+            db.flush()
         raise
     tracking_id = f"SS-{awb}"
     shipment.shipsagar_tracking_id = tracking_id
     db.flush()
     pushed = bool(result.get("ok"))
     message = result.get("message", "")
-    if not pushed:
-        try:
-            from app.services.audit_service import log_audit
+    try:
+        from app.services.audit_service import log_audit
+        if pushed:
+            log_audit(db, shipment.business_id, None, "shipment", shipment.id,
+                      "SHIPSAGAR_PUSH_ACCEPTED", {},
+                      {"message": message, "courier": code, "tracking_number": awb,
+                       "shipsagar_tracking_id": tracking_id})
+        else:
             log_audit(db, shipment.business_id, None, "shipment", shipment.id,
                       "SHIPSAGAR_PUSH_REJECTED", {},
                       {"message": message, "courier": code, "tracking_number": awb,
                        "shipsagar_tracking_id": tracking_id})
-        except Exception:
-            pass
+    except Exception:
+        pass
     return {"shipsagar_tracking_id": tracking_id, "stubbed": False,
             "pushed": pushed, "message": message}
 
@@ -628,6 +680,34 @@ def _as_aware(value):
         return None
 
 
+def stale_reason(shipment, normalized: str, event_time) -> str | None:
+    """Public alias for _stale_reason, so the polling path can share it."""
+    return _stale_reason(shipment, normalized, event_time)
+
+
+def find_shipment_event(db, shipment_id: str, event_id: str):
+    """The dedupe probe both ShipSagar ingest paths share.
+
+    Scoped to one shipment, and tolerant of which identity column the arriving
+    path fills: the webhook writes provider_event_id, the polling path writes
+    carrier_event_id, and the same checkpoint can arrive by either route. A
+    probe that only knew about its own column let the two paths record the same
+    checkpoint twice on one shipment, and a probe keyed on (provider,
+    provider_event_id) alone could see no row at all for a shipment the other
+    path had already written.
+
+    Returns the existing ShipmentEvent, or None.
+    """
+    if not event_id:
+        return None
+    from sqlalchemy import or_
+    from app.models.shipment import ShipmentEvent
+    return db.query(ShipmentEvent).filter(
+        ShipmentEvent.shipment_id == shipment_id,
+        or_(ShipmentEvent.carrier_event_id == event_id,
+            ShipmentEvent.provider_event_id == event_id)).first()
+
+
 def _stale_reason(shipment, normalized: str, event_time) -> str | None:
     """Return why a checkpoint is stale, or None when it may roll up."""
     current = (getattr(shipment, "tracking_status", "") or "").upper()
@@ -650,15 +730,15 @@ def ingest_shipsagar_event(db, shipment, *, event_id: str, courier: str,
                            event_time=None, raw_payload: dict | None = None):
     """Idempotent checkpoint ingest. Returns (event, created, stale).
 
-    Duplicates (same provider + provider_event_id) never double-record:
-    the existing row is returned with created=False.
+    Duplicates (same checkpoint, same shipment) never double-record, whichever
+    path delivered them: the probe is find_shipment_event, shared with
+    shipment_service.ingest_event.
     Stale checkpoints (terminal regress / rank regress / older event_time)
     are persisted as history but NEVER roll up onto the shipment; they
     return stale=True so callers can report the skip.
     """
     from app.models.shipment import ShipmentEvent
-    dup = db.query(ShipmentEvent).filter_by(
-        provider=PROVIDER, provider_event_id=event_id).first()
+    dup = find_shipment_event(db, shipment.id, event_id)
     if dup is not None:
         return dup, False, False
     parsed_time = _as_aware(event_time) if isinstance(event_time, str) else event_time
@@ -743,6 +823,11 @@ def drain_retry_queue(db, limit: int = 50) -> dict:
     therefore treated as a failed attempt — bounded, like every other failure —
     rather than silently retiring a shipment the aggregator never accepted.
     The unconfigured stub path counts as success: there was nothing to push to.
+
+    register_tracking is called with queue_retry=False: this loop already owns
+    a job for the shipment and advances it via record_retry_attempt, so letting
+    register_tracking schedule its own would leave a second PENDING job per
+    failure and the queue would double on every cycle.
     """
     from app.models.shipment_event import ShipsagarRetryJob
     from app.models.shipment import Shipment
@@ -765,7 +850,7 @@ def drain_retry_queue(db, limit: int = 50) -> dict:
                     job.last_error = "SHIPMENT_NOT_FOUND"
                     db.flush()
                 else:
-                    result = register_tracking(db, s)
+                    result = register_tracking(db, s, queue_retry=False)
                     if result.get("stubbed") or result.get("pushed"):
                         job.status = "DONE"
                         job.next_retry_at = None
