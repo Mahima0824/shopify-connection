@@ -77,6 +77,7 @@ Copy-Item .env.example .env
 | `SHOPIFY_API_VERSION` | No | Defaults to `2026-01` |
 | `SHOPIFY_CLIENT_SECRET` | For webhooks | Shopify HMAC secret |
 | `INDIA_POST_*` / `DTDC_*` | For live tracking | Courier API creds (see .env.example) |
+| `SHIPSAGAR_TOKEN` / `SHIPSAGAR_CLIENT_CODE` | For live ShipSagar | "api key" and "client code" from the ShipSagar client profile page |
 
 If Shopify creds are missing, the backend seeds from `backend/tests/fixtures/shopify_orders.json` so the orders API stays demonstrable.
 
@@ -135,7 +136,7 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 - **Financial ledger**: Immutable financial_transactions (11 types), double-entry transform, revenue/profit/COGS engine.
 - **Bank reconciliation**: L1-L4 matching (never amount-alone), mismatch board, idempotent import.
 - **Tally hardening**: 14-check validation gate, 7-sheet workbook (numeric cells), duplicate prevention, batch lifecycle.
-- **ShipSagar**: Provider adapter, idempotent webhook (tenant-scoped, stale-guard), retry queue + drain, health.
+- **ShipSagar**: `PushShipment` + `TrackShipment` clients, provider adapter, idempotent webhook (tenant-scoped, stale-guard), retry queue + drain, health.
 - **Accounting controls**: Month close (fail-closed, 5 gates), FY config (Apr-Mar default), closed-period guard, RBAC gate.
 - **Finance UI**: Ledger explorer, mismatch board, Tally validate/export, month close, GST/profit cards, ShipSagar bits.
 
@@ -145,3 +146,22 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 - Supabase backups: enable PITR and periodically test a restore.
 - Never commit `.env`; run `python -m alembic upgrade head` against real Postgres before deploy (SQLite cannot run the full chain).
 - GST and voucher treatment needs CA review before statutory filing; unknown-jurisdiction IGST is flagged IGST_UNVERIFIED.
+
+## ShipSagar
+
+ShipSagar aggregates courier tracking. Two endpoints are integrated: `PushShipment`
+(register a shipment) and `TrackShipment` (poll history). Credentials come from the
+ShipSagar client profile page and are sent in the request body:
+
+- `SHIPSAGAR_API_BASE_URL` - defaults to `https://app.shipsagar.com/api/Web`
+- `SHIPSAGAR_TOKEN` - the "api key" from the client profile page
+- `SHIPSAGAR_CLIENT_CODE` - the "client code" from the client profile page
+- `SHIPSAGAR_WEBHOOK_SECRET` - HMAC secret for the inbound webhook
+
+With no credentials set, pushes fall back to a deterministic
+`SS-STUB-<COURIER>-<AWB>` identifier and tracking stays offline, so local
+development works without a ShipSagar account.
+
+To track a parcel: open `/shipments`, click **Push Shipment**, pick the order and
+type the tracking number the India Post worker issued. The page then refreshes
+every 25 seconds and shows each parcel's status and current location.
