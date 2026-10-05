@@ -272,7 +272,7 @@ export default function PushShipmentDialog({
                   {order?.receiver_city ? ` · ${order.receiver_city}` : ""}
                 </dd>
                 <dt className="text-slate-500">Company Name</dt>
-                <dd className="text-slate-900">{order?.receiver_company || "—"}</dd>
+                <dd className="text-slate-900">—</dd>
                 <dt className="text-slate-500">Country</dt>
                 <dd className="text-slate-900">India</dd>
                 <dt className="text-slate-500">Shipment Type</dt>

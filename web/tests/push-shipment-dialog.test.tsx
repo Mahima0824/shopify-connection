@@ -12,8 +12,7 @@ beforeEach(() => {
 
 const ORDERS = [
   { id: "o1", order_no: "MAN-1", customer_name: "Dileep Kumar",
-    receiver_city: "Nashik", receiver_pincode: "422001",
-    receiver_company: "Nashik Traders Pvt Ltd", shipment_id: null },
+    receiver_city: "Nashik", receiver_pincode: "422001", shipment_id: null },
   { id: "o2", order_no: "MAN-2", customer_name: "Rahul Sharma",
     receiver_city: "Pune", receiver_pincode: "411001", shipment_id: "s9" },
   { id: "o3", order_no: "MAN-3", customer_name: "Sunita Rao",
@@ -89,7 +88,7 @@ test("the payload preview shows the values that will actually be sent", async ()
   await waitFor(() => expect(screen.getByLabelText("Order")).toBeTruthy());
   await waitFor(() => expect(previewValues()).toEqual([
     "Dileep Kumar · Nashik",
-    "Nashik Traders Pvt Ltd",
+    "—",
     "India",
     "Road",
   ]));
