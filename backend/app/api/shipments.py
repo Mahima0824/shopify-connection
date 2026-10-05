@@ -43,6 +43,10 @@ def _day_bounds(value: str, is_end: bool):
     23:59:59.999999 at its end; a full timestamp is taken as given. Same
     semantics as the orders list filter, so the two date pickers cannot
     disagree about what a single day includes.
+
+    Raises ValueError on unparseable input. The params are declared as plain
+    str, so FastAPI never validates them and list_shipments maps the error to a
+    400 rather than letting it become a 500.
     """
     from datetime import datetime, timezone
     dt = datetime.fromisoformat(value)
@@ -258,7 +262,11 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
 
     Facets are counted from a subquery of the filtered ids, not from the paged
     rows, so the carrier and status chips keep counting the whole result set
-    however the caller paginates.
+    however the caller paginates. That subquery is also the only thing scoping
+    the facet queries: they join shipments to a set of ids and carry no
+    business_id predicate of their own, so narrowing or dropping the filter on
+    qy would leak another tenant's counts into the chips while the paged items
+    stayed correct.
     """
     from sqlalchemy import func, or_
     from app.models.order import Order
@@ -273,10 +281,14 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
         qy = qy.filter(Shipment.carrier_code == carrier.strip().upper())
     if order_id:
         qy = qy.filter(Shipment.order_id == order_id.strip())
-    if date_from:
-        qy = qy.filter(Shipment.created_at >= _day_bounds(date_from, False))
-    if date_to:
-        qy = qy.filter(Shipment.created_at <= _day_bounds(date_to, True))
+    try:
+        if date_from:
+            qy = qy.filter(Shipment.created_at >= _day_bounds(date_from, False))
+        if date_to:
+            qy = qy.filter(Shipment.created_at <= _day_bounds(date_to, True))
+    except ValueError:
+        return _err(400, "INVALID_DATE",
+                    "date_from and date_to must be ISO dates (YYYY-MM-DD) or timestamps.")
     text = f"%{q.strip()}%" if q and q.strip() else None
     order_text = f"%{order_no.strip()}%" if order_no and order_no.strip() else None
     if text:

@@ -2363,8 +2363,197 @@ def test_health_counts_an_ip_shipment_as_unregistered(monkeypatch):
         tok = c.post("/api/v1/auth/login",
                      json={"email": "ip-h@t.in", "password": "x"}).json()["data"]["token"]
         r = c.get("/api/v1/shipsagar/health",
-                  headers={"Authorization": f"Bearer {tok}"})
+headers={"Authorization": f"Bearer {tok}"})
         assert r.status_code == 200, r.text
         assert r.json()["data"]["unregistered_shipments"] == 1
     finally:
         app.dependency_overrides.clear()
+
+
+# --- review round 1: pin the date bound, the 400 path and the facet scope ---
+
+def _utc(day, hour, minute, second=0, microsecond=0):
+    from datetime import datetime as _dt
+    return _dt(day.year, day.month, day.day, hour, minute, second,
+               microsecond, tzinfo=timezone.utc)
+
+
+def _seed_rows_at(mk, moments, *, courier="IP", email="lt@t.in", prefix="LT",
+                  statuses=None):
+    """Seed shipments whose created_at is an explicit instant, not "now".
+
+    SQLite drops the tz offset when it stores a DateTime, so the aware
+    instants below are persisted as their UTC wall clock and compared against
+    _day_bounds the same way. That keeps the date-bound assertions independent
+    of the time of day the suite happens to run at.
+    """
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    db = mk()
+    b = Business(name="LT", email=email)
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    cols = statuses or ["IN_TRANSIT"] * len(moments)
+    for i, moment in enumerate(moments):
+        o = Order(business_id=b.id, internal_order_number=f"{prefix}-{i}",
+                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=moment,
+                  receiver_name=f"Customer {i}", receiver_email=f"l{i}@e.com",
+                  receiver_mobile=f"99630000{i:02d}", receiver_company=f"Co {i}")
+        db.add(o)
+        db.commit()
+        db.refresh(o)
+        p = Parcel(business_id=b.id, order_id=o.id, parcel_code=f"{prefix}P{i}",
+                   barcode_value=f"{prefix}{i}IN")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        db.add(Shipment(business_id=b.id, order_id=o.id, parcel_id=p.id,
+                        carrier_code=courier, awb_number=f"{prefix}{i}IN",
+                        tracking_status=cols[i],
+                        shipsagar_tracking_id=f"SS-{prefix}{i}IN",
+                        created_at=moment))
+        db.commit()
+    bid = b.id
+    db.close()
+    return bid
+
+
+def test_date_bounds_include_the_named_days_final_microsecond(monkeypatch):
+    """The end bound covers the whole named day, to its last microsecond.
+
+    The earlier date test seeded at the current wall-clock time, which is
+    mid-day, so it produced identical counts under an inclusive and an
+    exclusive reading and could not tell them apart. These rows sit at 23:59:30
+    and at exactly 23:59:59.999999 on the named day: the first proves the rest
+    of the evening is not dropped, the second is the row that ``<=`` returns
+    and ``<`` does not, so flipping the bound to an exclusive one turns this
+    test red.
+    """
+    from datetime import timedelta
+    mk = _mk()
+    day = datetime.now(timezone.utc).date() - timedelta(days=1)
+    _seed_rows_at(mk, [_utc(day, 23, 59, 30), _utc(day, 23, 59, 59, 999999)],
+                  email="edge@t.in", prefix="ED")
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="edge@t.in")
+    try:
+        d = day.isoformat()
+        earlier = (day - timedelta(days=1)).isoformat()
+        r = c.get(f"/api/v1/shipments?date_to={d}", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["total"] == 2, "date_to must include the whole day"
+        r = c.get(f"/api/v1/shipments?date_from={d}&date_to={d}", headers=h)
+        assert r.json()["data"]["total"] == 2, "a single named day must be closed"
+        r = c.get(f"/api/v1/shipments?date_from={d}", headers=h)
+        assert r.json()["data"]["total"] == 2
+        r = c.get(f"/api/v1/shipments?date_to={earlier}", headers=h)
+        assert r.json()["data"]["total"] == 0
+        r = c.get(f"/api/v1/shipments?date_from={d}&date_to={(day + timedelta(days=1)).isoformat()}",
+                  headers=h)
+        assert r.json()["data"]["total"] == 2
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_rejects_a_malformed_date_with_a_clean_400(monkeypatch):
+    """A garbage date param must not surface as a 500.
+
+    date_from / date_to are plain str params, so FastAPI never validates them
+    and datetime.fromisoformat raised ValueError straight through the handler.
+    """
+    mk = _mk()
+    _seed_list_rows(mk, n=1, email="bad@t.in", prefix="BAD")
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="bad@t.in")
+    try:
+        for qs in ("date_from=garbage", "date_to=2026-13-45",
+                   "date_from=2026-02-30", "date_to=not-a-date-at-all"):
+            r = c.get(f"/api/v1/shipments?{qs}", headers=h)
+            assert r.status_code == 400, (qs, r.status_code, r.text)
+            body = r.json()
+            assert body["success"] is False, qs
+            assert body["error"]["code"] == "INVALID_DATE", (qs, body)
+            assert r.headers["X-Error-Code"] == "INVALID_DATE", qs
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_status_filter_narrows_items_and_facets(monkeypatch):
+    """status goes through the same explicit-column path as carrier.
+
+    Both were broken by filter_by binding to the joined Order; only carrier had
+    a test.
+    """
+    mk = _mk()
+    _seed_list_rows(mk, n=3, courier="IP", email="st@t.in", prefix="ST")
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="st@t.in")
+    try:
+        data = c.get("/api/v1/shipments?status=DELIVERED", headers=h).json()["data"]
+        assert data["total"] == 1
+        assert data["items"][0]["awb_number"] == "EG0IN"
+        assert {x["code"]: x["count"] for x in data["facets"]["statuses"]} == {"DELIVERED": 1}
+        assert {x["code"]: x["count"] for x in data["facets"]["carriers"]} == {"IP": 1}
+        lower = c.get("/api/v1/shipments?status=delivered", headers=h).json()["data"]
+        assert lower["total"] == 1
+        empty = c.get("/api/v1/shipments?status=RTO", headers=h).json()["data"]
+        assert empty["total"] == 0
+        assert empty["items"] == []
+        assert empty["facets"]["statuses"] == []
+        assert empty["facets"]["carriers"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_facet_counts_never_include_another_tenants_shipments(monkeypatch):
+    """The chips inherit their tenant scope from facet_q, and nothing else.
+
+    The facet queries carry no business_id predicate of their own; they are
+    safe only because the subquery they join is already scoped. If that scoping
+    is ever dropped the chips would leak another tenant's counts while the
+    paged items stayed correct, so this pins the chips directly across every
+    filter shape - including the join-heavy q path and the narrow page.
+    """
+    from datetime import timedelta
+    mk = _mk()
+    day = datetime.now(timezone.utc).date() - timedelta(days=3)
+    mine = [_utc(day, 9, 0), _utc(day, 9, 5)]
+    theirs = [_utc(day, 10, 0), _utc(day, 11, 0), _utc(day, 12, 0), _utc(day, 13, 0)]
+    _seed_rows_at(mk, mine, email="iso@t.in", prefix="M2",
+                  statuses=["DELIVERED", "IN_TRANSIT"])
+    _seed_rows_at(mk, theirs, email="notmine@t.in", prefix="N2", courier="DTDC",
+                  statuses=["RTO", "RTO", "RTO", "RTO"])
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="iso@t.in")
+    try:
+        d = day.isoformat()
+        for qs in ("", f"?page_size=1", "?q=IN", "?carrier=IP",
+                   "?status=DELIVERED", f"?date_from={d}", "?order_no=M2-0"):
+            data = c.get(f"/api/v1/shipments{qs}", headers=h).json()["data"]
+            carriers = {x["code"]: x["count"] for x in data["facets"]["carriers"]}
+            statuses = {x["code"]: x["count"] for x in data["facets"]["statuses"]}
+            assert sum(carriers.values()) == data["total"], (qs, data)
+            assert sum(statuses.values()) == data["total"], (qs, data)
+            assert "DTDC" not in carriers, (qs, carriers)
+            assert "RTO" not in statuses, (qs, statuses)
+            assert set(carriers) <= {"IP"}, (qs, carriers)
+            assert set(statuses) <= {"DELIVERED", "IN_TRANSIT"}, (qs, statuses)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_every_courier_alias_target_is_a_supported_courier():
+    """A dangling alias would make the health counter over-report.
+
+    ACCEPTED_COURIER_CODES drives unregistered_shipments; an alias pointing at
+    a courier register_tracking refuses would count shipments that can never be
+    registered, and the endpoint would read healthy forever.
+    """
+    from app.services import shipsagar_service as ss
+    assert ss.COURIER_ALIASES, "the alias map should not be empty"
+    for alias, target in ss.COURIER_ALIASES.items():
+        assert target in ss.SUPPORTED_COURIERS, (alias, target)
+        assert ss.resolve_courier(alias) == target
+        assert alias in ss.ACCEPTED_COURIER_CODES
+        assert target in ss.ACCEPTED_COURIER_CODES
+    assert (set(ss.ACCEPTED_COURIER_CODES)
+            == set(ss.SUPPORTED_COURIERS) | set(ss.COURIER_ALIASES))
