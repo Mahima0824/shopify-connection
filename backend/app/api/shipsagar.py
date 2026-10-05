@@ -78,7 +78,7 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
         return _fail("MISSING_EVENT_ID", "Webhook is missing the event ID.", 400, payload=body)
     if not tracking and not ss_tracking_id:
         return _fail("MISSING_TRACKING", "Webhook is missing the tracking number.", 400, payload=body)
-    if courier and courier not in ss.SUPPORTED_COURIERS:
+    if courier and ss.resolve_courier(courier) not in ss.SUPPORTED_COURIERS:
         return _fail("UNSUPPORTED_COURIER", f"Unsupported courier '{courier}'.", 400, payload=body)
 
     shipment = ss.find_shipment(db, business_id=business.id,
@@ -90,8 +90,8 @@ async def receive_shipsagar(request: Request, db: Session = Depends(get_db)):
                      "No shipment matches the webhook tracking reference.", 404,
                      payload=body, business_id=business.id)
     if not courier:
-        courier = (shipment.carrier_code or "").upper()
-    if courier not in ss.SUPPORTED_COURIERS:
+        courier = (shipment.carrier_code or "").strip().upper()
+    if ss.resolve_courier(courier) not in ss.SUPPORTED_COURIERS:
         return _fail("UNSUPPORTED_COURIER",
                      f"Shipment courier '{courier}' is not ShipSagar-supported.", 400, payload=body)
 
@@ -155,7 +155,7 @@ def shipsagar_health(db: Session = Depends(get_db), u: dict = Depends(get_curren
         ShipsagarRetryJob.status == "PENDING").scalar() or 0
     unregistered = db.query(_func.count(Shipment.id)).filter(
         Shipment.shipsagar_tracking_id.is_(None),
-        Shipment.carrier_code.in_(list(ss.SUPPORTED_COURIERS))).scalar() or 0
+        Shipment.carrier_code.in_(list(ss.ACCEPTED_COURIER_CODES))).scalar() or 0
     rejected_pushes = db.query(_func.count(_func.distinct(AuditLog.entity_id))).filter(
         AuditLog.business_id == u.get("business_id"),
         AuditLog.entity_type == "shipment",

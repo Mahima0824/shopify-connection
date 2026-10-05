@@ -167,10 +167,18 @@ def test_generic_matrix_does_not_shadow_courier_specific_rows():
 # --- generic fallback: no false positives from substring collisions ---
 
 def test_generic_matrix_rto_does_not_match_carton():
+    """The word-boundary rule belongs to the generic matrix only.
+
+    IP is an alias of INDIA_POST, so it reads the India Post rows and agrees
+    with them exactly. The India Post matrix still matches "rto" as a substring
+    (the pre-existing, documented looseness of the courier-specific rows), so
+    "carton" is only protected on the generic path.
+    """
     from app.services.shipsagar_service import normalize_shipsagar_status as norm
     assert norm("FEDEX", "Packed in carton") != "RTO"
     assert norm("FEDEX", "Carton sealed") != "RTO"
-    assert norm("IP", "Carton sealed and shipped") == "IN_TRANSIT"
+    assert norm("FEDEX", "Carton sealed and shipped") == "IN_TRANSIT"
+    assert norm("IP", "Carton sealed and shipped") == norm("INDIA_POST", "Carton sealed and shipped")
 
 
 def test_generic_matrix_rto_still_matches_real_rto_phrasings():
@@ -1972,5 +1980,391 @@ def test_push_queued_retry_is_actually_drained(monkeypatch):
             assert s.shipsagar_tracking_id == "SS-EG-DRAIN"
         finally:
             db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --- list: date filters, facets, joined display columns ---
+
+def _seed_list_rows(mk, n=3, courier="IP", days=(0, 1, 2), email="l@t.in",
+                    prefix="MAN"):
+    from datetime import timedelta
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    db = mk()
+    b = Business(name="L", email=email)
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    now = datetime.now(timezone.utc)
+    for i in range(n):
+        o = Order(business_id=b.id, internal_order_number=f"{prefix}-{i}",
+                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=now,
+                  receiver_name=f"Customer {i}", receiver_email=f"c{i}@e.com",
+                  receiver_mobile=f"99630266{i:02d}", receiver_company=f"Co {i}")
+        db.add(o)
+        db.commit()
+        db.refresh(o)
+        p = Parcel(business_id=b.id, order_id=o.id, parcel_code=f"P{i}",
+                   barcode_value=f"EG{i}IN")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        s = Shipment(business_id=b.id, order_id=o.id, parcel_id=p.id,
+                     carrier_code=courier, awb_number=f"EG{i}IN",
+                     tracking_status="DELIVERED" if i == 0 else "IN_TRANSIT",
+                     shipsagar_tracking_id=f"SS-EG{i}IN",
+                     created_at=now - timedelta(days=days[i]))
+        db.add(s)
+        db.commit()
+    bid = b.id
+    db.close()
+    return bid
+
+
+def _authed_for_list(monkeypatch, mk, email="l@t.in"):
+    from app.models.business import Business
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    db = mk()
+    b = db.query(Business).filter_by(email=email).first()
+    if b is None:
+        b = Business(name="L", email=email)
+        db.add(b)
+        db.commit()
+        db.refresh(b)
+    u = User(business_id=b.id, name="L", email=email,
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    c = _client(monkeypatch, mk)
+    tok = c.post("/api/v1/auth/login",
+                 json={"email": email, "password": "x"}).json()["data"]["token"]
+    return c, {"Authorization": f"Bearer {tok}"}, bid
+
+
+def test_list_returns_joined_display_columns(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=1)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments", headers=h)
+        assert r.status_code == 200, r.text
+        row = r.json()["data"]["items"][0]
+        assert row["order_no"] == "MAN-0"
+        assert row["customer_name"] == "Customer 0"
+        assert row["customer_email"] == "c0@e.com"
+        assert row["customer_mobile"] == "9963026600"
+        assert row["company_name"] == "Co 0"
+        assert row["shipment_type"] == "Road"
+        assert row["country_name"] == "India"
+        assert row["entry_datetime"] is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_returns_facets_over_the_filtered_set(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=3, courier="IP")
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments?page_size=1", headers=h)
+        data = r.json()["data"]
+        assert data["total"] == 3
+        assert len(data["items"]) == 1
+        assert data["page_size"] == 1
+        carriers = {x["code"]: x["count"] for x in data["facets"]["carriers"]}
+        statuses = {x["code"]: x["count"] for x in data["facets"]["statuses"]}
+        assert carriers == {"IP": 3}
+        assert statuses == {"DELIVERED": 1, "IN_TRANSIT": 2}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_date_filters_narrow_the_set_and_facets(monkeypatch):
+    """Both ends of the range cover the whole named day, inclusive.
+
+    Rows are seeded at today, yesterday and the day before. date_to=yesterday
+    must therefore return 2 (yesterday and the day before), not 1: shipments.py
+    mirrors order_service._day_bounds so the orders and shipments date pickers
+    cannot disagree about whether a single day includes its final second.
+    """
+    from datetime import timedelta
+    mk = _mk()
+    _seed_list_rows(mk, n=3, days=(0, 1, 2))
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        today = datetime.now(timezone.utc).date()
+        r = c.get(f"/api/v1/shipments?date_from={(today - timedelta(days=1)).isoformat()}",
+                  headers=h)
+        data = r.json()["data"]
+        assert data["total"] == 2
+        assert sum(x["count"] for x in data["facets"]["statuses"]) == 2
+        r = c.get(f"/api/v1/shipments?date_to={(today - timedelta(days=1)).isoformat()}",
+                  headers=h)
+        assert r.json()["data"]["total"] == 2
+        r = c.get(f"/api/v1/shipments?date_from={(today - timedelta(days=1)).isoformat()}"
+                  f"&date_to={(today - timedelta(days=1)).isoformat()}", headers=h)
+        assert r.json()["data"]["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_order_no_filter_matches_order_numbers(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=3)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments?order_no=MAN-1", headers=h)
+        assert r.json()["data"]["total"] == 1
+        assert r.json()["data"]["items"][0]["awb_number"] == "EG1IN"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_carrier_filter_drives_facets(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=2, courier="IP")
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments?carrier=DELHIVERY", headers=h)
+        data = r.json()["data"]
+        assert data["total"] == 0
+        assert data["facets"]["carriers"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_q_still_matches_awb_and_barcode(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=3)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        assert c.get("/api/v1/shipments?q=EG1IN", headers=h).json()["data"]["total"] == 1
+        assert c.get("/api/v1/shipments?q=MAN-2", headers=h).json()["data"]["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_shipment_detail_includes_display_columns(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=1)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        sid = c.get("/api/v1/shipments", headers=h).json()["data"]["items"][0]["id"]
+        r = c.get(f"/api/v1/shipments/{sid}", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["customer_name"] == "Customer 0"
+        assert r.json()["data"]["country_name"] == "India"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_facets_do_not_inflate_when_the_joined_columns_fan_out(monkeypatch):
+    """Facets count shipments, not join rows.
+
+    Three orders and three parcels in one tenant is the shape that inflates if
+    the facet query joins on something other than the PK (a stray
+    ``Order.business_id == Shipment.business_id``, say): the counts then report
+    9 and the page repeats rows. q is what drags both outer joins into the
+    facet subquery, so this is the path that must stay a set of ids.
+    """
+    mk = _mk()
+    _seed_list_rows(mk, n=3, courier="IP")
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        data = c.get("/api/v1/shipments?q=IN", headers=h).json()["data"]
+        assert data["total"] == 3
+        assert len(data["items"]) == 3
+        assert len({i["id"] for i in data["items"]}) == 3
+        assert sum(x["count"] for x in data["facets"]["carriers"]) == 3
+        assert sum(x["count"] for x in data["facets"]["statuses"]) == 3
+        assert {x["code"]: x["count"] for x in data["facets"]["statuses"]} == {
+            "DELIVERED": 1, "IN_TRANSIT": 2}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_and_facets_stay_inside_the_callers_business(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=2, courier="IP", email="mine@t.in", prefix="MINE")
+    _seed_list_rows(mk, n=1, courier="DTDC", email="other@t.in", prefix="OTH")
+    c, h, _ = _authed_for_list(monkeypatch, mk, email="mine@t.in")
+    try:
+        data = c.get("/api/v1/shipments", headers=h).json()["data"]
+        assert data["total"] == 2
+        assert {x["code"]: x["count"] for x in data["facets"]["carriers"]} == {"IP": 2}
+        assert {x["code"] for x in data["facets"]["statuses"]} == {"DELIVERED", "IN_TRANSIT"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_clamps_an_unbounded_page_size(monkeypatch):
+    mk = _mk()
+    _seed_list_rows(mk, n=3)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        data = c.get("/api/v1/shipments?page_size=100000", headers=h).json()["data"]
+        assert data["page_size"] == 200
+        assert len(data["items"]) == 3
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_display_columns_degrade_to_null_where_no_order_is_joined(monkeypatch):
+    """_sdict(s) with one argument must still serialize the new keys.
+
+    correct-awb returns _sdict(s) with no Order attached, so the display
+    columns have to fall back to nulls rather than raising.
+    """
+    mk = _mk()
+    _seed_list_rows(mk, n=1)
+    c, h, _ = _authed_for_list(monkeypatch, mk)
+    try:
+        sid = c.get("/api/v1/shipments", headers=h).json()["data"]["items"][0]["id"]
+        r = c.post(f"/api/v1/shipments/{sid}/correct-awb",
+                   json={"awb_number": "EG0IN-X", "reason": "reprint"}, headers=h)
+        assert r.status_code == 200, r.text
+        row = r.json()["data"]
+        assert row["shipment_type"] == "Road"
+        assert row["country_name"] == "India"
+        assert row["entry_datetime"] is not None
+        for key in ("order_no", "customer_name", "customer_email",
+                    "customer_mobile", "company_name"):
+            assert row[key] is None, key
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --- courier alias map: ShipSagar reports India Post as IP ---
+
+def test_ip_resolves_through_the_india_post_matrix():
+    from app.services.shipsagar_service import normalize_shipsagar_status as norm
+    assert norm("IP", "Item Booked") == norm("INDIA_POST", "Item Booked") == "READY_TO_SHIP"
+    # Rows where the courier matrix and the generic fallback disagree prove the
+    # alias reaches _MATRIX. Before the fix IP landed on the generic matrix and
+    # returned the third value in each row.
+    disagreeing = [
+        ("Door Locked", "FAILED_ATTEMPT", "EXCEPTION"),
+        ("Redirected to other hub", "RTO", "EXCEPTION"),
+        ("Item retained at hub", "EXCEPTION", "EXCEPTION"),
+    ]
+    for raw, india_post, generic in disagreeing:
+        assert norm("IP", raw) == india_post, raw
+        assert norm("INDIA_POST", raw) == india_post, raw
+        assert norm("SOMETHING_ELSE", raw) == generic, raw
+
+
+def test_courier_alias_tolerates_case_and_surrounding_whitespace():
+    from app.services import shipsagar_service as ss
+    assert ss.normalize_shipsagar_status(" ip ", "Door Locked") == "FAILED_ATTEMPT"
+    assert ss.normalize_shipsagar_status("Ip", "Door Locked") == "FAILED_ATTEMPT"
+    assert ss.normalize_shipsagar_status("india_post ", "Door Locked") == "FAILED_ATTEMPT"
+    assert ss.resolve_courier(" ip ") == "INDIA_POST"
+    assert ss.resolve_courier(None) == "" and ss.resolve_courier("  ") == ""
+    # The alias map widens nothing: an unrecognized courier still falls through
+    # to the generic matrix rather than being treated as India Post.
+    assert ss.resolve_courier(" fedex ") == "FEDEX"
+    assert ss.normalize_shipsagar_status("FEDEX", "Door Locked") == "EXCEPTION"
+
+
+def test_register_tracking_accepts_the_ip_alias_and_still_rejects_the_unknown(monkeypatch):
+    from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    mk = _mk()
+    ip_id = _seed_shipment_with_order(mk, "IP-REG-1", courier="IP", order_no="MAN-IP1")
+    fedex_id = _seed_shipment_with_order(mk, "FZ-REG-1", courier="FEDEX", order_no="MAN-FZ1")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(id=ip_id).first()
+        seen = {}
+
+        def _fake_push(*, tracking_no, courier_code, order):
+            seen["awb"] = tracking_no
+            seen["courier"] = courier_code
+            return {"ok": True, "message": "Data has been recorded successfully"}
+
+        monkeypatch.setattr(ss, "push_shipment", _fake_push)
+        out = ss.register_tracking(db, s)
+        assert out["pushed"] is True and out["stubbed"] is False
+        # ShipSagar's own vocabulary goes back out on the wire: carrier_code
+        # stores "IP", so the PushShipment CourierCode must be "IP" too.
+        assert seen == {"awb": "IP-REG-1", "courier": "IP"}
+        assert s.carrier_code == "IP"
+        assert s.shipsagar_tracking_id == "SS-IP-REG-1"
+
+        bad = db.query(Shipment).filter_by(id=fedex_id).first()
+        try:
+            ss.register_tracking(db, bad)
+            raise AssertionError("expected ShipsagarError")
+        except ss.ShipsagarError as exc:
+            assert exc.code == "UNSUPPORTED_COURIER"
+    finally:
+        db.close()
+
+
+def test_webhook_accepts_an_ip_shipment_and_rolls_the_status_up(monkeypatch):
+    """An IP shipment was rejected as UNSUPPORTED_COURIER before the alias.
+
+    "Door Locked" is deliberately a row only the India Post matrix carries: the
+    generic matrix would have rolled this up to EXCEPTION instead.
+    """
+    from app.models.shipment import Shipment
+    mk = _mk()
+    sid, bid = _seed_shipment(mk, carrier="IP", awb="IP123456789IN")
+    c = _client(monkeypatch, mk)
+    try:
+        r = _post(c, {"event_id": "ip-evt-1", "tracking_number": "IP123456789IN",
+                      "courier": "IP", "status": "Door Locked",
+                      "location": "Delhi SP",
+                      "event_time": datetime.now(timezone.utc).isoformat()}, bid=bid)
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["created"] is True and data["stale"] is False
+        assert data["tracking_status"] == "FAILED_ATTEMPT"
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(id=sid).first()
+            assert s.tracking_status == "FAILED_ATTEMPT"
+            assert s.carrier_code == "IP"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_health_counts_an_ip_shipment_as_unregistered(monkeypatch):
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="ip-h@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="ip-h@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    db.add(Shipment(business_id=b.id, order_id="o1", parcel_id="p1",
+                    carrier_code="IP", awb_number="IP-H-1",
+                    tracking_status="READY_TO_SHIP"))
+    db.commit()
+    db.close()
+    c = _client(monkeypatch, mk)
+    try:
+        tok = c.post("/api/v1/auth/login",
+                     json={"email": "ip-h@t.in", "password": "x"}).json()["data"]["token"]
+        r = c.get("/api/v1/shipsagar/health",
+                  headers={"Authorization": f"Bearer {tok}"})
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["unregistered_shipments"] == 1
     finally:
         app.dependency_overrides.clear()

@@ -18,7 +18,45 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
                         headers={"X-Error-Code": code})
 
 
-def _sdict(s) -> dict:
+SHIPMENT_TYPE_DEFAULT = "Road"
+COUNTRY_NAME_DEFAULT = "India"
+
+
+def _order_fields(o) -> dict:
+    """Display columns sourced from the Order. Every one of them is nullable."""
+    if o is None:
+        return {"order_no": None, "customer_name": None, "customer_email": None,
+                "customer_mobile": None, "company_name": None}
+    return {
+        "order_no": o.internal_order_number or o.shopify_order_name or None,
+        "customer_name": o.receiver_name or None,
+        "customer_email": o.receiver_email or None,
+        "customer_mobile": o.receiver_mobile or None,
+        "company_name": o.receiver_company or None,
+    }
+
+
+def _day_bounds(value: str, is_end: bool):
+    """UTC bound for a date filter, covering the whole day at the end.
+
+    A bare YYYY-MM-DD becomes 00:00:00.000000 at the start of the day and
+    23:59:59.999999 at its end; a full timestamp is taken as given. Same
+    semantics as the orders list filter, so the two date pickers cannot
+    disagree about what a single day includes.
+    """
+    from datetime import datetime, timezone
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    if len(value) == 10:
+        if is_end:
+            dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return dt
+
+
+def _sdict(s, order=None) -> dict:
     def iso(v):
         try:
             return v.isoformat() if v is not None else None
@@ -45,6 +83,10 @@ def _sdict(s) -> dict:
         "rto_at": iso(s.rto_at),
         "returned_at": iso(s.returned_at),
         "last_synced_at": iso(s.last_synced_at),
+        "entry_datetime": iso(s.created_at),
+        "shipment_type": SHIPMENT_TYPE_DEFAULT,
+        "country_name": COUNTRY_NAME_DEFAULT,
+        **_order_fields(order),
     }
 
 
@@ -197,40 +239,94 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
 
 @router.get("")
 def list_shipments(status: str | None = None, carrier: str | None = None, order_id: str | None = None,
-                   q: str | None = None,
+                   q: str | None = None, date_from: str | None = None,
+                   date_to: str | None = None, order_no: str | None = None,
                    page: int = 1, page_size: int = 20,
                    db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
-    from sqlalchemy import or_
+    """One page of shipments plus facet counts for the whole filtered set.
+
+    Customer, Company Name, Shipment Type and Country Name are display columns
+    rather than stored data: the Order is outer-joined to supply the first two,
+    and shipment_type / country_name are the fixed values this deployment
+    pushes to ShipSagar. That join is unconditional so the display columns are
+    populated on every code path, and it is on the Order's primary key, so it
+    can never multiply a shipment row.
+
+    Because the Order join is applied up front, every filter below names the
+    Shipment column explicitly: ``filter_by`` binds to the last joined entity,
+    so ``filter_by(tracking_status=...)`` would resolve against Order and raise.
+
+    Facets are counted from a subquery of the filtered ids, not from the paged
+    rows, so the carrier and status chips keep counting the whole result set
+    however the caller paginates.
+    """
+    from sqlalchemy import func, or_
     from app.models.order import Order
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
-    qy = db.query(Shipment).filter_by(business_id=u.get("business_id"))
+    qy = (db.query(Shipment)
+          .filter_by(business_id=u.get("business_id"))
+          .outerjoin(Order, Order.id == Shipment.order_id))
     if status:
-        qy = qy.filter_by(tracking_status=status)
+        qy = qy.filter(Shipment.tracking_status == status.strip().upper())
     if carrier:
-        qy = qy.filter_by(carrier_code=carrier)
+        qy = qy.filter(Shipment.carrier_code == carrier.strip().upper())
     if order_id:
-        qy = qy.filter_by(order_id=order_id)
-    if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        qy = qy.outerjoin(Order, Order.id == Shipment.order_id
-                          ).outerjoin(Parcel, Parcel.id == Shipment.parcel_id
-                                       ).filter(or_(Shipment.awb_number.ilike(pattern),
-                                                    Order.shopify_order_name.ilike(pattern),
-                                                    Parcel.barcode_value.ilike(pattern)))
+        qy = qy.filter(Shipment.order_id == order_id.strip())
+    if date_from:
+        qy = qy.filter(Shipment.created_at >= _day_bounds(date_from, False))
+    if date_to:
+        qy = qy.filter(Shipment.created_at <= _day_bounds(date_to, True))
+    text = f"%{q.strip()}%" if q and q.strip() else None
+    order_text = f"%{order_no.strip()}%" if order_no and order_no.strip() else None
+    if text:
+        qy = (qy.outerjoin(Parcel, Parcel.id == Shipment.parcel_id)
+                .filter(or_(Shipment.awb_number.ilike(text),
+                            Order.internal_order_number.ilike(text),
+                            Order.shopify_order_name.ilike(text),
+                            Parcel.barcode_value.ilike(text))))
+    if order_text:
+        qy = qy.filter(or_(Order.internal_order_number.ilike(order_text),
+                            Order.shopify_order_name.ilike(order_text)))
     total = qy.count()
-    rows = qy.order_by(Shipment.created_at.desc()).offset(
-        (max(int(page or 1), 1) - 1) * int(page_size or 20)).limit(int(page_size or 20)).all()
-    return {"success": True, "data": {"items": [_sdict(s) for s in rows], "total": total, "page": max(int(page or 1), 1)}}
+
+    facet_q = qy.with_entities(Shipment.id).subquery()
+
+    def _facets(column):
+        return (db.query(column, func.count(Shipment.id))
+                .join(facet_q, facet_q.c.id == Shipment.id)
+                .group_by(column)
+                .order_by(func.count(Shipment.id).desc(), column.asc()).all())
+
+    carrier_rows = _facets(Shipment.carrier_code)
+    status_rows = _facets(Shipment.tracking_status)
+
+    size = max(min(int(page_size or 20), 200), 1)
+    page_no = max(int(page or 1), 1)
+    rows = (qy.add_columns(Order)
+            .order_by(Shipment.created_at.desc())
+            .offset((page_no - 1) * size).limit(size).all())
+    return {"success": True, "data": {
+        "items": [_sdict(s, o) for s, o in rows],
+        "total": total, "page": page_no, "page_size": size,
+        "facets": {
+            "carriers": [{"code": c, "count": n} for c, n in carrier_rows],
+            "statuses": [{"code": s_, "count": n} for s_, n in status_rows],
+        }}}
 
 
 @router.get("/{sid}")
 def get_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    from app.models.order import Order
     from app.models.shipment import Shipment
-    s = db.query(Shipment).filter_by(id=sid, business_id=u.get("business_id")).first()
-    if s is None:
+    row = (db.query(Shipment, Order)
+           .outerjoin(Order, Order.id == Shipment.order_id)
+           .filter(Shipment.id == sid, Shipment.business_id == u.get("business_id"))
+           .first())
+    if row is None:
         raise HTTPException(404, "Shipment not found")
-    return {"success": True, "data": _sdict(s)}
+    s, o = row
+    return {"success": True, "data": _sdict(s, o)}
 
 
 @router.post("/{sid}/correct-awb")

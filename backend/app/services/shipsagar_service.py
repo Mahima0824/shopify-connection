@@ -28,6 +28,29 @@ from app.config import settings
 PROVIDER = "SHIPSAGAR"
 SUPPORTED_COURIERS = ("INDIA_POST", "DTDC")
 
+# ShipSagar reports India Post as "IP" while this deployment stores and displays
+# "IP", so the two spellings have to reach the same India Post code path. The map
+# is one-directional: it never invents support, it only renames a code that is
+# already supported under another spelling.
+COURIER_ALIASES: dict[str, str] = {"IP": "INDIA_POST"}
+
+
+def resolve_courier(code: str | None) -> str:
+    """Canonicalize a courier code: trimmed, uppercased, alias-expanded.
+
+    Returns the canonical SUPPORTED_COURIERS spelling when the code is one of
+    them or an alias of one, and the normalized code unchanged otherwise, so an
+    unknown courier behaves exactly as it did before the map existed.
+    """
+    canonical = (code or "").strip().upper()
+    return COURIER_ALIASES.get(canonical, canonical)
+
+
+# Every spelling the app accepts for a supported courier, canonical or alias.
+# Queries that filter on shipments.carrier_code need the stored spelling, which
+# resolve_courier cannot help with inside SQL.
+ACCEPTED_COURIER_CODES = tuple(dict.fromkeys((*SUPPORTED_COURIERS, *COURIER_ALIASES)))
+
 # Plan #15 shipment statuses.
 STATUSES = (
     "NOT_CREATED",
@@ -179,14 +202,16 @@ _GENERIC_MATCHERS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
 def normalize_shipsagar_status(courier: str, raw: str) -> str:
     """Normalize a courier raw status to the plan #15 vocabulary.
 
-    Courier-specific rows win for INDIA_POST and DTDC; every other courier
-    falls through to _GENERIC_MATRIX. Unrecognized strings -> EXCEPTION
-    (visible, never silently swallowed). Empty string -> NOT_CREATED.
+    Courier-specific rows win for INDIA_POST and DTDC (and for any alias of
+    them, so "IP" reads the India Post matrix rather than the generic one);
+    every other courier falls through to _GENERIC_MATRIX. Unrecognized
+    strings -> EXCEPTION (visible, never silently swallowed). Empty string ->
+    NOT_CREATED.
     """
     text = (raw or "").strip().lower()
     if not text:
         return "NOT_CREATED"
-    code = (courier or "").upper()
+    code = resolve_courier(courier)
     if code in SUPPORTED_COURIERS:
         for courier_key, keyword, status in _MATRIX:
             if courier_key == code and keyword in text:
@@ -484,10 +509,14 @@ def register_tracking(db, shipment, *, courier: str | None = None) -> dict:
     recorded as a SHIPSAGAR_PUSH_REJECTED audit row; without that durable trace
     a permanently-rejected parcel would read as healthy forever.
 
+    Courier validation goes through resolve_courier, so an "IP" shipment is
+    accepted, while the wire payload keeps the stored spelling because "IP" is
+    what ShipSagar itself calls that courier.
+
     Returns {"shipsagar_tracking_id", "stubbed", "pushed", "message"}.
     """
-    code = ((courier or getattr(shipment, "carrier_code", "")) or "").upper()
-    if code not in SUPPORTED_COURIERS:
+    code = ((courier or getattr(shipment, "carrier_code", "")) or "").strip().upper()
+    if resolve_courier(code) not in SUPPORTED_COURIERS:
         raise ShipsagarError("UNSUPPORTED_COURIER",
                              f"ShipSagar supports {', '.join(SUPPORTED_COURIERS)}; got '{code}'.")
     awb = (getattr(shipment, "awb_number", "") or "").strip()
