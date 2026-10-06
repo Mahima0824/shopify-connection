@@ -120,7 +120,8 @@
 
 @theme inline {
   --font-sans: 'Inter', 'Plus Jakarta Sans', 'IBM Plex Sans Variable', sans-serif;
-  --font-heading: 'Montserrat Variable', 'Montserrat', sans-serif;
+  --font-heading: 'Montserrat', 'Montserrat Variable', sans-serif;
+  --default-font-family: var(--font-sans);
   /* DESIGN.md asks for Neue Haas Grotesk Display (commercial, not
      installable) and Inter Variable. Inter ships here as IBM Plex Sans,
      with Montserrat standing in for the thin display cut. */
@@ -222,28 +223,42 @@
    come from an IntersectionObserver) or is a print-media rule Tailwind cannot
    express. */
 
-html,
-body,
-input,
-button,
-select,
-textarea {
+html {
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
+/* Common UI Font rules: headings, header, navigation, brand, and prominent UI tags */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6,
-.font-heading {
+header,
+header nav,
+header button,
+header a,
+nav[aria-label="Primary"],
+nav[aria-label="Mobile"],
+.font-heading,
+[data-font="heading"] {
   font-family: var(--font-heading);
+}
+
+/* Ensure form controls and interactive inputs use clean sub-font */
+input,
+select,
+textarea,
+optgroup {
+  font-family: var(--font-sans);
 }
 
 a, a:visited {

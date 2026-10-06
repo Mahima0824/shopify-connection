@@ -19,7 +19,7 @@ function isGroupActive(pathname: string | null, href?: string, children?: { href
 }
 
 const PILL =
-  "inline-flex h-9 items-center rounded-full px-3 text-xs min-[1100px]:text-sm min-[1100px]:px-3.5 font-medium whitespace-nowrap transition-all duration-150";
+  "inline-flex h-9 items-center rounded-full px-3 text-xs min-[1100px]:text-sm min-[1100px]:px-3.5 font-semibold whitespace-nowrap transition-all duration-150 font-heading tracking-tight";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
@@ -34,7 +34,7 @@ export default function TopNav() {
       <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center justify-between px-4 sm:px-6">
         <Link
           to="/"
-          className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground transition-opacity hover:opacity-85"
+          className="flex items-center text-lg font-bold font-heading tracking-tight text-foreground transition-opacity hover:opacity-85"
         >
           ReconHub
         </Link>
@@ -123,7 +123,7 @@ export default function TopNav() {
                         aria-current={childActive ? "page" : undefined}
                         onClick={closeDrop}
                         className={cn(
-                          "flex h-9 items-center justify-between rounded-lg px-3 text-xs font-medium whitespace-nowrap transition-colors min-[1100px]:text-sm",
+                          "flex h-9 items-center justify-between rounded-lg px-3 text-xs font-semibold whitespace-nowrap transition-colors min-[1100px]:text-sm font-heading tracking-tight",
                           childActive
                             ? "bg-primary/10 text-primary font-semibold"
                             : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
@@ -146,7 +146,7 @@ export default function TopNav() {
         <div className="flex items-center gap-3">
           <Link
             to="/login"
-            className="text-xs font-semibold text-foreground transition-colors hover:text-primary min-[1100px]:text-sm"
+            className="text-xs font-semibold text-foreground transition-colors hover:text-primary min-[1100px]:text-sm font-heading tracking-tight"
           >
             Sign in
           </Link>
@@ -176,7 +176,7 @@ export default function TopNav() {
                     to={g.href}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex min-h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors",
+                      "flex min-h-10 items-center rounded-lg px-3 text-sm font-semibold transition-colors font-heading",
                       active ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                     )}
                   >
@@ -195,7 +195,7 @@ export default function TopNav() {
                     aria-expanded={isExpanded}
                     onClick={() => setExpanded(isExpanded ? null : g.label)}
                     className={cn(
-                      "flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition-colors",
+                      "flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-left text-sm font-semibold transition-colors font-heading",
                       groupActive ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                     )}
                   >
@@ -212,7 +212,7 @@ export default function TopNav() {
                             to={c.href}
                             onClick={() => setOpen(false)}
                             className={cn(
-                              "flex min-h-9 items-center justify-between rounded-md px-2 text-sm transition-colors",
+                              "flex min-h-9 items-center justify-between rounded-md px-2 text-sm transition-colors font-heading",
                               childActive
                                 ? "bg-primary/10 text-primary font-semibold"
                                 : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
@@ -233,7 +233,7 @@ export default function TopNav() {
             <Link
               to="/login"
               onClick={() => setOpen(false)}
-              className="mt-2 block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
+              className="mt-2 block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground font-heading shadow-xs"
             >
               Sign in
             </Link>
