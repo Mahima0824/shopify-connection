@@ -151,17 +151,81 @@ def _shipments(db, o):
     return db.query(Shipment).filter_by(business_id=o.business_id, order_id=o.id).all()
 
 
+# How long an order may sit awaiting its tracking number before "dispatched but
+# no shipment record" stops being the normal path. Three hours is one warehouse
+# shift: long past the seconds between a dispatch scan and typing the number off
+# the same sheet, and short enough that a genuinely forgotten order surfaces
+# within the working day rather than at month end. Deliberately not the SLA
+# scale (days) - this is about an operator's in-flight task, not the courier.
+AWAITING_STALE_AFTER = timedelta(hours=3)
+
+
+def _awaiting_rows(db, o):
+    from app.services.shipment_service import is_awaiting_awb
+    return [s for s in _shipments(db, o) if is_awaiting_awb(s.awb_number)]
+
+
+def _has_awaiting_shipment(db, o) -> bool:
+    return bool(_awaiting_rows(db, o))
+
+
+def _awaiting_is_stale(db, o) -> bool:
+    """True when every awaiting row is older than AWAITING_STALE_AFTER.
+
+    created_at is the row's age: an awaiting row is only ever written once, when
+    the order is synced, and it is never touched again until the push adopts it.
+    A row with no created_at (a hand-built fixture, a server default that did not
+    fire) is treated as fresh, so a missing timestamp cannot manufacture a HIGH.
+    """
+    rows = _awaiting_rows(db, o)
+    if not rows:
+        return False
+    now = datetime.now(timezone.utc)
+    for s in rows:
+        created = getattr(s, "created_at", None)
+        if created is None:
+            return False
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if now - created < AWAITING_STALE_AFTER:
+            return False
+    return True
+
+
 def check_r009(db, o):
     from app.models.scan_event import ScanEvent
     from app.models.parcel import Parcel
+    from app.services.shipment_service import is_awaiting_awb
     disp = db.query(ScanEvent).join(Parcel, ScanEvent.parcel_id == Parcel.id).filter(Parcel.order_id == o.id, ScanEvent.event_type == 'DISPATCHED').count()
-    if disp > 0 and not _shipments(db, o):
+    # A shipment that is still awaiting its tracking number does not count as a
+    # shipment record here: the rule exists to catch a parcel that physically
+    # went out without one, and the awaiting row would silence exactly that.
+    if disp > 0 and not [s for s in _shipments(db, o)
+                         if not is_awaiting_awb(s.awb_number)]:
+        # ...but only once the waiting has gone on long enough to be a real gap.
+        # A DISPATCHED scan and the tracking-number entry are the same desk
+        # workflow a minute apart, so flagging the normal path is what made this
+        # rule and check_r010 disagree on one state: r010 deliberately skips an
+        # awaiting row (see below) while r009 opened a HIGH on it. Two rules
+        # must not return opposite verdicts for one state, so the gate lives
+        # here and r010's skip stands.
+        if _has_awaiting_shipment(db, o) and not _awaiting_is_stale(db, o):
+            return []
         return [_open(db, o, 'DISPATCHED_WITHOUT_SHIPMENT', 'HIGH', 'Dispatched but no shipment/AWB record exists.')]
     return []
 
 
 def check_r010(db, o):
+    from app.services.shipment_service import AWAITING_TRACKING
     for s in _shipments(db, o):
+        # An awaiting shipment has no tracking number by design - the Orders
+        # page prompts for one - so it is deliberately not an AWB_MISSING
+        # anomaly. Its placeholder AWB is non-empty, so this loop does not fire
+        # for it today; the explicit skip is here so the rule stays correct if
+        # the placeholder scheme ever changes, and it documents the direction:
+        # awaiting is the intended state, not a data problem.
+        if (s.tracking_status or '') == AWAITING_TRACKING:
+            continue
         if not (s.awb_number or '').strip():
             return [_open(db, o, 'AWB_MISSING', 'HIGH', 'Shipment without AWB.')]
     return []
@@ -169,16 +233,18 @@ def check_r010(db, o):
 
 def check_r011(db, o):
     from datetime import datetime, timezone, timedelta
+    from app.services.shipment_service import display_awb
     for s in _shipments(db, o):
         if (s.tracking_status or '') in ('DELIVERED', 'RETURNED', 'LOST', 'CLOSED'):
             continue
         if s.last_checkpoint_at and datetime.now(timezone.utc) - s.last_checkpoint_at.replace(tzinfo=timezone.utc) > timedelta(days=7):
-            return [_open(db, o, 'SHIPMENT_STUCK', 'MEDIUM', f'Shipment {s.awb_number} idle over 7 days.')]
+            return [_open(db, o, 'SHIPMENT_STUCK', 'MEDIUM', f'Shipment {display_awb(s.awb_number)} idle over 7 days.')]
     return []
 
 
 def check_r012(db, o):
     from datetime import datetime, timezone
+    from app.services.shipment_service import display_awb
     from app.models.sla import SLARule
     from app.services.sla_service import sla_status, shipment_clock
     for s in _shipments(db, o):
@@ -189,7 +255,7 @@ def check_r012(db, o):
             rule = db.query(SLARule).filter_by(business_id=o.business_id, carrier_code='*').first()
         st = sla_status(shipment_clock(db, s, rule), datetime.now(timezone.utc))
         if st['status'] in ('APPROACHING', 'BREACHED'):
-            return [_open(db, o, 'RTO_DELAY', 'HIGH', f'RTO shipment {s.awb_number} aged {st["days_used"]}d.')]
+            return [_open(db, o, 'RTO_DELAY', 'HIGH', f'RTO shipment {display_awb(s.awb_number)} aged {st["days_used"]}d.')]
     return []
 
 
@@ -261,9 +327,10 @@ def check_r016(db, o):
 
 def check_r018(db, o):
     from datetime import datetime, timezone, timedelta
+    from app.services.shipment_service import display_awb
     for s in _shipments(db, o):
         if (s.tracking_status or '') == 'UNKNOWN' and s.last_synced_at and datetime.now(timezone.utc) - s.last_synced_at.replace(tzinfo=timezone.utc) > timedelta(hours=24):
-            return [_open(db, o, 'COURIER_STATUS_UNKNOWN', 'MEDIUM', f'Shipment {s.awb_number} status unknown over 24h.')]
+            return [_open(db, o, 'COURIER_STATUS_UNKNOWN', 'MEDIUM', f'Shipment {display_awb(s.awb_number)} status unknown over 24h.')]
     return []
 
 
@@ -302,6 +369,7 @@ def check_r021(db, o):
 
 def check_r022(db, o):
     from datetime import datetime, timezone
+    from app.services.shipment_service import display_awb
     from app.models.sla import SLARule, ShipmentCase
     from app.services.sla_service import sla_status, shipment_clock
     for s in _shipments(db, o):
@@ -314,7 +382,7 @@ def check_r022(db, o):
             continue
         open_case = db.query(ShipmentCase).filter_by(shipment_id=s.id).filter(ShipmentCase.status != 'RESOLVED').count()
         if open_case == 0:
-            return [_open(db, o, 'SLA_BREACHED', 'CRITICAL', f'Shipment {s.awb_number} breached SLA.')]
+            return [_open(db, o, 'SLA_BREACHED', 'CRITICAL', f'Shipment {display_awb(s.awb_number)} breached SLA.')]
     return []
 
 

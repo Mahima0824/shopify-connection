@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { API, api } from "../lib/api";
+import AddShipmentDialog from "../components/AddShipmentDialog";
 import OrderTable from "../components/OrderTable";
 import ImportResult, { ImportSummary } from "../components/ImportResult";
 import { Button, Card, Checkbox, Input, Label } from "../components/primitives";
@@ -16,6 +17,7 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [addShipmentOrder, setAddShipmentOrder] = useState<any | null>(null);
 
   const fetchOrders = (silent = false) => {
     if (!silent) setLoading(true);
@@ -146,9 +148,24 @@ export default function OrdersPage() {
             </div>
           </div>
         ) : (
-          <OrderTable orders={orders} />
+          <OrderTable orders={orders} onAddShipment={(o) => setAddShipmentOrder(o)} />
         )}
       </div>
+      <AddShipmentDialog
+        open={!!addShipmentOrder}
+        orderId={addShipmentOrder?.id ?? null}
+        orderLabel={addShipmentOrder?.internal_order_number ?? undefined}
+        onClose={() => setAddShipmentOrder(null)}
+        onPushed={() => {
+          fetchOrders(true);
+        }}
+        // A 502 means the AWB was committed and a retry job is queued, so the
+        // row changed even though the provider refused. Refreshing is what stops
+        // it still offering Add Shipment on a shipment that would now 400.
+        onRecovered={() => {
+          fetchOrders(true);
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./primitives";
+import {
+  Badge,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./primitives";
+import { isAwaiting, pushStateLabel, statusTone, type OrderShipment } from "../lib/shipments";
 
 const FINANCIAL_DOTS: Record<string, string> = {
   PAID: "var(--destructive)",
@@ -31,7 +41,90 @@ function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string
   );
 }
 
-export default function OrderTable({ orders }: { orders: any[] }) {
+const PILL_CLASSES: Record<string, string> = {
+  success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+  info: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
+  danger: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+  neutral: "bg-muted text-muted-foreground border border-border",
+};
+
+function ShipmentPill({ status }: { status: string }) {
+  const cls = PILL_CLASSES[statusTone(status)] ?? PILL_CLASSES.neutral;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
+// AWAITING_TRACKING is deliberately NOT in shipments.TERMINAL_STATUSES: it is
+// the one state that asks the user for the missing tracking number, so it has to
+// stay visible here as a green Add Shipment button rather than be filtered out
+// as a finished shipment.
+function ShipmentCell({
+  shipment,
+  onAdd,
+}: {
+  shipment: OrderShipment | null | undefined;
+  onAdd: () => void;
+}) {
+  if (!shipment) {
+    return <span className="text-xs text-muted-foreground">{pushStateLabel("none")}</span>;
+  }
+
+  if (isAwaiting(shipment)) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Button
+          type="button"
+          size="sm"
+          onClick={onAdd}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+        >
+          Add Shipment
+        </Button>
+        <span className="text-[11px] text-amber-600 font-medium">{pushStateLabel("awaiting")}</span>
+      </div>
+    );
+  }
+
+  if (shipment.push_state === "rejected") {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="font-mono text-xs text-foreground font-medium">{shipment.awb_number}</span>
+        <span className="text-[11px] text-destructive font-medium">{pushStateLabel("rejected")}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {shipment.id ? (
+        <Link
+          to={`/shipments/${shipment.id}`}
+          className="font-mono text-xs font-semibold text-primary hover:underline"
+        >
+          {shipment.awb_number}
+        </Link>
+      ) : (
+        <span className="font-mono text-xs text-foreground font-medium">{shipment.awb_number}</span>
+      )}
+      <ShipmentPill status={shipment.tracking_status ?? ""} />
+      {shipment.current_location && (
+        <span className="text-[11px] text-muted-foreground">{shipment.current_location}</span>
+      )}
+    </div>
+  );
+}
+
+export default function OrderTable({
+  orders,
+  onAddShipment,
+}: {
+  orders: any[];
+  onAddShipment?: (order: any) => void;
+}) {
   if (!orders || orders.length === 0) {
     return (
       <div className="p-10 text-center text-muted-foreground">
@@ -46,6 +139,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Order Name</TableHead>
+            <TableHead>Shipment</TableHead>
             <TableHead>Financial Status</TableHead>
             <TableHead>Fulfillment / Op Status</TableHead>
             <TableHead>Total Amount</TableHead>
@@ -57,9 +151,12 @@ export default function OrderTable({ orders }: { orders: any[] }) {
           {orders.map((o) => (
             <TableRow key={o.id}>
               <TableCell className="font-semibold">
-                <Link to={`/orders/${o.id}`}>
+                <Link to={`/orders/${o.id}`} className="hover:underline">
                   {o.shopify_order_name || o.internal_order_number || o.id}
                 </Link>
+              </TableCell>
+              <TableCell>
+                <ShipmentCell shipment={o.shipment} onAdd={() => onAddShipment?.(o)} />
               </TableCell>
               <TableCell>
                 <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />

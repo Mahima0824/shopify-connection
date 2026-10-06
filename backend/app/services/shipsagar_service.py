@@ -52,6 +52,29 @@ def resolve_courier(code: str | None) -> str:
 # resolve_courier cannot help with inside SQL.
 ACCEPTED_COURIER_CODES = tuple(dict.fromkeys((*SUPPORTED_COURIERS, *COURIER_ALIASES)))
 
+
+def courier_code_variants(code: str | None) -> tuple[str, ...]:
+    """Every stored spelling of one courier, for a spelling-independent lookup.
+
+    resolve_courier answers "what is this code called" but a SQL filter needs the
+    reverse: given a code, which values in shipments.carrier_code mean the same
+    carrier. Without this, a uniqueness probe on (business, carrier, awb) reads
+    INDIA_POST and IP as two different carriers, so the same AWB can be booked
+    once under each spelling - two live shipments, two timelines, SLA and
+    reconciliation double-counted. resolve_courier cannot be pushed into SQL, so
+    the set is computed here and handed over as an .in_() argument.
+
+    A code with no alias of its own yields exactly itself, so an unrelated
+    courier (FEDEX, DTDC) keeps behaving exactly as it did before this existed.
+    """
+    canonical = resolve_courier(code)
+    if not canonical:
+        return ()
+    spellings = {canonical}
+    spellings.update(alias for alias, target in COURIER_ALIASES.items()
+                     if target == canonical)
+    return tuple(sorted(spellings))
+
 # Codes that name the absence of a courier rather than a courier. register_tracking
 # refuses these and accepts every other code, because ShipSagar aggregates many
 # carriers while SUPPORTED_COURIERS only lists the ones this app has hand-written
@@ -469,6 +492,43 @@ def push_shipment(*, tracking_no: str, courier_code: str, order) -> dict:
     return {"ok": _is_ok(data), "message": _message_of(data)}
 
 
+# The audit actions that record ShipSagar's verdict on a push. Both write paths
+# go through record_push_verdict, so these names exist once on the write side.
+PUSH_ACCEPTED_ACTION = "SHIPSAGAR_PUSH_ACCEPTED"
+PUSH_REJECTED_ACTION = "SHIPSAGAR_PUSH_REJECTED"
+
+
+def record_push_verdict(db, shipment, *, pushed: bool, courier: str,
+                        tracking_number: str, tracking_id: str,
+                        message: str = ""):
+    """Record ShipSagar's verdict on one push as an audit row.
+
+    Shared by register_tracking and POST /api/v1/shipments/push so the action
+    name, the entity it points at and the metadata keys cannot drift apart
+    between them. They already had: the push route calls push_shipment directly
+    rather than going through register_tracking, and it wrote no audit row at
+    all, so a refusal on the Orders-driven push left no trace. Because both
+    paths persist SS-{awb} before reading the verdict, that refusal was then
+    indistinguishable from an acceptance and the Orders page reported it as
+    pushed — the one thing the refusal trace exists to prevent.
+
+    This is the durable record the health endpoint's rejected_pushes counts and
+    the orders list resolves against, so it is deliberately NOT wrapped in a
+    try/except. log_audit only adds and flushes; an exception here leaves the
+    session failed, so swallowing it would not make the push succeed, it would
+    just relocate the failure to the caller's next query as a
+    PendingRollbackError while losing the row that was the whole point. Callers
+    invoke this before their commit, so the failure stays atomic: the shipment
+    and its verdict are both stored, or neither is.
+    """
+    from app.services.audit_service import log_audit
+    log_audit(db, shipment.business_id, None, "shipment", shipment.id,
+              PUSH_ACCEPTED_ACTION if pushed else PUSH_REJECTED_ACTION, {},
+              {"message": message, "courier": courier,
+               "tracking_number": tracking_number,
+               "shipsagar_tracking_id": tracking_id})
+
+
 # ShipSagar sends English month names ('16-May-2023'). strptime's %b/%B resolve
 # those through the C library locale, so on a non-English host they fail to
 # parse and the event is silently misdated as "now" while its id stays stable —
@@ -590,7 +650,10 @@ def register_tracking(db, shipment, *, courier: str | None = None,
     success. The tracking id is persisted all the same, which drops the parcel
     out of the health endpoint's unregistered_shipments count, so a refusal is
     recorded as a SHIPSAGAR_PUSH_REJECTED audit row; without that durable trace
-    a permanently-rejected parcel would read as healthy forever.
+    a permanently-rejected parcel would read as healthy forever. The row is
+    written by record_push_verdict, which POST /api/v1/shipments/push also calls:
+    this function and that route persist the same tracking id on both verdicts,
+    so the audit row is the only thing that tells a refusal from an acceptance.
 
     ``queue_retry`` is the side that gives up the duplicate. register_tracking
     creates its retry job when it fails, and drain_retry_queue advances the job
@@ -641,20 +704,9 @@ def register_tracking(db, shipment, *, courier: str | None = None,
     db.flush()
     pushed = bool(result.get("ok"))
     message = result.get("message", "")
-    try:
-        from app.services.audit_service import log_audit
-        if pushed:
-            log_audit(db, shipment.business_id, None, "shipment", shipment.id,
-                      "SHIPSAGAR_PUSH_ACCEPTED", {},
-                      {"message": message, "courier": code, "tracking_number": awb,
-                       "shipsagar_tracking_id": tracking_id})
-        else:
-            log_audit(db, shipment.business_id, None, "shipment", shipment.id,
-                      "SHIPSAGAR_PUSH_REJECTED", {},
-                      {"message": message, "courier": code, "tracking_number": awb,
-                       "shipsagar_tracking_id": tracking_id})
-    except Exception:
-        pass
+    record_push_verdict(db, shipment, pushed=pushed, courier=code,
+                        tracking_number=awb, tracking_id=tracking_id,
+                        message=message)
     return {"shipsagar_tracking_id": tracking_id, "stubbed": False,
             "pushed": pushed, "message": message}
 

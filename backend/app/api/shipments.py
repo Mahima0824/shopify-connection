@@ -6,16 +6,24 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
+from app.services import shipment_service
 
 router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
 
 PARCEL_BARCODE_MAX_LEN = 32
 
 
-def _err(status: int, code: str, message: str) -> JSONResponse:
-    """Envelope error (ledger pattern): {success:false, error:{code,message}}."""
-    return JSONResponse(status_code=status,
-                        content={"success": False, "error": {"code": code, "message": message}},
+def _err(status: int, code: str, message: str, data: dict | None = None) -> JSONResponse:
+    """Envelope error (ledger pattern): {success:false, error:{code,message}}.
+
+    ``data`` is for the failures a caller can still render something with — a
+    502 on the courier catalogue carries an empty ``couriers`` list so the push
+    dialog's dropdown falls back instead of having nothing to draw.
+    """
+    content = {"success": False, "error": {"code": code, "message": message}}
+    if data is not None:
+        content["data"] = data
+    return JSONResponse(status_code=status, content=content,
                         headers={"X-Error-Code": code})
 
 
@@ -87,6 +95,22 @@ def _day_bounds(value: str, is_end: bool):
     return dt
 
 
+def _fmt_action_date(value) -> str:
+    """Timeline date, 'DD-Mon-YYYY'. Anything unformattable reads as blank."""
+    try:
+        return value.strftime("%d-%b-%Y")
+    except Exception:
+        return ""
+
+
+def _fmt_action_time(value) -> str:
+    """Timeline time, 'HH:MM'. Same blank-on-anything-else contract."""
+    try:
+        return value.strftime("%H:%M")
+    except Exception:
+        return ""
+
+
 def _sdict(s, order=None) -> dict:
     def iso(v):
         try:
@@ -100,7 +124,10 @@ def _sdict(s, order=None) -> dict:
         "order_id": s.order_id,
         "parcel_id": s.parcel_id,
         "carrier_code": s.carrier_code,
-        "awb_number": s.awb_number,
+        # display_awb, not the raw column: an awaiting shipment carries the
+        # placeholder AWB, and the Shipments page would render it as a tracking
+        # number. orders._shipment_dict masks it for the same reason.
+        "awb_number": shipment_service.display_awb(s.awb_number),
         "shipsagar_tracking_id": getattr(s, "shipsagar_tracking_id", None),
         "tracking_status": s.tracking_status,
         "carrier_status_raw": s.carrier_status_raw,
@@ -201,6 +228,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     from app.services import shipsagar_service as ss
     from app.services.order_service import (ShipmentOrderNoError,
                                             assign_shipment_order_no)
+    from app.services.shipment_service import is_awaiting_awb
     if u.get("role") not in ("ADMIN", "WAREHOUSE"):
         return _err(403, "FORBIDDEN", "Warehouse role required")
     bid = u.get("business_id")
@@ -210,6 +238,13 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         return _err(400, "MISSING_TRACKING_NUMBER", "Tracking number is required.")
     if not courier_code:
         return _err(400, "MISSING_COURIER", "Courier code is required.")
+    # Reserved: the awaiting placeholder is ours, not a carrier's. Adopting one
+    # would leave the row classified as awaiting - so push_state would never
+    # leave "awaiting" and a second push would be accepted forever. is_awaiting_awb
+    # rather than the prefix literal, so the two cannot drift.
+    if is_awaiting_awb(tracking_no):
+        return _err(400, "RESERVED_TRACKING_NUMBER",
+                    "That tracking number is reserved and cannot be pushed.")
     if len(tracking_no) > PARCEL_BARCODE_MAX_LEN:
         return _err(400, "INVALID_TRACKING_NUMBER_LENGTH",
                     f"Tracking number must be {PARCEL_BARCODE_MAX_LEN} characters or fewer.")
@@ -229,11 +264,35 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     order = db.query(Order).filter_by(id=body.order_id, business_id=bid).first()
     if order is None:
         return _err(404, "ORDER_NOT_FOUND", "Order not found in this business.")
-    if db.query(Shipment).filter_by(order_id=order.id).first() is not None:
+    # An order synced from Shopify already has an awaiting shipment, carrying a
+    # placeholder AWB. That row is a placeholder to be filled in, not a shipment
+    # to refuse, so the push adopts it instead of creating a second row. Any
+    # other existing shipment is still SHIPMENT_EXISTS: a real one means the
+    # order was already pushed, and pushing again would double-book the AWB.
+    # Newest first, id breaking the tie. create_shipment and book do not refuse a
+    # second shipment for an order, so an order can genuinely carry several, and
+    # .first() on an unordered query would let the database pick: had it returned
+    # the awaiting placeholder while a real booked shipment also existed, this
+    # would adopt the placeholder and the order would end up with two live
+    # shipments for one AWB. created_at is a second-resolution server default, so
+    # rows written in the same request tie-break on id.
+    awaiting = (db.query(Shipment)
+                .filter_by(order_id=order.id)
+                .order_by(Shipment.created_at.desc(), Shipment.id.desc())
+                .first())
+    if awaiting is not None and not is_awaiting_awb(awaiting.awb_number):
         return _err(400, "SHIPMENT_EXISTS", "This order already has a shipment.")
-    if db.query(Shipment).filter_by(
-            business_id=bid, carrier_code=courier_code,
-            awb_number=tracking_no).first() is not None:
+    # courier_code_variants, not the raw code: this probe mirrors the column's
+    # own UNIQUE(business_id, carrier_code, awb_number), but rows are written
+    # under two spellings of India Post - resolve_courier("IP") on the awaiting
+    # row, the raw catalogue "IP" here and in Dispatch bookings. Comparing one
+    # spelling against the other misses, the awaiting placeholder gets adopted,
+    # and one AWB ends up on two live shipments. A code with no alias keeps its
+    # single spelling, so this is a no-op for every other courier.
+    if db.query(Shipment).filter(
+            Shipment.business_id == bid,
+            Shipment.carrier_code.in_(ss.courier_code_variants(courier_code)),
+            Shipment.awb_number == tracking_no).first() is not None:
         return _err(400, "DUPLICATE_TRACKING",
                     f"Tracking number {tracking_no} is already used for {courier_code}.")
     if db.query(Parcel).filter_by(
@@ -251,17 +310,28 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     except ShipmentOrderNoError as exc:
         return _err(503, "SHIPMENT_ORDER_NO_UNAVAILABLE", str(exc))
 
-    parcel = Parcel(business_id=bid, order_id=order.id,
-                    parcel_code=tracking_no, barcode_value=tracking_no,
-                    status="CREATED")
-    db.add(parcel)
-    db.flush()
-    shipment = Shipment(business_id=bid, order_id=order.id, parcel_id=parcel.id,
-                        carrier_code=courier_code, awb_number=tracking_no,
-                        tracking_status="READY_TO_SHIP",
-                        shipped_at=datetime.now(timezone.utc))
-    db.add(shipment)
-    db.flush()
+    if awaiting is not None:
+        # Adopt the awaiting row: replace the placeholder with the real AWB and
+        # keep its parcel, so the parcel_id -> shipment_id -> awb_number chain
+        # the shipment model documents is never broken by a push.
+        shipment = awaiting
+        shipment.carrier_code = courier_code
+        shipment.awb_number = tracking_no
+        shipment.tracking_status = "READY_TO_SHIP"
+        shipment.shipped_at = datetime.now(timezone.utc)
+        db.flush()
+    else:
+        parcel = Parcel(business_id=bid, order_id=order.id,
+                        parcel_code=tracking_no, barcode_value=tracking_no,
+                        status="CREATED")
+        db.add(parcel)
+        db.flush()
+        shipment = Shipment(business_id=bid, order_id=order.id, parcel_id=parcel.id,
+                            carrier_code=courier_code, awb_number=tracking_no,
+                            tracking_status="READY_TO_SHIP",
+                            shipped_at=datetime.now(timezone.utc))
+        db.add(shipment)
+        db.flush()
 
     if not ss.is_configured():
         shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
@@ -288,14 +358,38 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
                           error=f"{exc.code}: {exc.message}",
                           payload={"courier": courier_code, "tracking_number": tracking_no})
         db.commit()
-        return _err(502, exc.code, exc.message)
+        db.refresh(shipment)
+        # The AWB is committed on this path, so the caller must be able to see
+        # that. Returning a bare error left the row `awaiting` with a real AWB
+        # and shipsagar_tracking_id NULL, which the Orders cell renders as a
+        # green Add Shipment button; retrying from there 400s SHIPMENT_EXISTS
+        # and the dialog had no way to recover. `pushed: false` plus the
+        # shipment's own id and order_no is the same shape the success paths
+        # return, so the dialog can refresh the row and the retry queue owns the
+        # registration from here.
+        return _err(502, exc.code, exc.message,
+                    data={**_sdict(shipment), "order_no": order_no,
+                          "pushed": False, "message": exc.message})
     shipment.shipsagar_tracking_id = f"SS-{tracking_no}"
+    pushed = bool(result.get("ok"))
+    message = result.get("message", "")
+    # A provider-level ERROR is a returned result, not an exception, and the
+    # tracking id above is persisted either way — so without this row a refusal
+    # here is indistinguishable from an acceptance, and the orders list reports
+    # it as pushed. record_push_verdict is the same helper register_tracking
+    # uses, so the two paths cannot drift apart again. It runs before the commit
+    # deliberately: log_audit flushes, so a failure aborts the push instead of
+    # storing a shipment whose verdict was never recorded.
+    ss.record_push_verdict(db, shipment, pushed=pushed, courier=courier_code,
+                           tracking_number=tracking_no,
+                           tracking_id=shipment.shipsagar_tracking_id,
+                           message=message)
     db.commit()
     db.refresh(shipment)
     return {"success": True, "data": {**_sdict(shipment),
                                       "order_no": order_no,
-                                      "pushed": bool(result.get("ok")),
-                                      "message": result.get("message", "")}}
+                                      "pushed": pushed,
+                                      "message": message}}
 
 
 @router.get("")
@@ -325,7 +419,7 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
     qy would leak another tenant's counts into the chips while the paged items
     stayed correct.
     """
-    from sqlalchemy import func, or_
+    from sqlalchemy import and_, func, or_
     from app.models.order import Order
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
@@ -349,8 +443,15 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
     text = f"%{q.strip()}%" if q and q.strip() else None
     order_text = f"%{order_no.strip()}%" if order_no and order_no.strip() else None
     if text:
+        # An awaiting shipment's placeholder AWB is not a searchable value:
+        # matching it would let a user "find" placeholder rows by typing the
+        # prefix, which is not what they mean. The pattern is built from the
+        # shared constant so the literal lives in exactly one place.
         qy = (qy.outerjoin(Parcel, Parcel.id == Shipment.parcel_id)
-                .filter(or_(Shipment.awb_number.ilike(text),
+                .filter(or_(and_(
+                        Shipment.awb_number.not_like(
+                            shipment_service.AWAITING_AWB_PREFIX + "%"),
+                        Shipment.awb_number.ilike(text)),
                             Order.internal_order_number.ilike(text),
                             Order.shopify_order_name.ilike(text),
                             Parcel.barcode_value.ilike(text))))
@@ -389,6 +490,28 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
         }}}
 
 
+@router.get("/couriers")
+def list_couriers(u: dict = Depends(get_current_user)):
+    """The courier catalogue ShipSagar serves, for the push dialog's dropdown.
+
+    Declared BEFORE the /{sid} route on purpose. Starlette matches in
+    declaration order, so a /couriers route placed after the parameterised one is
+    swallowed by it with sid="couriers" and the caller gets a shipment-not-found
+    instead of a catalogue.
+    """
+    from app.services import shipsagar_service as ss
+    if u.get("role") not in ("ADMIN", "WAREHOUSE"):
+        return _err(403, "FORBIDDEN", "Warehouse role required")
+    try:
+        rows = ss.get_couriers()
+    except ss.ShipsagarError as exc:
+        # get_couriers only raises when nothing is cached, so there is no
+        # previous list to fall back to. The empty list is still returned so the
+        # dialog renders rather than blowing up on a 502 body.
+        return _err(502, exc.code, exc.message, data={"couriers": []})
+    return {"success": True, "data": {"couriers": rows}}
+
+
 @router.get("/{sid}")
 def get_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     from app.models.order import Order
@@ -401,6 +524,62 @@ def get_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_
         raise HTTPException(404, "Shipment not found")
     s, o = row
     return {"success": True, "data": _sdict(s, o)}
+
+
+@router.get("/{sid}/history")
+def shipment_history(sid: str, db: Session = Depends(get_db),
+                     u: dict = Depends(get_current_user)):
+    """Live tracking history for one shipment, straight from its provider.
+
+    Read-only by contract: no ShipmentEvent row is written and
+    shipment.tracking_status is left exactly as it was, so opening the timeline
+    can never move a shipment's state. POST /{sid}/sync is the ingesting path.
+
+    ShipSagar documents TrackingHistory oldest-first (its sample runs 12:27 ->
+    15:51 -> 19:43 on one day), so the list is reversed for the response — the
+    newest scan leads — and the reported status comes from the LAST entry of the
+    provider's list, which is that newest, most advanced scan. Taking index 0
+    instead would report a shipment as still booked hours after it was delivered.
+    """
+    from app.carriers.base import CarrierError
+    from app.carriers.registry import provider_for_shipment
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import is_awaiting_awb
+    s = db.query(Shipment).filter_by(id=sid, business_id=u.get("business_id")).first()
+    if s is None:
+        return _err(404, "SHIPMENT_NOT_FOUND", "Shipment not found")
+    awb = (s.awb_number or "").strip()
+    # is_awaiting_awb, not `if not awb`: an order synced from Shopify arrives
+    # with a placeholder AWB, and asking ShipSagar to track a placeholder would
+    # report scans for a tracking number that was never issued.
+    if is_awaiting_awb(awb):
+        return _err(400, "NO_TRACKING_NUMBER",
+                    "This shipment has no tracking number yet.")
+    try:
+        # provider_for_shipment, not the carrier code: a pushed shipment keeps
+        # its ShipSagar courier (IP, FEDEX) in carrier_code and is discriminated
+        # by shipsagar_tracking_id.
+        provider = provider_for_shipment(s)
+        data = provider.get_tracking(awb)
+    except CarrierError as exc:
+        return _err(502, exc.code, exc.message)
+    raw_events = data.get("events") or []
+    # normalize_status on the provider instance, not the ShipSagar matrix
+    # directly: the instance carries the shipment's own courier, so an India Post
+    # shipment reads the India Post rows while a direct DTDC one reads DTDC's.
+    events = [{
+        "action_date": _fmt_action_date(e.get("event_time")),
+        "action_time": _fmt_action_time(e.get("event_time")),
+        "action_location": e.get("location") or "",
+        "action_description": e.get("status_raw") or "",
+        "normalized_status": provider.normalize_status(e.get("status_raw") or ""),
+    } for e in reversed(raw_events)]
+    final_raw = (raw_events[-1].get("status_raw") or "") if raw_events else ""
+    return {"success": True, "data": {
+        "awb": awb, "courier_code": s.carrier_code,
+        "status": provider.normalize_status(final_raw),
+        "tracking_url": provider.build_tracking_url(awb),
+        "events": events}}
 
 
 @router.post("/{sid}/correct-awb")
@@ -421,7 +600,15 @@ def correct_awb(sid: str, body: CorrectAwbIn, db: Session = Depends(get_db), u: 
         raise HTTPException(400, "awb_number is required")
     if new == old:
         return {"success": True, "data": _sdict(s)}
-    dup = db.query(Shipment).filter_by(business_id=s.business_id, carrier_code=s.carrier_code, awb_number=new).first()
+    # Same spelling-independent lookup the push route uses: the probe stands in
+    # for the column's own uniqueness, and reading s.carrier_code verbatim would
+    # miss the same AWB held under an alias spelling and fall through to an
+    # IntegrityError from the commit instead of this readable 400.
+    from app.services.shipsagar_service import courier_code_variants
+    dup = db.query(Shipment).filter(
+        Shipment.business_id == s.business_id,
+        Shipment.carrier_code.in_(courier_code_variants(s.carrier_code)),
+        Shipment.awb_number == new).first()
     if dup is not None:
         raise HTTPException(400, "AWB already linked")
     s.awb_number = new

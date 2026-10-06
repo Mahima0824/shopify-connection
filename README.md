@@ -149,9 +149,10 @@ All endpoints use the envelope `{success: true, data}` / `{success: false, error
 
 ## ShipSagar
 
-ShipSagar aggregates courier tracking. Two endpoints are integrated: `PushShipment`
-(register a shipment) and `TrackShipment` (poll history). Credentials come from the
-ShipSagar client profile page and are sent in the request body:
+ShipSagar aggregates courier tracking. Three endpoints are integrated: `PushShipment`
+(register a shipment), `TrackShipment` (poll history) and `GetCourier` (the
+account's courier catalogue, which backs the **Add Shipment** dropdown). Credentials
+come from the ShipSagar client profile page and are sent in the request body:
 
 - `SHIPSAGAR_API_BASE_URL` - defaults to `https://app.shipsagar.com/api/Web`
 - `SHIPSAGAR_TOKEN` - the "api key" from the client profile page
@@ -162,6 +163,41 @@ With no credentials set, pushes fall back to a deterministic
 `SS-STUB-<COURIER>-<AWB>` identifier and tracking stays offline, so local
 development works without a ShipSagar account.
 
-To track a parcel: open `/shipments`, click **Push Shipment**, pick the order and
-type the tracking number the India Post worker issued. The page then refreshes
-every 25 seconds and shows each parcel's status and current location.
+### ShipSagar environment
+
+| Variable | Purpose |
+| --- | --- |
+| `SHIPSAGAR_TOKEN` | "api key" from the ShipSagar client profile page |
+| `SHIPSAGAR_CLIENT_CODE` | "client code" from the client profile page |
+| `SHIPSAGAR_EMAIL` | constant `EmailID` sent on every shipment |
+| `SHIPSAGAR_COMPANY` | constant `CompanyName` sent on every shipment |
+| `SHIPSAGAR_API_BASE_URL` | defaults to `https://app.shipsagar.com/api/Web` |
+| `SHIPSAGAR_WEBHOOK_SECRET` | HMAC secret for the inbound webhook |
+
+Only `SHIPSAGAR_TOKEN` and `SHIPSAGAR_CLIENT_CODE` are required to talk to
+ShipSagar. `SHIPSAGAR_EMAIL` and `SHIPSAGAR_COMPANY` are optional account
+constants: when either is unset or blank that one field falls back to the
+order's own `receiver_email` / `receiver_company`, so a half-configured deploy
+still sends a usable value. Set them if you want a single address and company on
+every shipment.
+
+The backend reads **two** env files, and the split is intentional:
+
+| File | Holds |
+| --- | --- |
+| `backend/.env` | `SHIPSAGAR_TOKEN`, `SHIPSAGAR_CLIENT_CODE` — deployment secrets |
+| `.env` (repo root) | `SHIPSAGAR_EMAIL`, `SHIPSAGAR_COMPANY` — shared account constants |
+
+Both are resolved to absolute paths at import, so the start directory does not
+matter: launching with `uvicorn` from the repo root and from `backend/` both
+work. Where a variable appears in both files, `backend/.env` wins.
+
+Set all of them in a **backend** env file — never in `frontend/.env`. Anything
+prefixed `VITE_` is compiled into the browser bundle and visible to every
+visitor.
+
+Orders are the only entry point for shipments. A synced Shopify order starts in
+`AWAITING_TRACKING`; open the Orders page and use **Add Shipment** to enter the
+tracking number the India Post worker issued. Manual orders ask for the tracking
+number immediately after they are created. Clicking a tracking number opens the
+full scan history from ShipSagar's `TrackShipment`.

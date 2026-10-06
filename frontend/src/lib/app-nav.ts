@@ -7,7 +7,6 @@ export const APP_NAV_GROUPS: NavEntry[] = [
     children: [
       { label: "Orders", href: "/orders" },
       { label: "Parcels", href: "/parcels" },
-      { label: "Shipments", href: "/shipments" },
       { label: "Tracking Center", href: "/tracking" },
       { label: "Outstanding", href: "/shipments/outstanding" },
     ],
@@ -22,7 +21,6 @@ export const APP_NAV_GROUPS: NavEntry[] = [
     ],
   },
   { label: "Tracking", href: "/tracking" },
-  { label: "Shipments", href: "/shipments" },
   { label: "Exceptions", href: "/exceptions" },
   {
     label: "Finance",
