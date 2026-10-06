@@ -325,10 +325,12 @@ export default function StatementsPage() {
                       return (
                         <TableRow key={r.bank_row_id}>
                           <TableCell className="font-semibold text-foreground">
-                            {r.order_name || r.order_id || "-"}
+                            {r.order_name || r.order_id || "—"}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground font-mono">
-                            {r.bank_reference || "-"}
+                          <TableCell>
+                            <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                              {r.bank_reference || "—"}
+                            </span>
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-foreground">
                             {inr(r.expected_amount)}
@@ -340,7 +342,7 @@ export default function StatementsPage() {
                             {inr(r.difference)}
                           </TableCell>
                           <TableCell>
-                            <div className="inline-flex items-center gap-2">
+                            <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-muted/50 border border-border/70">
                               <SeverityBadge severity={statusSeverity(st)} />
                               <span className="text-xs font-bold text-foreground">{st}</span>
                             </div>

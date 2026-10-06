@@ -137,17 +137,23 @@ export default function StatementDetailPage() {
               <TableBody>
                 {rows.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {r.row_number}
+                    <TableCell className="tabular-nums font-mono text-xs text-muted-foreground">
+                      #{r.row_number}
                     </TableCell>
-                    <TableCell className="font-mono font-semibold text-foreground">
-                      {r.awb_number ?? "-"}
+                    <TableCell>
+                      {r.awb_number ? (
+                        <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                          {r.awb_number}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
                     </TableCell>
-                    <TableCell className="tabular-nums font-medium text-foreground">
+                    <TableCell className="tabular-nums font-semibold text-foreground">
                       ₹{Number(r.net_amount || 0).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={r.reconciliation_status === "MATCHED" ? "default" : "secondary"}>
+                      <Badge variant={r.reconciliation_status === "MATCHED" ? "success" : "warning"} className="text-xs font-semibold shadow-xs">
                         {r.reconciliation_status}
                       </Badge>
                     </TableCell>

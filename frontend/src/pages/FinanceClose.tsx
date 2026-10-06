@@ -328,10 +328,12 @@ export default function MonthClosePage() {
                     <TableRow key={g.key}>
                       <TableCell className="font-semibold text-foreground">{g.label}</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                        {g.count}
+                        <span className="inline-block px-2.5 py-0.5 rounded-md bg-muted/50 border border-border/60 text-xs">
+                          {g.count}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        <div className="inline-flex items-center gap-2">
+                        <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-muted/50 border border-border/70">
                           <SeverityBadge severity={gateSeverity(g.count)} />
                           <span className="text-xs font-bold text-foreground">
                             {g.count > 0 ? "BLOCKER" : "CLEAR"}

@@ -30,14 +30,14 @@ const OPERATIONAL_DOTS: Record<string, string> = {
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
   const dot = dotMap[status?.toUpperCase()] ?? "var(--muted-foreground)";
   return (
-    <Badge variant="secondary">
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted/60 border border-border/80 text-foreground">
       <span
         aria-hidden="true"
-        className="size-2 shrink-0 rounded-full"
+        className="size-1.5 shrink-0 rounded-full"
         style={{ background: dot }}
       />
       {status}
-    </Badge>
+    </span>
   );
 }
 
@@ -127,60 +127,61 @@ export default function OrderTable({
 }) {
   if (!orders || orders.length === 0) {
     return (
-      <div className="p-10 text-center text-muted-foreground">
+      <div className="rounded-xl border border-border/80 bg-card p-12 text-center text-sm text-muted-foreground shadow-xs">
         No orders found. Click &quot;Sync Shopify Orders&quot; to import data.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Order Name</TableHead>
-            <TableHead>Shipment</TableHead>
-            <TableHead>Financial Status</TableHead>
-            <TableHead>Fulfillment / Op Status</TableHead>
-            <TableHead>Total Amount</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead className="text-right">Action</TableHead>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Order Name</TableHead>
+          <TableHead>Shipment</TableHead>
+          <TableHead>Financial Status</TableHead>
+          <TableHead>Fulfillment / Op Status</TableHead>
+          <TableHead className="text-right">Total Amount</TableHead>
+          <TableHead>Date</TableHead>
+          <TableHead className="text-right">Action</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {orders.map((o) => (
+          <TableRow key={o.id}>
+            <TableCell>
+              <Link
+                to={`/orders/${o.id}`}
+                className="font-mono text-xs font-semibold text-foreground hover:text-primary transition-colors bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md border border-border/70 inline-block"
+              >
+                {o.shopify_order_name || o.internal_order_number || o.id}
+              </Link>
+            </TableCell>
+            <TableCell>
+              <ShipmentCell shipment={o.shipment} onAdd={() => onAddShipment?.(o)} />
+            </TableCell>
+            <TableCell>
+              <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
+            </TableCell>
+            <TableCell>
+              <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
+            </TableCell>
+            <TableCell className="text-right font-semibold tabular-nums text-foreground">
+              ₹{Number(o.total_amount || 0).toLocaleString()}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground font-mono">
+              {(o.order_date ?? o.shopify_created_at ?? o.created_at)
+                ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
+                : "-"}
+            </TableCell>
+            <TableCell className="text-right">
+              <Button asChild variant="outline" size="sm" className="shadow-xs hover:border-primary/50 text-xs">
+                <Link to={`/orders/${o.id}`}>View Timeline</Link>
+              </Button>
+            </TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orders.map((o) => (
-            <TableRow key={o.id}>
-              <TableCell className="font-semibold">
-                <Link to={`/orders/${o.id}`} className="hover:underline">
-                  {o.shopify_order_name || o.internal_order_number || o.id}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <ShipmentCell shipment={o.shipment} onAdd={() => onAddShipment?.(o)} />
-              </TableCell>
-              <TableCell>
-                <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
-              </TableCell>
-              <TableCell>
-                <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
-              </TableCell>
-              <TableCell className="font-semibold tabular-nums">
-                ₹{Number(o.total_amount || 0).toLocaleString()}
-              </TableCell>
-              <TableCell className="text-[13px] text-muted-foreground">
-                {(o.order_date ?? o.shopify_created_at ?? o.created_at)
-                  ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
-                  : "-"}
-              </TableCell>
-              <TableCell className="text-right">
-                <Button asChild variant="outline" size="sm">
-                  <Link to={`/orders/${o.id}`}>View Timeline</Link>
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

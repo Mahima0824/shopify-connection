@@ -145,7 +145,7 @@ export default function OrdersPage() {
       )}
 
       {/* Main Table */}
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
+      <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
         {loading ? (
           <div className="p-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-3">
             <div className="size-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -168,7 +168,7 @@ export default function OrdersPage() {
         ) : (
           <OrderTable orders={orders} onAddShipment={(o) => setAddShipmentOrder(o)} />
         )}
-      </div>
+      </Card>
 
       <AddShipmentDialog
         open={!!addShipmentOrder}

@@ -35,9 +35,11 @@ export default function ImportResult({ summary }: { summary: ImportSummary }) {
             <TableBody>
               {summary.errors.map((e, ix) => (
                 <TableRow key={ix}>
-                  <TableCell className="font-mono text-xs">{e.row ?? "-"}</TableCell>
-                  <TableCell className="font-medium">{e.name ?? "-"}</TableCell>
-                  <TableCell className="text-destructive">{e.reason}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                    {e.row ? `#${e.row}` : "—"}
+                  </TableCell>
+                  <TableCell className="font-semibold text-foreground">{e.name ?? "—"}</TableCell>
+                  <TableCell className="text-destructive font-medium text-xs">{e.reason}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

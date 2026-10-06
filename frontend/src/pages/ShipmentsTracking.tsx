@@ -227,14 +227,29 @@ export default function TrackingPage() {
               <TableBody>
                 {shown.map((s) => (
                   <TableRow key={s.id} className={`transition-colors ${TONE_STYLE[bandTone(s.tracking_status)]}`}>
-                    <TableCell className="font-mono font-semibold text-foreground">{s.awb_number}</TableCell>
-                    <TableCell className="text-foreground">{names[s.id] ?? "-"}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{s.carrier_code}</Badge>
+                      <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                        {s.awb_number}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-foreground font-medium">{names[s.id] ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-[11px] font-semibold">{s.carrier_code}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{s.tracking_status}</Badge>
-                      {cool[s.id] && <div role="status" className="mt-1 text-xs text-warning">{cool[s.id]}</div>}
+                      <Badge
+                        variant={
+                          bandTone(s.tracking_status) === "critical"
+                            ? "destructive"
+                            : bandTone(s.tracking_status) === "warn"
+                            ? "warning"
+                            : "secondary"
+                        }
+                        className="text-xs font-semibold shadow-xs"
+                      >
+                        {s.tracking_status}
+                      </Badge>
+                      {cool[s.id] && <div role="status" className="mt-1 text-xs text-warning font-medium">{cool[s.id]}</div>}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">

@@ -186,19 +186,23 @@ export default function ExceptionsPage() {
                 {items.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell className="font-semibold">
-                      <Link to={`/orders/${i.order_id}`} className="text-foreground hover:underline">
+                      <Link to={`/orders/${i.order_id}`} className="text-foreground hover:text-primary transition-colors font-semibold">
                         {i.order_name || i.order_id}
                       </Link>
                     </TableCell>
-                    <TableCell className="font-mono text-foreground font-semibold">{i.issue_code}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                        {i.issue_code}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <SeverityBadge severity={i.severity} />
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="text-xs text-muted-foreground font-mono">
                       {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={i.resolved ? "success" : "warning"}>
+                      <Badge variant={i.resolved ? "success" : "warning"} className="text-xs font-semibold shadow-xs">
                         {i.resolved ? "RESOLVED" : "OPEN"}
                       </Badge>
                     </TableCell>

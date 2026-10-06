@@ -555,19 +555,23 @@ export default function TallySettingsPage() {
                   return (
                     <TableRow key={b.id}>
                       <TableCell>
-                        <div className="font-semibold text-foreground">
-                          {b.file_name || `${b.batch_reference}.xlsx`}
+                        <div className="font-semibold text-foreground flex items-center gap-2">
+                          <span className="font-mono text-xs bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground font-semibold">
+                            {b.file_name || `${b.batch_reference}.xlsx`}
+                          </span>
                         </div>
-                        <div className="text-xs text-muted-foreground">{b.batch_reference}</div>
+                        <div className="text-xs text-muted-foreground font-mono mt-1">{b.batch_reference}</div>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">
                         {b.created_at ? new Date(b.created_at).toLocaleString() : "-"}
                       </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums text-foreground">
-                        {count}
+                      <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                        <span className="inline-block px-2.5 py-0.5 rounded-md bg-muted/50 border border-border/60 text-xs">
+                          {count}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        <div className="inline-flex items-center gap-2">
+                        <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-muted/50 border border-border/70">
                           <SeverityBadge severity={sev} />
                           <span className="text-xs font-bold text-foreground">{b.status}</span>
                         </div>

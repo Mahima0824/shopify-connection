@@ -109,13 +109,17 @@ export default function OutstandingPage() {
                     className={`transition-colors ${TONE_BORDER[slaTone(r.sla_status)] || ""}`}
                   >
                     <TableCell className="font-semibold text-foreground">
-                      {r.order_name ?? "-"}
+                      {r.order_name ?? "—"}
                     </TableCell>
-                    <TableCell className="font-mono text-foreground">{r.awb_number}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{r.tracking_status}</Badge>
+                      <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                        {r.awb_number}
+                      </span>
                     </TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs font-medium">{r.tracking_status}</Badge>
+                    </TableCell>
+                    <TableCell className="tabular-nums font-mono text-xs text-muted-foreground">
                       {r.age_days}d
                     </TableCell>
                     <TableCell>
@@ -127,11 +131,12 @@ export default function OutstandingPage() {
                             ? "outline"
                             : "secondary"
                         }
+                        className="text-xs font-semibold shadow-xs"
                       >
                         {r.sla_status} ({r.sla_days_used}d)
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums text-foreground">
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
                       ₹{Number(r.amount || 0).toLocaleString()}
                     </TableCell>
                   </TableRow>

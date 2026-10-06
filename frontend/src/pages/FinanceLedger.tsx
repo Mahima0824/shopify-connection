@@ -238,24 +238,32 @@ export default function LedgerPage() {
               <TableBody>
                 {pageItems.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {t.transaction_date_ist ?? t.transaction_date ?? "-"}
+                    <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                      {t.transaction_date_ist ?? t.transaction_date ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{t.transaction_type}</Badge>
+                      <Badge variant="secondary" className="text-xs font-semibold">{t.transaction_type}</Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-foreground">{t.order_id ?? "-"}</TableCell>
+                    <TableCell>
+                      {t.order_id ? (
+                        <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                          {t.order_id}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/60">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums text-foreground">
                       {inr(t.amount)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {inr(t.tax_amount)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-foreground font-medium">
+                    <TableCell className="text-right tabular-nums text-foreground font-semibold">
                       {inr(t.net_amount)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">
-                      {t.reference_number ?? "-"}
+                      {t.reference_number ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}

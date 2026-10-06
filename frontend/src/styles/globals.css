@@ -261,6 +261,20 @@ optgroup {
   font-family: var(--font-sans);
 }
 
+/* Table containment: prevent double borders when Table is rendered inside a Card */
+[data-slot="card"] [data-slot="table-container"],
+[data-slot="card"] > [data-slot="table-container"] {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+[data-slot="table"] {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
 a, a:visited {
   text-decoration: none;
 }

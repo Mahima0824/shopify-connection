@@ -116,7 +116,11 @@ export default function LabelsPage() {
                         />
                       </TableCell>
                       <TableCell className="font-semibold text-foreground">{p.parcel_code}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{p.barcode_value}</TableCell>
+                      <TableCell>
+                        <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                          {p.barcode_value}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{p.status}</Badge>
                       </TableCell>

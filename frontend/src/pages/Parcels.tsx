@@ -180,15 +180,29 @@ export default function ParcelsPage() {
               <TableBody>
                 {items.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-semibold text-foreground">{p.parcel_code}</TableCell>
-                    <TableCell className="text-foreground">{p.order_name ?? p.order_id}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{p.barcode_value}</TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      <Link to={`/parcels/${p.barcode_value}`} className="hover:text-primary transition-colors">
+                        {p.parcel_code}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-foreground font-medium">{p.order_name ?? p.order_id}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                        {p.barcode_value}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       {getStatusBadge(p.status)}
                     </TableCell>
                     <TableCell className="text-foreground">{p.courier ?? "—"}</TableCell>
-                    <TableCell className="font-mono text-xs text-foreground">{p.awb ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{fmtDate(p.created_at)}</TableCell>
+                    <TableCell>
+                      {p.awb ? (
+                        <span className="font-mono text-xs text-foreground font-semibold">{p.awb}</span>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">{fmtDate(p.created_at)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <Link to={`/parcels/${p.barcode_value}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
