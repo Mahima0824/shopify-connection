@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import Reveal from "../components/Reveal";
 import Footer from "../components/Footer";
+import HeroSection from "../components/HeroSection";
 import {
   Badge,
   Card,
@@ -62,71 +63,8 @@ const testimonials = [
 export default function Landing() {
   return (
     <>
-      {/* Hero 2-col */}
-      <section className="bg-background py-20 lg:py-24">
-        <div className="mx-auto grid w-full max-w-[1280px] items-center gap-12 px-6 min-[769px]:grid-cols-[7fr_5fr] max-[480px]:px-4">
-          <Reveal>
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Shopify reconciliation
-            </p>
-            <h1 className="font-bold tracking-tight text-foreground text-4xl sm:text-5xl lg:text-[56px] leading-[1.05] tracking-[-0.02em]">
-              Reconciliation for Shopify ops
-            </h1>
-            <p className="mt-4 max-w-[520px] text-lg text-muted-foreground leading-relaxed">
-              Connect Shopify orders, warehouse scans, returns, and Tally accounting in one operational ledger.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/dashboard" className={buttonVariants({ size: "lg" })}>
-                Sign up free
-              </Link>
-              <Link to="/#product" className={buttonVariants({ variant: "outline", size: "lg" })}>
-                See product
-              </Link>
-            </div>
-          </Reveal>
-          <Reveal delay={120}>
-            <Card className="p-6">
-              <div className="flex gap-6 pb-4">
-                {[
-                  { value: "128k", label: "Synced" },
-                  { value: "96k", label: "Scanned" },
-                  { value: "99.9%", label: "Accuracy" },
-                ].map((s) => (
-                  <div key={s.label}>
-                    <div className="tabular-nums font-semibold text-xl text-foreground">{s.value}</div>
-                    <div className="text-xs text-muted-foreground">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="overflow-hidden rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ledgerRows.map((r) => (
-                      <TableRow key={r.order}>
-                        <TableCell className="font-semibold">{r.order}</TableCell>
-                        <TableCell>{r.status}</TableCell>
-                        <TableCell className="tabular-nums text-right font-medium">{r.amount}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="mt-4">
-                <Badge variant="secondary" className="bg-success/15 text-foreground font-medium">
-                  Sync status: healthy
-                </Badge>
-              </div>
-            </Card>
-          </Reveal>
-        </div>
-      </section>
+      {/* Brand Hero Section matching reference */}
+      <HeroSection />
 
       {/* Metric strip */}
       <section className="border-y border-border bg-card py-8">
