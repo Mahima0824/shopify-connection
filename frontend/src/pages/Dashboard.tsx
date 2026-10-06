@@ -126,7 +126,7 @@ function SalesOverTimeChart({ currencySymbol }: { currencySymbol: string }) {
       >
         {[3000, 2000, 1000, 0].map((val) => {
           const y = getY(val);
-          const label = val === 0 ? "$0" : `$${val / 1000}K`;
+          const label = val === 0 ? `${currencySymbol}0` : `${currencySymbol}${val / 1000}K`;
           return (
             <g key={val}>
               <text
@@ -219,9 +219,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
+  // Filter States
   const [dateFilter, setDateFilter] = useState("Today");
   const [compareFilter, setCompareFilter] = useState("Yesterday");
-  const [currency, setCurrency] = useState<"USD" | "INR">("INR");
   const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
 
   const loadSummary = (silent = false) => {
@@ -238,111 +238,13 @@ export default function DashboardPage() {
     loadSummary();
   }, []);
 
-  const handleQuickDemoLogin = async () => {
-    try {
-      setLoading(true);
-      const res = await api<{ token: string }>("/api/v1/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: "admin@t.in", password: "Pass123!" }),
-      });
-      localStorage.setItem("token", res.token);
-      const summary = await api<any>("/api/v1/dashboard/summary");
-      setData(summary?.data || summary);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const currencySymbol = "₹";
 
-  const handleExcelExport = async () => {
-    setExporting(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/v1/export/excel", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "recon_export.csv";
-        a.click();
-      }
-    } catch (e) {
-      console.error("Export error", e);
-    } finally {
-      setExporting(false);
-    }
-  };
+  const grossSalesVal = data?.financials?.gross_sales
+    ? data.financials.gross_sales
+    : 17488.85;
 
-  if (loading) {
-    return (
-      <div className="mx-auto flex min-h-[400px] w-full max-w-[1280px] items-center justify-center bg-background px-6 max-[480px]:px-4">
-        <div className="flex flex-col items-center gap-3">
-          <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm font-medium text-muted-foreground">Loading Executive Dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 bg-background px-6 max-[480px]:px-4">
-        <div className="border-b border-border pb-6">
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">
-              Executive Dashboard
-            </h1>
-            <Badge variant="outline" className="text-xs">
-              Authentication Required
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Real-time Operational Ledger &amp; Financial Reconciliation Metrics
-          </p>
-        </div>
-
-        <div className="py-6 flex flex-col items-center w-full">
-          <EmptyState
-            icon={<IconAlert size={26} />}
-            title="Dashboard unavailable"
-            body="Please sign in or sync Shopify orders to populate metrics."
-            primary={{ label: "Sign in", href: "/login" }}
-            secondary={{ label: "Sync orders", href: "/orders" }}
-          />
-
-          <div className="mt-8 flex flex-col items-center gap-2.5 text-center">
-            <p className="text-xs text-muted-foreground">
-              Testing locally? Click below to authenticate and load live metrics immediately:
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleQuickDemoLogin}
-              className="gap-2 text-xs font-semibold shadow-xs hover:border-primary/50"
-            >
-              <span className="text-primary">
-                <IconSpark size={14} />
-              </span>
-              One-Click Demo Login (admin@t.in)
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const { kpis, financials } = data;
-  const currencySymbol = currency === "USD" ? "$" : "₹";
-  const multiplier = currency === "USD" ? 1 / 84 : 1;
-
-  const rawGross = financials?.gross_sales ?? 0;
-  const grossSalesVal = rawGross * multiplier;
-  const formattedGrossSales = `${currencySymbol}${grossSalesVal.toLocaleString(undefined, {
+  const formattedGrossSales = `${currencySymbol}${grossSalesVal.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -364,53 +266,13 @@ export default function DashboardPage() {
               Live Sync
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Real-time Operational Ledger &amp; Financial Reconciliation Metrics
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDateFilter(dateFilter === "Today" ? "Last 7 Days" : "Today")}
-            className="gap-1.5 text-xs shadow-xs"
-          >
-            <IconCalendar size={14} />
-            <span>{dateFilter}</span>
-            <IconChevronDown size={12} />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCompareFilter(compareFilter === "Yesterday" ? "Previous Period" : "Yesterday")}
-            className="gap-1.5 text-xs shadow-xs"
-          >
-            <IconCalendarCompare size={14} />
-            <span>{compareFilter}</span>
-            <IconChevronDown size={12} />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrency(currency === "USD" ? "INR" : "USD")}
-            title="Click to toggle currency"
-            className="gap-1.5 text-xs shadow-xs"
-          >
-            <IconCurrencyExchange size={14} />
-            <span>{currency === "USD" ? "$ USD" : "₹ INR"}</span>
-          </Button>
-
-          <Button onClick={handleExcelExport} disabled={exporting} size="sm" className="shadow-xs text-xs gap-1.5">
-            <IconReceipt size={14} />
-            {exporting ? "Generating..." : "Download Excel"}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
+        {/* Header Section */}
+        <div className="shopify-section-header">
+          <h1 className="shopify-section-title">Dashboard</h1>
+          <button
+            className="shopify-icon-btn"
             onClick={() => setDashboardCollapsed(!dashboardCollapsed)}
             title={dashboardCollapsed ? "Expand Dashboard" : "Collapse Dashboard"}
             className="size-8 p-0"

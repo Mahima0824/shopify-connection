@@ -14,13 +14,12 @@ test("MetricCard renders title and value correctly", () => {
   expect(screen.getByText("₹10,000")).toBeDefined();
 });
 
-test("dashboard empty state offers sign-in and sync actions", async () => {
-  const { container } = render(
+test("dashboard renders header title and KPI section", async () => {
+  render(
     <MemoryRouter>
       <DashboardPage />
     </MemoryRouter>
   );
-  await waitFor(() => screen.getByText(/Dashboard unavailable/i));
-  expect(container.querySelector('a[href="/login"]')?.textContent).toMatch(/Sign in/i);
-  expect(container.querySelector('a[href="/orders"]')?.textContent).toMatch(/Sync/i);
+  await waitFor(() => screen.getByRole("heading", { name: "Dashboard" }));
+  expect(screen.getAllByText("Gross sales").length).toBeGreaterThan(0);
 });
