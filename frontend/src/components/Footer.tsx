@@ -11,14 +11,6 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
     ],
   },
   {
-    title: "Scanning",
-    links: [
-      { label: "Dispatch scan", href: "/scan/dispatch" },
-      { label: "Return scan", href: "/scan/return" },
-      { label: "Parcels", href: "/orders" },
-    ],
-  },
-  {
     title: "Finance",
     links: [
       { label: "Statements", href: "/statements" },

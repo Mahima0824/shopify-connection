@@ -11,15 +11,6 @@ export const APP_NAV_GROUPS: NavEntry[] = [
       { label: "Outstanding", href: "/shipments/outstanding" },
     ],
   },
-  {
-    label: "Scan",
-    children: [
-      { label: "Hub", href: "/scan" },
-      { label: "Dispatch", href: "/scan/dispatch" },
-      { label: "Returns", href: "/scan/return" },
-      { label: "RTO", href: "/scan/rto" },
-    ],
-  },
   { label: "Tracking", href: "/tracking" },
   { label: "Exceptions", href: "/exceptions" },
   {

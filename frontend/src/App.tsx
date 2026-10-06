@@ -13,10 +13,6 @@ import Parcels from "./pages/Parcels";
 import ParcelDetail from "./pages/ParcelDetail";
 import ParcelLabels from "./pages/ParcelLabels";
 import ParcelTestSheet from "./pages/ParcelTestSheet";
-import ScanHub from "./pages/ScanHub";
-import Dispatch from "./pages/Dispatch";
-import ReturnScan from "./pages/ReturnScan";
-import RtoScan from "./pages/RtoScan";
 import ShipmentHistory from "./pages/ShipmentHistory";
 import Outstanding from "./pages/Outstanding";
 import StatementList from "./pages/StatementList";
@@ -57,10 +53,6 @@ export function AppRoutes() {
         <Route path="/parcels/labels" element={<ParcelLabels />} />
         <Route path="/parcels/test-sheet" element={<ParcelTestSheet />} />
         <Route path="/parcels/:barcode" element={<ParcelDetail />} />
-        <Route path="/scan" element={<ScanHub />} />
-        <Route path="/scan/dispatch" element={<Dispatch />} />
-        <Route path="/scan/return" element={<ReturnScan />} />
-        <Route path="/scan/rto" element={<RtoScan />} />
         <Route path="/shipments/outstanding" element={<Outstanding />} />
         <Route path="/shipments/tracking" element={<ShipmentsTracking />} />
         <Route path="/shipments/:id" element={<ShipmentHistory />} />

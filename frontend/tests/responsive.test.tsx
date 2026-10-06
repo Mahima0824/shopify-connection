@@ -24,9 +24,3 @@ test("root layout declares device-width viewport", () => {
   expect(layout).toMatch(/viewport/);
   expect(layout).toMatch(/device-width/);
 });
-
-test("scan hub uses collapsible grid instead of fixed 3 columns", () => {
-  const scan = read("../src/pages/ScanHub.tsx");
-  expect(scan).toMatch(/cols-3/);
-  expect(scan).not.toMatch(/1fr 1fr 1fr/);
-});
