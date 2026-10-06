@@ -1,7 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import Reveal from "../components/Reveal";
-import Footer from "../components/Footer";
 import HeroSection from "../components/HeroSection";
 import {
   Badge,
@@ -634,8 +633,6 @@ export default function Landing() {
           </Reveal>
         </div>
       </section>
-
-      <Footer />
     </>
   );
 }

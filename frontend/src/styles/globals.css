@@ -119,8 +119,8 @@
 }
 
 @theme inline {
-  --font-sans: 'IBM Plex Sans Variable', sans-serif;
-  --font-heading: 'Montserrat Variable', sans-serif;
+  --font-sans: 'Inter', 'Plus Jakarta Sans', 'IBM Plex Sans Variable', sans-serif;
+  --font-heading: 'Montserrat Variable', 'Montserrat', sans-serif;
   /* DESIGN.md asks for Neue Haas Grotesk Display (commercial, not
      installable) and Inter Variable. Inter ships here as IBM Plex Sans,
      with Montserrat standing in for the thin display cut. */
@@ -222,10 +222,28 @@
    come from an IntersectionObserver) or is a print-media rule Tailwind cannot
    express. */
 
+html,
+body,
+input,
+button,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
+  font-family: var(--font-heading);
 }
 
 a, a:visited {

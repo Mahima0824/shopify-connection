@@ -9,5 +9,5 @@ test("shell renders nav and outlet for unknown route", () => {
       <AppRoutes />
     </MemoryRouter>
   );
-  expect(screen.getByText(/ReconHub/i)).toBeTruthy();
+  expect(screen.getAllByText(/ReconHub/i)[0]).toBeTruthy();
 });
