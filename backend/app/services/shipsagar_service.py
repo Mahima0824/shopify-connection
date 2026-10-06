@@ -416,22 +416,32 @@ def _post(path: str, payload: dict) -> dict:
                              "ShipSagar returned non-JSON.") from exc
 
 
-def build_push_payload(*, tracking_no: str, courier_code: str, order) -> dict:
-    """Map an Order onto the PushShipment business fields."""
-    # The receiver_* reads go through getattr with a "" default: those columns
-    # arrive with the India Post order migration, and without the default a tree
-    # that does not carry it raised AttributeError while building the payload.
+def build_push_payload(*, tracking_no: str, courier_code: str, order,
+                       order_no: str | None = None) -> dict:
+    """Map an Order plus the configured constants onto the PushShipment body.
+
+    EmailID and CompanyName are the account constants when set, falling back to
+    the order's own values when unset so a misconfigured deploy still sends
+    something usable rather than a blank. Every read goes through getattr with a
+    "" default: the receiver_* columns arrive with the India Post order
+    migration, and without the default a tree that does not carry them raised
+    AttributeError while building the payload.
+    """
+    email = (settings.shipsagar_email or "").strip() or str(
+        getattr(order, "receiver_email", "") or "").strip()
+    company = (settings.shipsagar_company or "").strip() or str(
+        getattr(order, "receiver_company", "") or "").strip()
     return {
         "CourierCode": (courier_code or "").strip().upper(),
         "TrackingNo": (tracking_no or "").strip(),
-        "OrderNo": str(getattr(order, "internal_order_number", "")
+        "OrderNo": str(order_no or getattr(order, "internal_order_number", "")
                        or getattr(order, "shopify_order_name", "") or "").strip(),
         "CustomerName": str(getattr(order, "receiver_name", "") or "").strip(),
-        "EmailID": str(getattr(order, "receiver_email", "") or "").strip(),
+        "EmailID": email,
         "ShipmentType": DEFAULT_SHIPMENT_TYPE,
         "MobileNo": str(getattr(order, "receiver_mobile", "") or "").strip(),
         "CountryName": DEFAULT_COUNTRY,
-        "CompanyName": str(getattr(order, "receiver_company", "") or "").strip(),
+        "CompanyName": company,
     }
 
 

@@ -3548,3 +3548,48 @@ def test_get_couriers_serves_the_stale_catalogue_when_a_refresh_fails(monkeypatc
         raise AssertionError("expected ShipsagarError")
     except ss.ShipsagarError as exc:
         assert exc.code == "SHIPSAGAR_API_ERROR"
+
+# --- build_push_payload uses the constants ---
+
+def test_push_payload_uses_constant_email_and_company(monkeypatch):
+    from app import config
+    from app.services.shipsagar_service import build_push_payload
+    monkeypatch.setattr(config.settings, "shipsagar_email", "ops@example.com")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "Reshamgath")
+    o = _OrderStub()
+    o.receiver_email = "customer@own.com"
+    o.receiver_company = "Customer Co"
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o, order_no="20261006-001")
+    assert p["EmailID"] == "ops@example.com"
+    assert p["CompanyName"] == "Reshamgath"
+    assert p["CustomerName"] == "Dileep Kumar"
+    assert p["MobileNo"] == "9963026645"
+    assert p["CountryName"] == "India"
+    assert p["ShipmentType"] == "Road"
+    assert p["OrderNo"] == "20261006-001"
+
+
+def test_push_payload_falls_back_to_the_order_when_a_constant_is_unset(monkeypatch):
+    from app import config
+    from app.services.shipsagar_service import build_push_payload
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
+    o = _OrderStub()
+    o.receiver_email = "customer@own.com"
+    o.receiver_company = "Customer Co"
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == "customer@own.com"
+    assert p["CompanyName"] == "Customer Co"
+
+
+def test_push_payload_never_invents_an_email(monkeypatch):
+    from app import config
+    from app.services.shipsagar_service import build_push_payload
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "Reshamgath")
+    o = _OrderStub()
+    o.receiver_email = ""
+    o.receiver_company = ""
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == ""
+    assert p["CompanyName"] == "Reshamgath"
