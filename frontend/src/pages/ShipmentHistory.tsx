@@ -3,32 +3,29 @@ import { Link, useParams } from "react-router-dom";
 import { getShipmentHistory, ShipmentHistory as History } from "../lib/api";
 import { statusTone, Tone } from "../lib/shipments";
 import ShipsagarRetryDrain from "../components/ShipsagarRetryDrain";
+import { Button, buttonVariants, Card, Badge } from "../components/primitives";
+import { cn } from "@/lib/utils";
 
 const TONE_CLASS: Record<Tone, string> = {
-  success: "bg-emerald-100 text-emerald-800",
-  info: "bg-sky-100 text-sky-800",
-  warning: "bg-amber-100 text-amber-800",
-  danger: "bg-red-100 text-red-800",
-  neutral: "bg-slate-100 text-slate-700",
+  success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  info: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  danger: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  neutral: "bg-muted text-muted-foreground border-border",
 };
-
-/**
- * True for the backend's 429 REFRESH_COOLDOWN. `api()` puts the structured
- * `code` and `status` on the thrown Error; the message alone is not used so a
- * real outage whose text happens to mention cooldown is not swallowed.
- */
-function isCooldown(err: unknown): boolean {
-  const e = err as { code?: string; status?: number } | null;
-  return e?.code === "REFRESH_COOLDOWN" || e?.status === 429;
-}
 
 const DOT_CLASS: Record<Tone, string> = {
   success: "bg-emerald-500",
   info: "bg-sky-500",
   warning: "bg-amber-500",
   danger: "bg-red-500",
-  neutral: "bg-slate-400",
+  neutral: "bg-muted-foreground",
 };
+
+function isCooldown(err: unknown): boolean {
+  const e = err as { code?: string; status?: number } | null;
+  return e?.code === "REFRESH_COOLDOWN" || e?.status === 429;
+}
 
 export default function ShipmentHistoryPage() {
   const { id } = useParams();
@@ -45,11 +42,6 @@ export default function ShipmentHistoryPage() {
         setError(null);
       })
       .catch((err: unknown) => {
-        // A 429 REFRESH_COOLDOWN is the backend rate-limiting a poll, not a
-        // failure the operator did anything about. Surfacing it every 60s would
-        // train people to ignore the banner, so a silent poll swallows it and
-        // leaves the already-rendered timeline alone. An explicit Refresh still
-        // reports it, because then the user is waiting on an answer.
         if (silent && isCooldown(err)) return;
         setError(err instanceof Error ? err.message : "Failed to load tracking history");
       })
@@ -65,18 +57,19 @@ export default function ShipmentHistoryPage() {
   const tone = statusTone(data?.status);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6 flex flex-col gap-6">
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-        <Link to="/orders" className="text-xs font-semibold text-emerald-700 hover:underline">
-          Back to Orders
+    <div className="max-w-4xl mx-auto px-6 py-6 flex flex-col gap-6 bg-background">
+      {/* Header Card */}
+      <Card className="p-6 sm:p-7 shadow-xs">
+        <Link to="/orders" className="text-xs font-semibold text-primary hover:underline">
+          &larr; Back to Orders
         </Link>
-        <div className="flex flex-wrap items-center justify-between gap-4 mt-2">
+        <div className="flex flex-wrap items-center justify-between gap-4 mt-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tracking History</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold font-heading text-foreground tracking-tight">Tracking History</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               {data ? (
                 <>
-                  <span>{data.awb}</span>
+                  <span className="font-mono font-semibold text-foreground">{data.awb}</span>
                   <span> · {data.courier_code}</span>
                 </>
               ) : (
@@ -86,60 +79,61 @@ export default function ShipmentHistoryPage() {
           </div>
           <div className="flex items-center gap-3">
             {data && (
-              <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide ${TONE_CLASS[tone]}`}>
+              <span className={`px-2.5 py-1 rounded-full border text-xs font-bold uppercase tracking-wide ${TONE_CLASS[tone]}`}>
                 {data.status}
               </span>
             )}
-            {/* The carrier's own page is the only place that shows the scans
-                ShipSagar has not delivered yet: this timeline is built from the
-                events already pulled, so it can lag a live parcel by a poll. */}
             {data?.tracking_url && (
               <a
                 href={data.tracking_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white border border-emerald-300 hover:bg-emerald-50 transition"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-primary border-primary/30 hover:bg-primary/5")}
               >
                 Track on courier site
               </a>
             )}
-            <button type="button" onClick={() => load()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 shadow-xs transition">
+            <Button
+              type="button"
+              onClick={() => load()}
+              size="sm"
+            >
               Refresh
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {error && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-xl px-4 py-3">
+        <div role="alert" className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl px-4 py-3">
           {error}
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
+      {/* Events Timeline Card */}
+      <Card className="p-6 sm:p-7 shadow-xs">
         {!id ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             No shipment was selected. Open tracking history from an order row.
           </p>
         ) : loading ? (
-          <p className="text-sm text-slate-500">Loading tracking history…</p>
+          <p className="text-sm text-muted-foreground">Loading tracking history…</p>
         ) : (data?.events ?? []).length === 0 ? (
-          <p className="text-sm text-slate-500">No scans yet for this tracking number.</p>
+          <p className="text-sm text-muted-foreground">No scans yet for this tracking number.</p>
         ) : (
-          <ol className="flex flex-col gap-4">
+          <ol className="flex flex-col gap-5 relative before:absolute before:top-2 before:bottom-2 before:left-[4px] before:w-0.5 before:bg-border">
             {data!.events.map((e, i) => {
               const t = statusTone(e.normalized_status);
               return (
-                <li key={`${e.action_date}-${e.action_time}-${i}`} className="flex gap-3">
-                  <span className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${DOT_CLASS[t]}`} aria-hidden="true" />
+                <li key={`${e.action_date}-${e.action_time}-${i}`} className="flex gap-4 relative z-10">
+                  <span className={`mt-1.5 size-2.5 rounded-full shrink-0 ring-4 ring-card ${DOT_CLASS[t]}`} aria-hidden="true" />
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold text-slate-900">{e.action_description}</span>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-sm font-semibold text-foreground">{e.action_description}</span>
+                    <span className="text-xs text-muted-foreground">
                       {[e.action_date, e.action_time].filter(Boolean).join(" · ")}
                     </span>
                     {e.action_location && (
-                      <span className="text-xs text-slate-500">{e.action_location}</span>
+                      <span className="text-xs text-muted-foreground/80 font-medium">{e.action_location}</span>
                     )}
                   </div>
                 </li>
@@ -147,7 +141,7 @@ export default function ShipmentHistoryPage() {
             })}
           </ol>
         )}
-      </div>
+      </Card>
 
       <ShipsagarRetryDrain />
     </div>

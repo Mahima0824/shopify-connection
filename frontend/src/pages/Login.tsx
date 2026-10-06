@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { Button, Card, Input, Label } from "../components/primitives";
-import { IconAlert } from "../components/icons";
+import { Button, Card, Input, Label, Badge } from "../components/primitives";
+import { IconAlert, IconSpark } from "../components/icons";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -36,29 +36,45 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen min-h-dvh w-full items-center justify-center bg-background p-5">
-      <Card className="w-full max-w-[440px] p-8 sm:p-10 shadow-none">
+    <div className="flex min-h-screen min-h-dvh w-full items-center justify-center bg-background px-4 py-8">
+      {/* Background ambient glow */}
+      <div
+        className="pointer-events-none fixed inset-0 flex items-center justify-center overflow-hidden"
+        aria-hidden="true"
+      >
+        <div className="size-[500px] rounded-full bg-primary/5 blur-[120px]" />
+      </div>
+
+      <Card className="relative z-10 w-full max-w-[440px] p-8 sm:p-10 shadow-xl border-border/80 bg-card rounded-2xl">
         {/* Brand Header */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl border border-border bg-muted text-xl font-bold text-foreground">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary font-bold text-xl shadow-xs">
             R
           </div>
-          <h1 className="font-bold tracking-tight text-foreground text-2xl mb-2">Welcome Back</h1>
-          <p className="text-sm text-muted-foreground">
+          <Badge variant="secondary" className="mb-2.5 text-[11px] font-semibold tracking-wider uppercase">
+            Shopify ReconHub
+          </Badge>
+          <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl mb-1.5">
+            Welcome Back
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Sign in to access your Shopify Order Reconciliation platform
           </p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" className="mb-6 flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive border border-destructive/20">
+          <div
+            role="alert"
+            className="mb-6 flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-xs sm:text-sm text-destructive border border-destructive/20"
+          >
             <IconAlert size={16} />
             <span>{error}</span>
           </div>
         )}
 
         {/* Login Form */}
-        <form onSubmit={onSubmit} className="flex flex-col gap-5">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4.5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">Email Address</Label>
             <Input
@@ -72,7 +88,10 @@ export default function LoginPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <span className="text-[11px] text-muted-foreground">Demo: Pass123!</span>
+            </div>
             <Input
               id="password"
               type="password"
@@ -86,35 +105,37 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full"
+            className="mt-3 w-full h-10 font-semibold shadow-xs hover:shadow-md"
           >
             {loading ? "Signing in..." : "Sign In to ReconHub"}
           </Button>
         </form>
 
         {/* Demo Credentials Quick Fill */}
-        <div className="mt-8 border-t border-border pt-6 text-center">
+        <div className="mt-8 border-t border-border/80 pt-6 text-center">
           <p className="mb-3 text-xs text-muted-foreground">
-            Testing locally? Click to fill test accounts:
+            Testing locally? Quick-fill demo credentials:
           </p>
           <div className="flex justify-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="min-h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs gap-1.5"
               onClick={() => fillDemoCreds("admin@t.in")}
             >
-              Admin Account
+              <IconSpark size={13} />
+              Admin
             </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="min-h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs gap-1.5"
               onClick={() => fillDemoCreds("dash@t.in")}
             >
-              Dashboard User
+              <IconSpark size={13} />
+              Dashboard
             </Button>
           </div>
         </div>

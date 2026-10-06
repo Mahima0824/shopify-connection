@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import MetricCard from "../components/MetricCard";
 import EmptyState from "../components/EmptyState";
-import { Button } from "../components/primitives";
+import { Button, buttonVariants, Badge, Card } from "../components/primitives";
 import {
   IconAlert,
   IconBox,
@@ -52,7 +53,10 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="mx-auto flex min-h-[400px] w-full max-w-[1280px] items-center justify-center bg-background px-6 max-[480px]:px-4">
-        <p className="text-base text-muted-foreground">Loading Executive Dashboard...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm font-medium text-muted-foreground">Loading Executive Dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -61,7 +65,7 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground text-2xl">Executive Dashboard</h1>
+          <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">Executive Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Real-time Operational Ledger &amp; Financial Reconciliation Metrics
           </p>
@@ -81,23 +85,44 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 bg-background px-6 max-[480px]:px-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground text-2xl">Executive Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">Executive Dashboard</h1>
+            <Badge variant="secondary" className="text-xs">Live Sync</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
             Real-time Operational Ledger &amp; Financial Reconciliation Metrics
           </p>
         </div>
-        <Button onClick={handleExcelExport} disabled={exporting}>
-          <IconReceipt size={16} data-icon="inline-start" />
-          {exporting ? "Generating Export..." : "Download Excel Workbook"}
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/orders" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Orders Directory
+          </Link>
+          <Link to="/scan" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Scan Hub
+          </Link>
+          <Button onClick={handleExcelExport} disabled={exporting} size="sm" className="shadow-xs">
+            <IconReceipt size={15} data-icon="inline-start" />
+            {exporting ? "Generating Export..." : "Download Excel Workbook"}
+          </Button>
+        </div>
       </div>
 
       {/* Operational KPI Grid */}
       <div>
-        <h2 className="mb-4 font-bold tracking-tight text-lg text-foreground">Operational Health</h2>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-heading font-bold tracking-tight text-lg text-foreground">Operational Health</h2>
+            <p className="text-xs text-muted-foreground">Parcel fulfillment and station scan throughput</p>
+          </div>
+          <Badge variant="outline" className="text-xs font-mono">
+            Audit Level: Active
+          </Badge>
+        </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
           <MetricCard title="Total Orders" value={kpis.orders_total} icon={<IconBox />} subtitle={`${kpis.paid_orders} Paid`} />
           <MetricCard title="Dispatched Scans" value={kpis.dispatched_orders} icon={<IconTag />} subtitle={`${kpis.packed_orders} Packed`} />
           <MetricCard title="Returns / RTO" value={`${kpis.returns_total}`} icon={<IconReturn />} subtitle={`RTO Total: ${kpis.rto_total}`} />
@@ -107,7 +132,15 @@ export default function DashboardPage() {
 
       {/* Financial Breakdown Grid */}
       <div>
-        <h2 className="mb-4 font-bold tracking-tight text-lg text-foreground">Financial Summary</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-heading font-bold tracking-tight text-lg text-foreground">Financial Summary</h2>
+            <p className="text-xs text-muted-foreground">Sales ledger and remittance reconciliation</p>
+          </div>
+          <Badge variant="outline" className="text-xs font-mono">
+            Tally Prime Matched
+          </Badge>
+        </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
           <MetricCard title="Gross Sales" value={`₹${financials.gross_sales.toLocaleString()}`} icon={<IconCoin />} />
           <MetricCard title="Total Tax" value={`₹${financials.total_tax.toLocaleString()}`} icon={<IconReceipt />} />

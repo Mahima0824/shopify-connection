@@ -76,11 +76,25 @@ export default function ExceptionsPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Mismatch Exceptions Queue</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl sm:text-3xl font-bold font-heading tracking-tight text-foreground">
+              Mismatch Exceptions Queue
+            </h1>
+            <Badge variant="destructive" className="text-xs">
+              Audit Clearance
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs font-mono">
+            {items.length} {status.toLowerCase()} issue{items.length === 1 ? "" : "s"}
+          </Badge>
+        </div>
       </div>
 
       {/* Filter Tabs Bar */}
@@ -94,7 +108,7 @@ export default function ExceptionsPage() {
               variant={status === s ? "default" : "outline"}
               onClick={() => setStatus(s)}
               aria-pressed={status === s}
-              className="text-xs"
+              className="text-xs font-semibold px-3.5 h-8"
             >
               {s}
             </Button>
@@ -106,7 +120,7 @@ export default function ExceptionsPage() {
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SEVERITY:</label>
             <select
-              className="min-h-11 w-36 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="h-9 w-36 rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 shadow-xs"
               value={severity}
               onChange={(e) => setSeverity(e.target.value)}
               aria-label="Severity"
@@ -123,7 +137,7 @@ export default function ExceptionsPage() {
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CATEGORY:</label>
             <select
-              className="min-h-11 w-36 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="h-9 w-36 rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 shadow-xs"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               aria-label="Category"
@@ -146,7 +160,7 @@ export default function ExceptionsPage() {
       )}
 
       {/* Main Issues Table */}
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 border-border/80">
         {loading ? (
           <div className="p-10 text-center text-sm text-muted-foreground">
             Loading exception queue...
@@ -184,17 +198,17 @@ export default function ExceptionsPage() {
                       {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={i.resolved ? "bg-success/15 text-foreground" : "bg-warning/15 text-foreground"}>
+                      <Badge variant={i.resolved ? "success" : "warning"}>
                         {i.resolved ? "RESOLVED" : "OPEN"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {!i.resolved ? (
-                        <Button onClick={() => setResolving(i)} size="sm" className="text-xs">
+                        <Button onClick={() => setResolving(i)} size="sm" className="text-xs font-semibold shadow-xs">
                           Resolve Discrepancy
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Resolved</span>
+                        <span className="text-xs text-muted-foreground font-medium">Resolved</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -210,10 +224,10 @@ export default function ExceptionsPage() {
         <div
           role="dialog"
           aria-label="Resolve issue"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
         >
-          <Card className="w-full max-w-lg p-6 sm:p-8">
-            <h2 className="text-xl font-bold tracking-tight text-foreground mb-2">Resolve Discrepancy</h2>
+          <Card className="w-full max-w-lg p-6 sm:p-8 shadow-2xl border-border bg-card">
+            <h2 className="text-xl font-bold font-heading tracking-tight text-foreground mb-2">Resolve Discrepancy</h2>
             <p className="text-sm text-muted-foreground mb-4">
               {resolving.order_name || resolving.order_id}: <strong className="text-foreground">{resolving.issue_code}</strong>
             </p>
