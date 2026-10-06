@@ -1,7 +1,7 @@
 import * as React from "react";
 import {
   Button as ShadcnButton,
-  type buttonVariants,
+  buttonVariants as shadcnButtonVariants,
 } from "./ui/button";
 import { Input as ShadcnInput } from "./ui/input";
 import { Textarea as ShadcnTextarea } from "./ui/textarea";
@@ -27,52 +27,42 @@ import { Label as ShadcnLabel } from "./ui/label";
 import { Checkbox as ShadcnCheckbox } from "./ui/checkbox";
 import { cn } from "@/lib/utils";
 
-/* The shadcn `mira` preset sizes controls at h-7 (28px). This app is driven by
-   warehouse handheld scanners and phone cameras, so every interactive control
-   keeps a 44px minimum touch target. DESIGN.md independently requires 44px form
-   fields and 44x44 pill buttons, so the two agree here.
+type ButtonProps = React.ComponentProps<typeof ShadcnButton> & {
+  pill?: boolean;
+};
 
-   Button shape follows DESIGN.md Components: "Pill-shape is the only button
-   shape across both tracks; rounded rectangles do not exist for buttons." */
-const TOUCH = "min-h-11";
-const PILL = "rounded-pill";
-const FIELD =
-  "min-h-11 rounded-md border border-input bg-background px-3.5 py-2.5 text-base " +
-  "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
-
-type ButtonProps = React.ComponentProps<typeof ShadcnButton>;
-
-function Button({ className, size = "lg", ...props }: ButtonProps) {
-  return (
-    <ShadcnButton
-      size={size}
-      className={cn(TOUCH, PILL, "px-5 text-sm font-medium", className)}
-      {...props}
-    />
+function buttonVariants(opts?: Parameters<typeof shadcnButtonVariants>[0]) {
+  return cn(
+    "inline-flex items-center justify-center font-medium transition-all duration-150 cursor-pointer select-none disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+    shadcnButtonVariants(opts),
   );
 }
 
-function Input({ className, ...props }: React.ComponentProps<typeof ShadcnInput>) {
-  return <ShadcnInput className={cn(FIELD, className)} {...props} />;
-}
+function Button({
+  className,
+  variant = "default",
+  size = "default",
+  pill = false,
+  ...props
+}: ButtonProps) {
+  const sizeClasses = {
+    default: "h-9 px-4 py-2 text-sm rounded-lg gap-2",
+    sm: "h-8 px-3 text-xs rounded-md gap-1.5",
+    lg: "h-10 px-5 text-sm font-medium rounded-lg gap-2",
+    xs: "h-7 px-2.5 text-xs rounded-md gap-1",
+    icon: "size-9 p-0 rounded-lg",
+    "icon-sm": "size-8 p-0 rounded-md",
+    "icon-lg": "size-10 p-0 rounded-lg",
+  }[size as string] || "h-9 px-4 py-2 text-sm rounded-lg gap-2";
 
-function Textarea({ className, ...props }: React.ComponentProps<typeof ShadcnTextarea>) {
-  return <ShadcnTextarea className={cn(FIELD, className)} {...props} />;
-}
-
-function Label({ className, ...props }: React.ComponentProps<typeof ShadcnLabel>) {
-  return <ShadcnLabel className={cn("text-sm font-medium text-foreground", className)} {...props} />;
-}
-
-/* Card: the preset uses rounded-lg + a 1px ring; this app's surfaces were a
-   solid hairline border, so keep the border and lift the padding. */
-function Card({ className, ...props }: React.ComponentProps<typeof ShadcnCard>) {
   return (
-    <ShadcnCard
+    <ShadcnButton
+      variant={variant}
+      size={size}
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground shadow-none",
-        "[--card-spacing:--spacing(6)]",
-        "max-[768px]:[--card-spacing:--spacing(5)]",
+        "inline-flex items-center justify-center font-medium transition-all duration-150 cursor-pointer select-none disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] shadow-xs hover:shadow-sm",
+        sizeClasses,
+        pill && "rounded-full px-5",
         className,
       )}
       {...props}
@@ -80,36 +70,132 @@ function Card({ className, ...props }: React.ComponentProps<typeof ShadcnCard>) 
   );
 }
 
-const CardHeader = ShadcnCardHeader;
-const CardTitle = ShadcnCardTitle;
-const CardDescription = ShadcnCardDescription;
-const CardContent = ShadcnCardContent;
-const CardFooter = ShadcnCardFooter;
+function Input({ className, ...props }: React.ComponentProps<typeof ShadcnInput>) {
+  return (
+    <ShadcnInput
+      className={cn(
+        "h-9 w-full min-w-0 rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-/* Table: the preset's cells are px-2/p-2 at text-xs with whitespace-nowrap.
-   This app's tables were p-4 at text-sm, and long addresses must wrap, so
-   restore the roomier cell metrics and allow wrapping. */
+function Textarea({ className, ...props }: React.ComponentProps<typeof ShadcnTextarea>) {
+  return (
+    <ShadcnTextarea
+      className={cn(
+        "min-h-20 w-full rounded-lg border border-input bg-background/90 px-3 py-2 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function Label({ className, ...props }: React.ComponentProps<typeof ShadcnLabel>) {
+  return (
+    <ShadcnLabel
+      className={cn("text-xs font-semibold uppercase tracking-wider text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        "rounded-xl border border-border/80 bg-card text-card-foreground text-sm shadow-xs transition-all duration-200",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn("flex flex-col gap-1.5 p-6 pb-4", className)}
+      {...props}
+    />
+  );
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
+  return (
+    <h3
+      data-slot="card-title"
+      className={cn("font-heading text-lg font-bold tracking-tight text-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      data-slot="card-description"
+      className={cn("text-xs sm:text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn("p-6 pt-0", className)}
+      {...props}
+    />
+  );
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn("flex items-center p-6 pt-0", className)}
+      {...props}
+    />
+  );
+}
+
 function Table({ className, ...props }: React.ComponentProps<typeof ShadcnTable>) {
-  return <ShadcnTable className={cn("text-sm", className)} {...props} />;
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-border/80 bg-card shadow-xs">
+      <ShadcnTable className={cn("w-full text-sm", className)} {...props} />
+    </div>
+  );
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
-    <ShadcnTableHeader className={cn("bg-muted/50", className)} {...props} />
+    <ShadcnTableHeader className={cn("bg-muted/50 border-b border-border/80", className)} {...props} />
   );
 }
 
 const TableBody = ShadcnTableBody;
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
-  return <ShadcnTableRow className={cn("hover:bg-muted/40", className)} {...props} />;
+  return (
+    <ShadcnTableRow
+      className={cn("border-b border-border/50 transition-colors hover:bg-muted/40 data-[state=selected]:bg-muted", className)}
+      {...props}
+    />
+  );
 }
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <ShadcnTableHead
       className={cn(
-        "h-auto px-4 py-3.5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground",
+        "h-10 px-4 py-2.5 text-left align-middle text-xs font-semibold uppercase tracking-wider text-muted-foreground",
         className,
       )}
       {...props}
@@ -120,7 +206,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <ShadcnTableCell
-      className={cn("p-4 text-sm text-foreground whitespace-normal", className)}
+      className={cn("p-3.5 px-4 text-sm text-foreground align-middle whitespace-normal", className)}
       {...props}
     />
   );
@@ -128,11 +214,32 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
 
 const TableCaption = ShadcnTableCaption;
 
-function Badge({ className, ...props }: React.ComponentProps<typeof ShadcnBadge>) {
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info";
+
+function Badge({
+  className,
+  variant = "default",
+  ...props
+}: Omit<React.ComponentProps<typeof ShadcnBadge>, "variant"> & { variant?: BadgeVariant }) {
+  const variantClasses: Record<BadgeVariant, string> = {
+    default: "bg-primary text-primary-foreground border-transparent shadow-xs",
+    secondary: "bg-secondary text-secondary-foreground border-transparent",
+    outline: "border-border text-foreground bg-background",
+    destructive: "bg-destructive/10 text-destructive border-destructive/20",
+    success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    info: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  };
+
+  const isCustomVariant = ["success", "warning", "info"].includes(variant);
+  const shadcnVariant = isCustomVariant ? "default" : (variant as any);
+
   return (
     <ShadcnBadge
+      variant={shadcnVariant}
       className={cn(
-        "h-auto min-h-5 gap-1.5 px-3 py-1 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border transition-colors",
+        variantClasses[variant],
         className,
       )}
       {...props}
@@ -140,13 +247,19 @@ function Badge({ className, ...props }: React.ComponentProps<typeof ShadcnBadge>
   );
 }
 
-/* Checkbox: the preset renders a size-4 box, below the 44px touch target, so
-   pad the hit area rather than inflating the indicator itself. */
 function Checkbox({
   className,
   ...props
 }: React.ComponentProps<typeof ShadcnCheckbox>) {
-  return <ShadcnCheckbox className={cn("size-4", className)} {...props} />;
+  return (
+    <ShadcnCheckbox
+      className={cn(
+        "size-4 rounded border-input ring-offset-background focus-visible:ring-ring focus-visible:ring-2",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export {

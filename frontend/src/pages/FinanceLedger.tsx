@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Label,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/primitives";
 import { LEDGER_TXN_TYPES, LedgerEntry, LedgerSummary, getLedgerSummary, listLedger } from "../lib/api";
 
 const PAGE_SIZE = 20;
@@ -28,8 +41,6 @@ function defaultRange(): { from: string; to: string } {
 
 function inr(v: string | number): string {
   const n = Number(v ?? 0);
-  // "U+20B9" (rupee sign) as a unicode escape keeps this file pure ASCII,
-  // immune to encoding misinterpretation at any layer (editor/git/server/browser).
   return `\u20B9${Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
 }
 
@@ -72,7 +83,6 @@ export default function LedgerPage() {
           });
     Promise.all([listP, summaryP])
       .catch((e) => {
-        // Never leave prior rows/summary visible alongside an error.
         if (!isCurrent()) return;
         setItems([]);
         setSummary(null);
@@ -95,56 +105,86 @@ export default function LedgerPage() {
   const hasSummary = Boolean(summary?.revenue && summary?.profit);
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Ledger</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Ledger</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Immutable financial events &mdash; read-only. Corrections happen via reversal entries.
         </p>
       </div>
 
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
-          From
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
-          To
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
-          Type
-          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Transaction type" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" style={{ minWidth: "200px" }}>
+      <Card className="flex flex-wrap items-end gap-3 p-5">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ledger-from" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            From
+          </Label>
+          <Input
+            id="ledger-from"
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label="From date"
+            className="w-auto"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ledger-to" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            To
+          </Label>
+          <Input
+            id="ledger-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="To date"
+            className="w-auto"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ledger-type" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Type
+          </Label>
+          <select
+            id="ledger-type"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            aria-label="Transaction type"
+            className="min-h-11 min-w-[200px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          >
             <option value="">All types</option>
             {LEDGER_TXN_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
-          Order
-          <input
+        </div>
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+          <Label htmlFor="ledger-order" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Order
+          </Label>
+          <Input
+            id="ledger-order"
             type="search"
             value={orderSearch}
             onChange={(e) => setOrderSearch(e.target.value)}
             placeholder="Order ID"
             aria-label="Order search"
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
-            style={{ minWidth: "200px" }}
           />
-        </label>
-        <button onClick={load} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ minHeight: 44 }}>Apply</button>
-      </div>
+        </div>
+        <Button onClick={load}>Apply</Button>
+      </Card>
 
       {error && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={load} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={load}>
+            Retry
+          </Button>
         </div>
       )}
 
       {hasSummary && summary && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <MetricCard title="Net sales" value={inr(summary.revenue.net_exclusive)} subtitle="excl. GST" />
             <MetricCard title="Gross profit" value={inr(summary.profit.gross_profit)} subtitle={`COGS ${inr(summary.profit.cogs)}`} />
             <MetricCard
@@ -154,7 +194,7 @@ export default function LedgerPage() {
             />
           </div>
           {summary.profit.warning && (
-            <p role="note" style={{ color: "var(--warning)", fontSize: "13px", fontWeight: 600, marginTop: "12px" }}>
+            <p role="note" className="text-xs font-semibold text-warning">
               {summary.profit.warning}
             </p>
           )}
@@ -162,7 +202,7 @@ export default function LedgerPage() {
       )}
 
       {loading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading ledger&hellip;</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">Loading ledger&hellip;</div>
       ) : items.length === 0 ? (
         <EmptyState
           title="No ledger entries"
@@ -171,51 +211,73 @@ export default function LedgerPage() {
           secondary={{ label: "Monthly report", href: "/reports/monthly" }}
         />
       ) : (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Order</th>
-                  <th style={{ textAlign: "right" }}>Amount</th>
-                  <th style={{ textAlign: "right" }}>Tax</th>
-                  <th style={{ textAlign: "right" }}>Net</th>
-                  <th>Reference</th>
-                </tr>
-              </thead>
-              <tbody>
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Tax</TableHead>
+                  <TableHead className="text-right">Net</TableHead>
+                  <TableHead>Reference</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {pageItems.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontSize: "13px", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+                  <TableRow key={t.id}>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {t.transaction_date_ist ?? t.transaction_date ?? "-"}
-                    </td>
-                    <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{t.transaction_type}</span></td>
-                    <td style={{ fontSize: "13px" }}>{t.order_id ?? "-"}</td>
-                    <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{inr(t.amount)}</td>
-                    <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(t.tax_amount)}</td>
-                    <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(t.net_amount)}</td>
-                    <td style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{t.reference_number ?? "-"}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{t.transaction_type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-foreground">{t.order_id ?? "-"}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                      {inr(t.amount)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {inr(t.tax_amount)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-foreground font-medium">
+                      {inr(t.net_amount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {t.reference_number ?? "-"}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
-            <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <span className="text-xs text-muted-foreground">
               Page {safePage + 1} of {totalPages} &middot; {items.length} entries
             </span>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" aria-label="Previous page">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                aria-label="Previous page"
+              >
                 Prev
-              </button>
-              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" aria-label="Next page">
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                aria-label="Next page"
+              >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

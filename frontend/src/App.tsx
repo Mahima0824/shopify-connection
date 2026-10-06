@@ -34,14 +34,14 @@ import ShipmentsTracking from "./pages/ShipmentsTracking";
 
 export function AppShell() {
   return (
-    <>
+    <div className="min-h-screen bg-background text-foreground antialiased flex flex-col">
       <TopNav />
-      <main style={{ paddingTop: 24 }}>
+      <main className="flex-1 pb-16 pt-6">
         <Suspense fallback={<Loading />}>
           <Outlet />
         </Suspense>
       </main>
-    </>
+    </div>
   );
 }
 

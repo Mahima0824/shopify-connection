@@ -2,6 +2,18 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, api } from "../lib/api";
 import EmptyState from "../components/EmptyState";
+import {
+  Badge,
+  Button,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  buttonVariants,
+} from "../components/primitives";
 
 type ParcelRow = {
   id: string; parcel_code: string; barcode_value: string; status: string;
@@ -60,30 +72,46 @@ export default function ParcelsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Parcels</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Parcels</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Every order's physical identity — one barcode per parcel, stable for life
           </p>
         </div>
-        <Link to="/parcels/labels" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ textDecoration: "none" }}>
+        <Link to="/parcels/labels" className={buttonVariants({ size: "lg" })}>
           Labels manager
         </Link>
       </div>
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "16px", alignItems: "center" }}>
-        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={status} onChange={(e) => { setStatus(e.target.value); load(e.target.value); }} aria-label="Status filter" style={{ width: "220px" }}>
+
+      <Card className="flex flex-wrap items-center gap-4 p-4 sm:p-5">
+        <select
+          className="min-h-11 w-full sm:w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          value={status}
+          onChange={(e) => { setStatus(e.target.value); load(e.target.value); }}
+          aria-label="Status filter"
+        >
           <option value="">All statuses</option>
           {STATUSES.slice(1).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{items.length} parcel{items.length === 1 ? "" : "s"}</span>
-      </div>
-      {err && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
-      {notice && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{notice}</p>}
-      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+        <span className="text-xs text-muted-foreground">{items.length} parcel{items.length === 1 ? "" : "s"}</span>
+      </Card>
+
+      {err && (
+        <p role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {err}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="rounded-xl border border-success/30 bg-success/15 px-4 py-3 text-sm font-semibold text-foreground">
+          {notice}
+        </p>
+      )}
+
+      <Card className="overflow-hidden p-0">
         {items.length === 0 ? (
-          <div style={{ padding: "24px" }}>
+          <div className="p-6">
             <EmptyState
               title="No parcels yet"
               body="Sync orders or import a CSV — parcels are created automatically."
@@ -92,31 +120,52 @@ export default function ParcelsPage() {
             />
           </div>
         ) : (
-          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ border: "none" }}>
-            <thead>
-              <tr><th>Parcel</th><th>Order</th><th>Barcode</th><th>Status</th><th>Courier</th><th>AWB</th><th>Created</th><th style={{ textAlign: "right" }}>Actions</th></tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.parcel_code}</td>
-                  <td>{p.order_name ?? p.order_id}</td>
-                  <td>{p.barcode_value}</td>
-                  <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{p.status}</span></td>
-                  <td>{p.courier ?? "—"}</td>
-                  <td>{p.awb ?? "—"}</td>
-                  <td style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{fmtDate(p.created_at)}</td>
-                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <Link to={`/parcels/${p.barcode_value}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">View</Link>{" "}
-                    <button onClick={() => openLabel(p.id)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Print</button>{" "}
-                    <button onClick={() => reprint(p.id, p.parcel_code)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Reprint</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Parcel</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Courier</TableHead>
+                  <TableHead>AWB</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-semibold text-foreground">{p.parcel_code}</TableCell>
+                    <TableCell className="text-foreground">{p.order_name ?? p.order_id}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{p.barcode_value}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{p.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-foreground">{p.courier ?? "—"}</TableCell>
+                    <TableCell className="text-foreground">{p.awb ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{fmtDate(p.created_at)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link to={`/parcels/${p.barcode_value}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                          View
+                        </Link>
+                        <Button variant="outline" size="sm" onClick={() => openLabel(p.id)}>
+                          Print
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => reprint(p.id, p.parcel_code)}>
+                          Reprint
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

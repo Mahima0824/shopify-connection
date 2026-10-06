@@ -3,6 +3,18 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import SeverityBadge from "../components/SeverityBadge";
 import { IconAlert } from "../components/icons";
+import {
+  Badge,
+  Button,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+} from "../components/primitives";
 
 type Issue = {
   id: string;
@@ -62,171 +74,159 @@ export default function ExceptionsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-
-     
-
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Mismatch Exceptions Queue</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Mismatch Exceptions Queue</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
         </p>
       </div>
 
       {/* Filter Tabs Bar */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
-
+      <Card className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         {/* Status Filter Tabs */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="flex gap-2">
           {(["OPEN", "RESOLVED", "ALL"] as const).map((s) => (
-            <button
+            <Button
               key={s}
+              size="sm"
+              variant={status === s ? "default" : "outline"}
               onClick={() => setStatus(s)}
-              className={status === s ? "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" : "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"}
               aria-pressed={status === s}
-              style={{ fontSize: "13px", padding: "8px 16px" }}
+              className="text-xs"
             >
               {s}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {/* Severity Select Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <label style={{ fontSize: "13px", color: "var(--muted-foreground)", fontWeight: 600 }}>SEVERITY:</label>
-          <select
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value)}
-            aria-label="Severity"
-            style={{ width: "160px", padding: "8px 12px" }}
-          >
-            <option value="">All Severities</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-          </select>
-        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Severity Select Dropdown */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SEVERITY:</label>
+            <select
+              className="min-h-11 w-36 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value)}
+              aria-label="Severity"
+            >
+              <option value="">All Severities</option>
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+            </select>
+          </div>
 
-        {/* Category Select Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <label style={{ fontSize: "13px", color: "var(--muted-foreground)", fontWeight: 600 }}>CATEGORY:</label>
-          <select
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            aria-label="Category"
-            style={{ width: "160px", padding: "8px 12px" }}
-          >
-            <option value="">All Categories</option>
-            <option value="COURIER">Courier</option>
-            <option value="MONEY">Money</option>
-            <option value="RETURNS">Returns</option>
-            <option value="SLA">SLA</option>
-          </select>
+          {/* Category Select Dropdown */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CATEGORY:</label>
+            <select
+              className="min-h-11 w-36 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              aria-label="Category"
+            >
+              <option value="">All Categories</option>
+              <option value="COURIER">Courier</option>
+              <option value="MONEY">Money</option>
+              <option value="RETURNS">Returns</option>
+              <option value="SLA">SLA</option>
+            </select>
+          </div>
         </div>
-
-      </div>
+      </Card>
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="flex items-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <IconAlert size={16} /> {error}
         </div>
       )}
 
       {/* Main Issues Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+      <Card className="overflow-hidden p-0">
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
+          <div className="p-10 text-center text-sm text-muted-foreground">
             Loading exception queue...
           </div>
         ) : items.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
+          <div className="p-10 text-center text-sm text-muted-foreground">
             No exception issues found matching selected filters.
           </div>
         ) : (
-          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Issue Code</th>
-                <th>Severity</th>
-                <th>Detected At</th>
-                <th>Status</th>
-                <th style={{ textAlign: "right" }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((i) => (
-                <tr key={i.id}>
-                  <td style={{ fontWeight: 600 }}>
-                    <Link to={`/orders/${i.order_id}`}>
-                      {i.order_name || i.order_id}
-                    </Link>
-                  </td>
-                  <td style={{ fontWeight: 600, color: "var(--foreground)" }}>{i.issue_code}</td>
-                  <td>
-                    <SeverityBadge severity={i.severity} />
-                  </td>
-                  <td style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>
-                    {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
-                  </td>
-                  <td>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground ${i.resolved ? "bg-[var(--success/12)] text-foreground" : "bg-[var(--warning/12)] text-foreground"}`}>
-                      {i.resolved ? "RESOLVED" : "OPEN"}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    {!i.resolved ? (
-                      <button onClick={() => setResolving(i)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ padding: "6px 14px", fontSize: "12px" }}>
-                        Resolve Discrepancy
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>Resolved</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Issue Code</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Detected At</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((i) => (
+                  <TableRow key={i.id}>
+                    <TableCell className="font-semibold">
+                      <Link to={`/orders/${i.order_id}`} className="text-foreground hover:underline">
+                        {i.order_name || i.order_id}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-foreground font-semibold">{i.issue_code}</TableCell>
+                    <TableCell>
+                      <SeverityBadge severity={i.severity} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={i.resolved ? "bg-success/15 text-foreground" : "bg-warning/15 text-foreground"}>
+                        {i.resolved ? "RESOLVED" : "OPEN"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {!i.resolved ? (
+                        <Button onClick={() => setResolving(i)} size="sm" className="text-xs">
+                          Resolve Discrepancy
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Resolved</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
+      </Card>
 
       {/* Resolve Dialog Modal */}
       {resolving && (
         <div
           role="dialog"
           aria-label="Resolve issue"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "20px"
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4"
         >
-          <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-            <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
-            <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginBottom: "20px" }}>
-              {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--foreground)" }}>{resolving.issue_code}</strong>
+          <Card className="w-full max-w-lg p-6 sm:p-8">
+            <h2 className="text-xl font-bold tracking-tight text-foreground mb-2">Resolve Discrepancy</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {resolving.order_name || resolving.order_id}: <strong className="text-foreground">{resolving.issue_code}</strong>
             </p>
 
-            <div style={{ background: "var(--muted-foreground)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--border)", color: "var(--foreground)" }}>
+            <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4 text-sm text-foreground">
               {resolving.issue_message}
             </div>
 
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "6px" }}>
+            <div className="mb-6 flex flex-col gap-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 AUDITED RESOLUTION REASON (MANDATORY)
               </label>
-              <textarea
-                className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+              <Textarea
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -235,27 +235,24 @@ export default function ExceptionsPage() {
               />
             </div>
 
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button
+            <div className="flex gap-3">
+              <Button
                 onClick={doResolve}
                 disabled={!reason.trim()}
-                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
-                style={{ flex: 1, padding: "12px" }}
+                className="flex-1"
               >
-                Confirm Resolution & Audit
-              </button>
-              <button
+                Confirm Resolution &amp; Audit
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setResolving(null)}
-                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"
-                style={{ padding: "12px 20px" }}
               >
                 Cancel
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
-
     </div>
   );
 }

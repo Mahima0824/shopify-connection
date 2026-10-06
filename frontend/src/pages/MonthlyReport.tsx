@@ -5,6 +5,12 @@ import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
 import {
+  Button,
+  Card,
+  Input,
+  Label,
+} from "../components/primitives";
+import {
   GstReport,
   ProfitReport,
   REPORT_PRESETS,
@@ -15,7 +21,6 @@ import {
 
 function inr(v: string | number): string {
   const n = Number(v ?? 0);
-  // "U+20B9" (rupee sign) as a unicode escape keeps this file pure ASCII.
   return `\u20B9${Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
 }
 
@@ -33,6 +38,7 @@ export default function MonthlyPage() {
   const [cardsLoading, setCardsLoading] = useState(false);
   const [cardsError, setCardsError] = useState<string | null>(null);
   const reqRef = useRef(0);
+
   function load(m: string) {
     setLoading(true);
     setError(null);
@@ -42,10 +48,12 @@ export default function MonthlyPage() {
       .catch((e) => setError(e?.message ?? "Failed to load report"))
       .finally(() => setLoading(false));
   }
+
   useEffect(() => {
     load(month);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
+
   function loadCards() {
     const req = ++reqRef.current;
     const isCurrent = () => reqRef.current === req;
@@ -56,7 +64,6 @@ export default function MonthlyPage() {
       preset === "custom"
         ? { preset, ...(from ? { from } : {}), ...(to ? { to } : {}) }
         : { preset };
-    // Keep query-builder import referenced so preset wiring stays covered.
     void buildReportRangeQuery(params);
     Promise.all([getGstReport(params, token), getProfitReport(params, token)])
       .then(([g, p]) => {
@@ -74,10 +81,12 @@ export default function MonthlyPage() {
         if (isCurrent()) setCardsLoading(false);
       });
   }
+
   useEffect(() => {
     loadCards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
+
   async function download() {
     const token = localStorage.getItem("token") ?? "";
     setDownloading(true);
@@ -100,117 +109,155 @@ export default function MonthlyPage() {
       setDownloading(false);
     }
   }
+
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Monthly report</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>Operational + financial summary with profitability</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Monthly report</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Operational + financial summary with profitability
+          </p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <input type="month" value={month} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonth(e.target.value)} aria-label="Month" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" />
-          <button onClick={download} disabled={downloading || !data} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="month"
+            value={month}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonth(e.target.value)}
+            aria-label="Month"
+            className="w-auto"
+          />
+          <Button onClick={download} disabled={downloading || !data}>
             {downloading ? "Exporting..." : "Download Excel"}
-          </button>
+          </Button>
         </div>
       </div>
+
       {error && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={() => load(month)}>
+            Retry
+          </Button>
         </div>
       )}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-          <label htmlFor="preset" style={{ fontSize: "13px", fontWeight: 600 }}>Period preset</label>
+
+      <Card className="flex flex-col gap-3 p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <Label htmlFor="preset" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Period preset
+          </Label>
           <select
             id="preset"
             aria-label="Period preset"
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+            className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
             value={preset}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPreset(e.target.value)}
-            style={{ width: "220px" }}
           >
             {REPORT_PRESETS.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
           </select>
           {preset === "custom" && (
-            <>
-              <input type="date" aria-label="From" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={from} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)} />
-              <input type="date" aria-label="To" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={to} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTo(e.target.value)} />
-            </>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                type="date"
+                aria-label="From"
+                className="w-auto"
+                value={from}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                aria-label="To"
+                className="w-auto"
+                value={to}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTo(e.target.value)}
+              />
+            </div>
           )}
-          <button onClick={loadCards} disabled={cardsLoading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Apply period</button>
+          <Button variant="outline" onClick={loadCards} disabled={cardsLoading}>
+            Apply period
+          </Button>
         </div>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "12px", margin: "8px 0 0" }}>
+        <p className="text-xs text-muted-foreground">
           Financial year runs Apr to Mar (financial_year / last_fy). Explicit from/to wins over the preset.
         </p>
-      </div>
+      </Card>
+
       {cardsError && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {cardsError} <button onClick={loadCards} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          <span>{cardsError}</span>
+          <Button variant="outline" size="sm" onClick={loadCards}>
+            Retry
+          </Button>
         </div>
       )}
+
       {cardsLoading ? (
-        <div style={{ padding: "16px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading GST and profit&hellip;</div>
+        <div className="p-4 text-center text-sm text-muted-foreground">
+          Loading GST and profit&hellip;
+        </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 20px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, margin: "0 0 12px" }}>GST</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="p-5">
+            <h2 className="text-base font-bold text-foreground mb-3">GST</h2>
             {gst ? (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div className="grid grid-cols-2 gap-3">
                   <MetricCard title="Taxable" value={inr(gst.totals?.taxable ?? 0)} />
                   <MetricCard title="CGST" value={inr(gst.totals?.cgst ?? 0)} />
                   <MetricCard title="SGST" value={inr(gst.totals?.sgst ?? 0)} />
                   <MetricCard title="IGST" value={inr(gst.totals?.igst ?? 0)} />
                 </div>
-                <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "12px 0 0" }}>
+                <p className="mt-3 text-xs text-muted-foreground">
                   {gst.orders ?? 0} orders &middot; {gst.invalid ?? 0} invalid
                 </p>
-                <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "4px 0 0" }}>
+                <p className="mt-1 text-xs text-muted-foreground">
                   GST treatment must be reviewed by the CA before filing.
                 </p>
                 {(gst.rows ?? []).some((r) =>
                   (r.warnings ?? []).some((w) => w === "IGST_UNVERIFIED" || w === "JURISDICTION_UNKNOWN"),
                 ) && (
-                  <p style={{ margin: "8px 0 0", display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div className="mt-2 flex items-center gap-2">
                     <SeverityBadge severity="HIGH" />
-                    <span style={{ fontSize: "12px" }}>IGST-UNVERIFIED: intra-state split assumed, CA review required.</span>
-                  </p>
+                    <span className="text-xs text-foreground">IGST-UNVERIFIED: intra-state split assumed, CA review required.</span>
+                  </div>
                 )}
               </>
             ) : (
-              <p style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>No GST data for this period.</p>
+              <p className="text-sm text-muted-foreground">No GST data for this period.</p>
             )}
-          </div>
-          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 20px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, margin: "0 0 12px" }}>Profit</h2>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-base font-bold text-foreground mb-3">Profit</h2>
             {profit ? (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div className="grid grid-cols-2 gap-3">
                   <MetricCard title="Gross profit" value={inr(profit.profit?.gross_profit ?? 0)} />
                   <MetricCard title="Operating profit" value={inr(profit.profit?.operating_profit ?? 0)} subtitle={profit.profit?.label ?? ""} />
                   <MetricCard title="Margin" value={`${profit.profit?.margin_pct ?? "0.00"}%`} />
                   <MetricCard title="Net sales" value={inr(profit.revenue?.net_exclusive ?? 0)} />
                 </div>
                 {profit.profit?.warning ? (
-                  <p style={{ margin: "8px 0 0", display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div className="mt-2 flex items-center gap-2">
                     <SeverityBadge severity="MEDIUM" />
-                    <span style={{ fontSize: "12px" }}>{profit.profit.warning}</span>
-                  </p>
+                    <span className="text-xs text-foreground">{profit.profit.warning}</span>
+                  </div>
                 ) : null}
               </>
             ) : (
-              <p style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>No profit data for this period.</p>
+              <p className="text-sm text-muted-foreground">No profit data for this period.</p>
             )}
-          </div>
+          </Card>
         </div>
       )}
+
       {loading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading report...</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">Loading report...</div>
       ) : data ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div className="flex flex-col gap-4">
           {data.orders?.total === 0 ? (
             <EmptyState
               title={`No orders in ${month}`}
@@ -220,10 +267,32 @@ export default function MonthlyPage() {
             />
           ) : (
             <>
-              <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"><h2>Orders</h2><pre>{JSON.stringify(data.orders, null, 2)}</pre></div>
-              <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"><h2>Money</h2><pre>{JSON.stringify(data.money, null, 2)}</pre></div>
-              <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"><h2>Profitability ({data.profitability.label})</h2><pre>{JSON.stringify(data.profitability, null, 2)}</pre></div>
-              <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"><h2>Exceptions</h2><pre>{JSON.stringify(data.exceptions, null, 2)}</pre></div>
+              <Card className="p-5">
+                <h2 className="text-base font-bold text-foreground mb-2">Orders</h2>
+                <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
+                  {JSON.stringify(data.orders, null, 2)}
+                </pre>
+              </Card>
+              <Card className="p-5">
+                <h2 className="text-base font-bold text-foreground mb-2">Money</h2>
+                <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
+                  {JSON.stringify(data.money, null, 2)}
+                </pre>
+              </Card>
+              <Card className="p-5">
+                <h2 className="text-base font-bold text-foreground mb-2">
+                  Profitability ({data.profitability?.label})
+                </h2>
+                <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
+                  {JSON.stringify(data.profitability, null, 2)}
+                </pre>
+              </Card>
+              <Card className="p-5">
+                <h2 className="text-base font-bold text-foreground mb-2">Exceptions</h2>
+                <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
+                  {JSON.stringify(data.exceptions, null, 2)}
+                </pre>
+              </Card>
             </>
           )}
         </div>

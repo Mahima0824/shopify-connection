@@ -38,30 +38,36 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
 
 export default function Footer() {
   return (
-    <footer style={{ background: "var(--card)", borderTop: "1px solid var(--border)", padding: "64px 0 0" }}>
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4 grid gap-8 min-[769px]:grid-cols-[1.5fr_1fr_1fr_1fr]" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 32 }}>
+    <footer className="border-t border-border bg-card pt-16 text-card-foreground">
+      <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-8 px-6 sm:grid-cols-2 md:grid-cols-[2fr_repeat(4,1fr)] max-[480px]:px-4">
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--foreground)", fontWeight: 600 }}>
+          <div className="flex items-center gap-2.5 font-semibold text-foreground text-base">
             ReconHub
           </div>
-          <p style={{ color: "var(--foreground)", fontSize: 14, marginTop: 12, maxWidth: 280 }}>
+          <p className="mt-3 max-w-[280px] text-sm text-muted-foreground leading-relaxed">
             Reconciliation for Shopify ops. Scans, returns, and Tally in sync.
           </p>
         </div>
         {cols.map((c) => (
           <div key={c.title}>
-            <div style={{ color: "var(--foreground)", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{c.title}</div>
-            {c.links.map((l) => (
-              <Link key={l.label + l.href} to={l.href} style={{ display: "block", color: "var(--foreground)", fontWeight: 500, fontSize: 14, padding: "6px 0" }}>
-                {l.label}
-              </Link>
-            ))}
+            <div className="mb-3 text-sm font-semibold text-foreground">{c.title}</div>
+            <div className="flex flex-col gap-1.5">
+              {c.links.map((l) => (
+                <Link
+                  key={l.label + l.href}
+                  to={l.href}
+                  className="block text-sm font-medium text-muted-foreground transition-colors hover:text-foreground py-0.5"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
           </div>
         ))}
       </div>
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ marginTop: 48, borderTop: "1px solid var(--border)", paddingTop: 20, paddingBottom: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <span style={{ color: "var(--muted-foreground)", fontSize: 13 }}>© 2026 ReconHub. All rights reserved.</span>
-        <span style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Enterprise reconciliation for Shopify ops.</span>
+      <div className="mx-auto mt-12 flex w-full max-w-[1280px] flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-5 max-[480px]:px-4">
+        <span className="text-xs text-muted-foreground">© 2026 ReconHub. All rights reserved.</span>
+        <span className="text-xs text-muted-foreground">Enterprise reconciliation for Shopify ops.</span>
       </div>
     </footer>
   );

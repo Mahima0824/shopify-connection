@@ -78,7 +78,15 @@ def test_double_entry_payment_and_fee():
 def test_immutable_no_update_delete_api():
     # Ledger must expose no update/delete routes: corrections via reversal only.
     from app.main import app
-    routes = [r for r in app.routes if getattr(r, "path", "").startswith("/api/v1/ledger")]
+    all_routes = []
+    for r in app.routes:
+        if hasattr(r, "original_router"):
+            all_routes.extend(r.original_router.routes)
+        elif hasattr(r, "routes"):
+            all_routes.extend(r.routes)
+        else:
+            all_routes.append(r)
+    routes = [r for r in all_routes if getattr(r, "path", "").startswith("/api/v1/ledger")]
     assert routes, "ledger routes must be wired in main.py"
     for r in routes:
         assert "PUT" not in r.methods and "DELETE" not in r.methods and "PATCH" not in r.methods, (r.path, r.methods)

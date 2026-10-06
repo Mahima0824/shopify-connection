@@ -3,6 +3,18 @@ import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
 import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/primitives";
+import {
   CloseIssues,
   canCloseMonth,
   canReopenMonth,
@@ -185,140 +197,175 @@ export default function MonthClosePage() {
     : [];
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Month close</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Month close</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Five close gates must read zero before a month can be closed &mdash; closed months accept adjustments only.
         </p>
       </div>
 
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
-          Month
-          <input
+      <Card className="flex flex-wrap items-end gap-3 p-5">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="close-month" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Month
+          </label>
+          <Input
+            id="close-month"
             type="month"
             value={month}
             onChange={(e) => handleMonthChange(e.target.value)}
             aria-label="Close month"
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+            className="w-auto"
           />
-        </label>
+        </div>
         {status && (
-          <span className={isClosed ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-muted text-muted-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground"} aria-label={`Period status ${status}`}>
+          <Badge
+            variant={isClosed ? "secondary" : "default"}
+            className="mb-1"
+            aria-label={`Period status ${status}`}
+          >
             {status}
-          </span>
+          </Badge>
         )}
-        <button onClick={() => load(month)} disabled={checking} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ minHeight: 44 }}>
+        <Button
+          variant="outline"
+          onClick={() => load(month)}
+          disabled={checking}
+        >
           {checking ? "Running checks..." : "Run checks"}
-        </button>
+        </Button>
         {privileged && !isClosed && (
-          <button
+          <Button
             onClick={handleClose}
             disabled={closing || blocked || !issues}
-            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
-            style={{ minHeight: 44 }}
             title={blocked ? "Close blocked - fix the open gates first" : "Close this month"}
           >
             {closing ? "Closing..." : "Close month"}
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
 
       {error && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={() => load(month)}>
+            Retry
+          </Button>
         </div>
       )}
+
       {notice && (
-        <p role="status" style={{ color: "var(--success)", fontWeight: 600, margin: 0 }}>{notice}</p>
+        <p role="status" className="text-sm font-semibold text-success">
+          {notice}
+        </p>
       )}
 
       {isClosed && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <Card className="flex flex-wrap items-center gap-3 p-5 border-l-4 border-l-warning">
           <SeverityBadge severity="MEDIUM" />
-          <p style={{ margin: 0, fontSize: "14px", color: "var(--foreground)" }}>
+          <p className="flex-1 text-sm text-foreground">
             Period {month} is CLOSED - only ADJUSTMENT corrections may post here.
           </p>
           {adminOnly ? (
-            <button onClick={handleReopen} disabled={reopening} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ minHeight: 44 }}>
+            <Button variant="outline" onClick={handleReopen} disabled={reopening}>
               {reopening ? "Reopening..." : "Reopen month"}
-            </button>
+            </Button>
           ) : (
-            <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>
+            <span className="text-xs text-muted-foreground">
               Reopening requires an ADMIN role.
             </span>
           )}
-        </div>
+        </Card>
       )}
 
       {loading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading period&hellip;</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">Loading period&hellip;</div>
       ) : issues ? (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-            <span style={{ fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Close gates
             </span>
-            <span className={blocked ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--destructive/10)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground"}>
+            <Badge variant={blocked ? "destructive" : "default"}>
               {blocked ? `BLOCKED (${total})` : "CLEAR"}
-            </span>
+            </Badge>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {gates.map((g) => (
-              <MetricCard key={g.key} title={g.label} value={`${g.count}`} subtitle={g.count > 0 ? "must be zero" : "clear"} />
+              <MetricCard
+                key={g.key}
+                title={g.label}
+                value={`${g.count}`}
+                subtitle={g.count > 0 ? "must be zero" : "clear"}
+              />
             ))}
           </div>
-          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
-                <thead>
-                  <tr>
-                    <th>Gate</th>
-                    <th style={{ textAlign: "right" }}>Open count</th>
-                    <th>Severity</th>
-                  </tr>
-                </thead>
-                <tbody>
+
+          <Card className="overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Gate</TableHead>
+                    <TableHead className="text-right">Open count</TableHead>
+                    <TableHead>Severity</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {gates.map((g) => (
-                    <tr key={g.key}>
-                      <td style={{ fontWeight: 600 }}>{g.label}</td>
-                      <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{g.count}</td>
-                      <td>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                    <TableRow key={g.key}>
+                      <TableCell className="font-semibold text-foreground">{g.label}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                        {g.count}
+                      </TableCell>
+                      <TableCell>
+                        <div className="inline-flex items-center gap-2">
                           <SeverityBadge severity={gateSeverity(g.count)} />
-                          <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                          <span className="text-xs font-bold text-foreground">
                             {g.count > 0 ? "BLOCKER" : "CLEAR"}
                           </span>
-                        </span>
-                      </td>
-                    </tr>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
                   {checkErrors > 0 && (
-                    <tr>
-                      <td style={{ fontWeight: 600 }}>Check errors (fail-closed)</td>
-                      <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{checkErrors}</td>
-                      <td>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                    <TableRow>
+                      <TableCell className="font-semibold text-foreground">
+                        Check errors (fail-closed)
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                        {checkErrors}
+                      </TableCell>
+                      <TableCell>
+                        <div className="inline-flex items-center gap-2">
                           <SeverityBadge severity="HIGH" />
-                          <span style={{ fontSize: "12px", fontWeight: 700 }}>BLOCKER</span>
-                        </span>
-                      </td>
-                    </tr>
+                          <span className="text-xs font-bold text-foreground">BLOCKER</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </div>
+          </Card>
+
           {blockerEntries.length > 0 && (
-            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0 0", padding: 0 }}>
+            <div className="flex flex-col gap-2">
               {blockerEntries.map((b) => (
-                <li key={b.gate} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
+                <div
+                  key={b.gate}
+                  className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3 text-xs"
+                >
                   <SeverityBadge severity="HIGH" />
-                  <span><strong>{b.gate}</strong>: {b.refs.join(", ")}{blockers && (blockers.checks[b.gate] ?? []).length > 5 ? " ..." : ""}</span>
-                </li>
+                  <span className="text-foreground">
+                    <strong className="font-semibold">{b.gate}</strong>: {b.refs.join(", ")}
+                    {blockers && (blockers.checks[b.gate] ?? []).length > 5 ? " ..." : ""}
+                  </span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       ) : (

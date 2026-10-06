@@ -69,7 +69,7 @@
    canonical names at the DESIGN.md palette. Single source of truth, and
    inline styles and utility classes can no longer drift apart. */
 :root {
-  --background: var(--dm-background);
+  --background: oklch(0.992 0.002 245);
   --foreground: var(--dm-foreground);
   --card: var(--dm-card);
   --card-foreground: var(--dm-card-foreground);
@@ -77,11 +77,11 @@
   --popover-foreground: var(--dm-popover-foreground);
   --primary: var(--dm-primary);
   --primary-foreground: var(--dm-primary-foreground);
-  --secondary: var(--dm-secondary);
+  --secondary: oklch(0.965 0.005 245);
   --secondary-foreground: var(--dm-secondary-foreground);
-  --muted: var(--dm-muted);
+  --muted: oklch(0.965 0.005 245);
   --muted-foreground: var(--dm-muted-foreground);
-  --accent: var(--dm-accent);
+  --accent: oklch(0.955 0.01 245);
   --accent-foreground: var(--dm-accent-foreground);
   --destructive: var(--dm-destructive);
   --border: var(--dm-border);
@@ -223,8 +223,8 @@
    express. */
 
 body {
-  background: var(--dm-background);
-  color: var(--dm-foreground);
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
 }
 

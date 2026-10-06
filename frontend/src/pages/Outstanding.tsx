@@ -1,57 +1,136 @@
-
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { slaTone } from "../lib/sla";
+import {
+  Badge,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/primitives";
 
-type Row = { shipment_id: string; order_name: string | null; carrier_code: string; awb_number: string; tracking_status: string; age_days: number; sla_status: string; sla_days_used: number; sla_deadline: string | null; amount: number; money_status: string };
+type Row = {
+  shipment_id: string;
+  order_name: string | null;
+  carrier_code: string;
+  awb_number: string;
+  tracking_status: string;
+  age_days: number;
+  sla_status: string;
+  sla_days_used: number;
+  sla_deadline: string | null;
+  amount: number;
+  money_status: string;
+};
 
-const TONE_BG: Record<string, string> = { critical: "var(--destructive)", warn: "var(--warning)", ok: "transparent" };
+const TONE_BORDER: Record<string, string> = {
+  critical: "border-l-4 border-l-destructive",
+  warn: "border-l-4 border-l-warning",
+  ok: "",
+};
 
 export default function OutstandingPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [sla, setSla] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const token = localStorage.getItem("token") ?? undefined;
     const qs = new URLSearchParams({ ...(sla ? { sla } : {}) });
     api<{ items: Row[] }>(`/api/v1/shipments/outstanding?${qs}`, {}, token)
       .then((d) => setItems(d.items ?? []))
-      .catch((e) => setError(e?.message ?? "Failed to load"));
+      .catch((e) => setError(e?.message ?? "Failed to load outstanding shipments"));
   }, [sla]);
+
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Outstanding shipments</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Outstanding shipments</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Parcels that need courier follow-up — oldest and breached first
         </p>
       </div>
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
-        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={sla} onChange={(e) => setSla(e.target.value)} aria-label="SLA band" style={{ width: "220px" }}>
+
+      <Card className="p-4 sm:p-5">
+        <select
+          className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          value={sla}
+          onChange={(e) => setSla(e.target.value)}
+          aria-label="SLA band"
+        >
           <option value="">All bands</option>
-          <option>NORMAL</option><option>APPROACHING</option><option>BREACHED</option>
+          <option value="NORMAL">NORMAL</option>
+          <option value="APPROACHING">APPROACHING</option>
+          <option value="BREACHED">BREACHED</option>
         </select>
-      </div>
-      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
-      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+      </Card>
+
+      {error && (
+        <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <Card className="overflow-hidden p-0">
         {items.length === 0 ? (
-          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
+          <p className="p-10 text-center text-sm text-muted-foreground">
             Nothing outstanding. Every parcel is delivered, returned, or resolved.
           </p>
         ) : (
-          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ border: "none" }}>
-            <thead><tr><th>Order</th><th>AWB</th><th>Status</th><th>Age</th><th>SLA</th><th>Amount</th></tr></thead>
-            <tbody>
-              {items.map((r) => (
-                <tr key={r.shipment_id} style={{ borderLeft: `4px solid ${TONE_BG[slaTone(r.sla_status)]}` }}>
-                  <td style={{ fontWeight: 600 }}>{r.order_name ?? "-"}</td><td>{r.awb_number}</td><td>{r.tracking_status}</td>
-                  <td>{r.age_days}d</td><td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{r.sla_status} ({r.sla_days_used}d)</span></td><td className="tabular-nums">₹{Number(r.amount || 0).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>AWB</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>SLA</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((r) => (
+                  <TableRow
+                    key={r.shipment_id}
+                    className={`transition-colors ${TONE_BORDER[slaTone(r.sla_status)] || ""}`}
+                  >
+                    <TableCell className="font-semibold text-foreground">
+                      {r.order_name ?? "-"}
+                    </TableCell>
+                    <TableCell className="font-mono text-foreground">{r.awb_number}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{r.tracking_status}</Badge>
+                    </TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">
+                      {r.age_days}d
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          slaTone(r.sla_status) === "critical"
+                            ? "destructive"
+                            : slaTone(r.sla_status) === "warn"
+                            ? "outline"
+                            : "secondary"
+                        }
+                      >
+                        {r.sla_status} ({r.sla_days_used}d)
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums text-foreground">
+                      ₹{Number(r.amount || 0).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

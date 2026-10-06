@@ -18,10 +18,8 @@ function isGroupActive(pathname: string | null, href?: string, children?: { href
   return (children ?? []).some((c) => isActive(pathname, c.href));
 }
 
-/* Nav pills keep a 44px min-height for the handheld scanners; the active state
-   is a surface fill rather than a colour change so it reads at a glance. */
 const PILL =
-  "inline-flex min-h-11 items-center rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors";
+  "inline-flex h-9 items-center rounded-full px-3 text-xs min-[1100px]:text-sm min-[1100px]:px-3.5 font-medium whitespace-nowrap transition-all duration-150";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
@@ -32,14 +30,19 @@ export default function TopNav() {
   const closeDrop = () => setOpenDrop(null);
 
   return (
-    <header className="sticky top-0 z-50 h-16 border-b border-border bg-background">
-      <div className="mx-auto flex h-16 w-full max-w-[1280px] items-center justify-between px-6 max-[480px]:px-4">
-        <Link to="/" className="text-lg font-semibold text-foreground">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
+      <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center justify-between px-4 sm:px-6">
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground transition-opacity hover:opacity-85"
+        >
           ReconHub
         </Link>
+
+        {/* Desktop Primary Navigation - NO overflow-x-auto to prevent scrollbar */}
         <nav
           aria-label="Primary"
-          className="hidden max-w-full gap-1 overflow-x-auto text-sm font-medium min-[769px]:flex"
+          className="hidden items-center gap-0.5 text-sm font-medium min-[769px]:flex min-[1100px]:gap-1"
         >
           {APP_NAV_GROUPS.map((g) => {
             const active = isGroupActive(pathname, g.href, g.children);
@@ -51,44 +54,64 @@ export default function TopNav() {
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     PILL,
-                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                    active
+                      ? "bg-foreground text-background font-semibold shadow-xs rounded-full"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground rounded-full",
                   )}
                 >
                   {g.label}
                 </Link>
               );
             }
+
             const dropOpen = openDrop === g.label;
             const primaryHref = g.children?.[0]?.href ?? "/";
+
             return (
-              <div key={g.label} className="group relative inline-flex items-center">
-                <Link
-                  to={primaryHref}
-                  aria-current={isExact(pathname, primaryHref) ? "page" : undefined}
-                  onClick={closeDrop}
+              <div
+                key={g.label}
+                className="group relative inline-flex items-center"
+                onMouseLeave={() => setOpenDrop(null)}
+              >
+                <div
                   className={cn(
-                    PILL,
-                    "rounded-r-none",
-                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                    "inline-flex h-9 items-center rounded-full transition-all duration-150",
+                    active
+                      ? "bg-muted text-foreground font-semibold ring-1 ring-border"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  {g.label}
-                </Link>
-                <button
-                  type="button"
-                  aria-expanded={dropOpen}
-                  aria-haspopup="true"
-                  aria-label={`${g.label} submenu`}
-                  onClick={() => setOpenDrop(dropOpen ? null : g.label)}
+                  <Link
+                    to={primaryHref}
+                    onClick={closeDrop}
+                    className="inline-flex h-full items-center pl-3 pr-1 text-xs font-medium min-[1100px]:text-sm min-[1100px]:pl-3.5"
+                  >
+                    {g.label}
+                  </Link>
+                  <button
+                    type="button"
+                    aria-expanded={dropOpen}
+                    aria-haspopup="true"
+                    aria-label={`${g.label} submenu`}
+                    onClick={() => setOpenDrop(dropOpen ? null : g.label)}
+                    className="inline-flex h-full items-center pr-2 pl-0.5 text-[11px] text-muted-foreground transition-transform hover:text-foreground min-[1100px]:pr-2.5"
+                  >
+                    <span className={cn("transition-transform duration-150 inline-block", dropOpen && "rotate-180")}>
+                      ▾
+                    </span>
+                  </button>
+                </div>
+
+                {/* Floating Dropdown Panel - Escapes navbar cleanly without clipping */}
+                <div
                   className={cn(
-                    PILL,
-                    "gap-0.5 rounded-l-none pl-1 pr-2.5 text-xs",
-                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                    "absolute top-full left-0 mt-1.5 min-w-[210px] rounded-xl border border-border/80 bg-popover/98 p-1.5 shadow-xl backdrop-blur-md z-50 transition-all duration-150",
+                    "before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']",
+                    dropOpen
+                      ? "opacity-100 visible translate-y-0 pointer-events-auto"
+                      : "opacity-0 invisible -translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:pointer-events-auto",
                   )}
                 >
-                  ▾
-                </button>
-                <div className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-border bg-card p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                   {(g.children ?? []).map((c) => {
                     const childActive = isActive(pathname, c.href);
                     return (
@@ -98,10 +121,10 @@ export default function TopNav() {
                         aria-current={isExact(pathname, c.href) ? "page" : undefined}
                         onClick={closeDrop}
                         className={cn(
-                          "flex min-h-11 items-center rounded-lg px-4 py-2.5 text-sm whitespace-nowrap",
+                          "flex h-9 items-center rounded-lg px-3 text-xs font-medium whitespace-nowrap transition-colors min-[1100px]:text-sm",
                           childActive
-                            ? "bg-muted text-foreground"
-                            : "text-body hover:bg-muted",
+                            ? "bg-accent text-accent-foreground font-semibold"
+                            : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
                         )}
                       >
                         {c.label}
@@ -113,82 +136,100 @@ export default function TopNav() {
             );
           })}
         </nav>
+
+        {/* Right Action & Mobile Toggle */}
         <div className="flex items-center gap-3">
-          <Link to="/login" className="text-sm font-medium text-foreground">
+          <Link
+            to="/login"
+            className="text-xs font-semibold text-foreground transition-colors hover:text-primary min-[1100px]:text-sm"
+          >
             Sign in
           </Link>
           <Button
             variant="ghost"
+            size="sm"
             aria-label="menu"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
-            className="hidden max-[768px]:inline-flex"
+            className="hidden h-9 w-9 p-0 text-base max-[768px]:inline-flex"
           >
             ☰
           </Button>
         </div>
       </div>
+
+      {/* Mobile Drawer */}
       {open && (
-        <nav aria-label="Mobile" className="border-b border-border bg-background p-4">
-          {APP_NAV_GROUPS.map((g) => {
-            if (g.href) {
-              const active = isActive(pathname, g.href);
+        <nav aria-label="Mobile" className="border-b border-border bg-background p-4 shadow-lg min-[769px]:hidden">
+          <div className="flex flex-col gap-1">
+            {APP_NAV_GROUPS.map((g) => {
+              if (g.href) {
+                const active = isActive(pathname, g.href);
+                return (
+                  <Link
+                    key={g.label}
+                    to={g.href}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      "flex min-h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors",
+                      active ? "bg-muted text-foreground font-semibold" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {g.label}
+                  </Link>
+                );
+              }
+
+              const isExpanded = expanded === g.label;
+              const groupActive = isGroupActive(pathname, g.href, g.children);
+
               return (
-                <Link
-                  key={g.label}
-                  to={g.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex min-h-11 items-center rounded-full px-4 py-2 text-sm",
-                    active ? "bg-card text-foreground" : "text-body",
+                <div key={g.label} className="flex flex-col">
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpanded(isExpanded ? null : g.label)}
+                    className={cn(
+                      "flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition-colors",
+                      groupActive ? "bg-muted text-foreground font-semibold" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span>{g.label}</span>
+                    <span className={cn("text-xs transition-transform", isExpanded && "rotate-180")}>▾</span>
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-3 mt-1 flex flex-col gap-1 border-l-2 border-border/60 pl-3">
+                      {(g.children ?? []).map((c) => {
+                        const childActive = isActive(pathname, c.href);
+                        return (
+                          <Link
+                            key={c.href}
+                            to={c.href}
+                            onClick={() => setOpen(false)}
+                            className={cn(
+                              "flex min-h-9 items-center rounded-md px-2 text-sm transition-colors",
+                              childActive
+                                ? "bg-accent text-accent-foreground font-semibold"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {c.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   )}
-                >
-                  {g.label}
-                </Link>
+                </div>
               );
-            }
-            const isExpanded = expanded === g.label;
-            const groupActive = isGroupActive(pathname, g.href, g.children);
-            return (
-              <div key={g.label}>
-                <button
-                  type="button"
-                  aria-expanded={isExpanded}
-                  onClick={() => setExpanded(isExpanded ? null : g.label)}
-                  className={cn(
-                    "flex min-h-11 w-full items-center rounded-full px-4 py-2 text-left text-sm font-medium",
-                    groupActive ? "bg-card text-foreground" : "text-body",
-                  )}
-                >
-                  {g.label}
-                </button>
-                {isExpanded &&
-                  (g.children ?? []).map((c) => {
-                    const childActive = isActive(pathname, c.href);
-                    return (
-                      <Link
-                        key={c.href}
-                        to={c.href}
-                        onClick={() => setOpen(false)}
-                        className={cn(
-                          "flex min-h-11 items-center rounded-full py-2 pr-4 pl-8 text-sm",
-                          childActive ? "bg-card text-foreground" : "text-body",
-                        )}
-                      >
-                        {c.label}
-                      </Link>
-                    );
-                  })}
-              </div>
-            );
-          })}
-          <Link
-            to="/login"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-foreground"
-          >
-            Sign in
-          </Link>
+            })}
+            <Link
+              to="/login"
+              onClick={() => setOpen(false)}
+              className="mt-2 block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
+            >
+              Sign in
+            </Link>
+          </div>
         </nav>
       )}
     </header>

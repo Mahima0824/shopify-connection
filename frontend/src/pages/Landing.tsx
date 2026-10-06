@@ -2,20 +2,18 @@ import React from "react";
 import { Link } from "react-router-dom";
 import Reveal from "../components/Reveal";
 import Footer from "../components/Footer";
+import {
+  Badge,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  buttonVariants,
+} from "../components/primitives";
 import { IconTruck, IconTag, IconReceipt } from "../components/icons";
-
-const sectionPad = { padding: "96px 0" };
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: 12,
-  padding: 24,
-  color: "var(--foreground)",
-};
-
-const h2Style: React.CSSProperties = { fontSize: 32, margin: 0 };
-const bodyStyle: React.CSSProperties = { color: "var(--foreground)", fontSize: 16, marginTop: 16 };
 
 const features = [
   {
@@ -65,96 +63,100 @@ export default function Landing() {
   return (
     <>
       {/* Hero 2-col */}
-      <section style={{ background: "var(--background)" }}>
-        <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4 grid items-center gap-8 min-[769px]:grid-cols-[7fr_5fr]" style={{ paddingTop: 96, paddingBottom: 96 }}>
+      <section className="bg-background py-20 lg:py-24">
+        <div className="mx-auto grid w-full max-w-[1280px] items-center gap-12 px-6 min-[769px]:grid-cols-[7fr_5fr] max-[480px]:px-4">
           <Reveal>
-            <p style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted-foreground)", margin: "0 0 16px" }}>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Shopify reconciliation
             </p>
-            <h1 className="font-bold tracking-tight text-foreground" style={{ margin: 0, fontSize: 56, fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.02em" }}>
+            <h1 className="font-bold tracking-tight text-foreground text-4xl sm:text-5xl lg:text-[56px] leading-[1.05] tracking-[-0.02em]">
               Reconciliation for Shopify ops
             </h1>
-            <p style={{ color: "var(--foreground)", fontSize: 18, marginTop: 16, maxWidth: 520 }}>
+            <p className="mt-4 max-w-[520px] text-lg text-muted-foreground leading-relaxed">
               Connect Shopify orders, warehouse scans, returns, and Tally accounting in one operational ledger.
             </p>
-            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-              <Link to="/dashboard" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/dashboard" className={buttonVariants({ size: "lg" })}>
                 Sign up free
               </Link>
-              <Link to="/#product" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
+              <Link to="/#product" className={buttonVariants({ variant: "outline", size: "lg" })}>
                 See product
               </Link>
             </div>
           </Reveal>
           <Reveal delay={120}>
-            <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 24 }}>
-              <div style={{ display: "flex", gap: 24 }}>
+            <Card className="p-6">
+              <div className="flex gap-6 pb-4">
                 {[
                   { value: "128k", label: "Synced" },
                   { value: "96k", label: "Scanned" },
                   { value: "99.9%", label: "Accuracy" },
                 ].map((s) => (
                   <div key={s.label}>
-                    <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 600, color: "var(--foreground)" }}>{s.value}</div>
-                    <div style={{ fontSize: 13, color: "var(--muted-foreground)" }}>{s.label}</div>
+                    <div className="tabular-nums font-semibold text-xl text-foreground">{s.value}</div>
+                    <div className="text-xs text-muted-foreground">{s.label}</div>
                   </div>
                 ))}
               </div>
-              <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ marginTop: 16 }}>
-                <thead>
-                  <tr>
-                    <th>Order</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: "right" }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledgerRows.map((r) => (
-                    <tr key={r.order}>
-                      <td style={{ fontWeight: 600, color: "var(--foreground)" }}>{r.order}</td>
-                      <td style={{ color: "var(--foreground)" }}>{r.status}</td>
-                      <td className="tabular-nums" style={{ textAlign: "right" }}>{r.amount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ marginTop: 16 }}>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground bg-[var(--success/12)] text-foreground">Sync status: healthy</span>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledgerRows.map((r) => (
+                      <TableRow key={r.order}>
+                        <TableCell className="font-semibold">{r.order}</TableCell>
+                        <TableCell>{r.status}</TableCell>
+                        <TableCell className="tabular-nums text-right font-medium">{r.amount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            </div>
+              <div className="mt-4">
+                <Badge variant="secondary" className="bg-success/15 text-foreground font-medium">
+                  Sync status: healthy
+                </Badge>
+              </div>
+            </Card>
           </Reveal>
         </div>
       </section>
 
       {/* Metric strip */}
-      <section style={{ borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: "var(--background)" }}>
-        <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexWrap: "wrap", gap: 48, paddingTop: 32, paddingBottom: 32 }}>
+      <section className="border-y border-border bg-card py-8">
+        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap gap-12 px-6 max-[480px]:px-4">
           {metrics.map((m) => (
             <div key={m.label}>
-              <div className="tabular-nums" style={{ fontSize: 28, fontWeight: 600, color: "var(--foreground)" }}>{m.value}</div>
-              <div style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 4 }}>{m.label}</div>
+              <div className="tabular-nums text-2xl sm:text-3xl font-bold text-foreground">{m.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{m.label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* Features 3-up */}
-      <section id="solutions" style={sectionPad}>
+      <section id="solutions" className="py-20 lg:py-24 bg-background">
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <h2 className="font-bold tracking-tight text-foreground" style={h2Style}>Everything reconciled</h2>
-            <p style={bodyStyle}>Orders, scans, returns, and Tally vouchers stay in sync.</p>
+            <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">Everything reconciled</h2>
+            <p className="mt-3 text-base text-muted-foreground">Orders, scans, returns, and Tally vouchers stay in sync.</p>
           </Reveal>
-          <div className="grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3" style={{ marginTop: 32 }}>
+          <div className="mt-8 grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3">
             {features.map((f, i) => (
               <Reveal key={f.title} delay={i * 100}>
-                <div style={cardStyle}>
-                  <span style={{ width: 40, height: 40, borderRadius: 8, background: "var(--muted-foreground)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <Card className="h-full p-6">
+                  <span className="inline-flex size-10 items-center justify-center rounded-xl bg-muted text-foreground">
                     {f.icon}
                   </span>
-                  <h3 className="font-bold tracking-tight text-foreground" style={{ fontSize: 18, margin: "16px 0 8px" }}>{f.title}</h3>
-                  <p style={{ margin: 0, fontSize: 14, color: "var(--foreground)" }}>{f.body}</p>
-                </div>
+                  <h3 className="mt-4 mb-2 font-bold tracking-tight text-foreground text-lg">{f.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+                </Card>
               </Reveal>
             ))}
           </div>
@@ -162,27 +164,27 @@ export default function Landing() {
       </section>
 
       {/* Product band */}
-      <section id="product" style={{ ...sectionPad, background: "var(--muted-foreground)" }}>
-        <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4 grid items-center gap-8 min-[769px]:grid-cols-[7fr_5fr]">
+      <section id="product" className="py-20 lg:py-24 bg-muted/40 border-y border-border">
+        <div className="mx-auto grid w-full max-w-[1280px] items-center gap-10 px-6 min-[769px]:grid-cols-[7fr_5fr] max-[480px]:px-4">
           <Reveal>
-            <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--border)", fontSize: 14 }}>
-                <span style={{ color: "var(--foreground)", fontWeight: 600 }}>Missing return scan — #2091</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">High severity</span>
+            <Card className="p-6">
+              <div className="flex items-center justify-between border-b border-border py-3 text-sm">
+                <span className="font-semibold text-foreground">Missing return scan — #2091</span>
+                <Badge variant="destructive" className="font-medium">High severity</Badge>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", fontSize: 14 }}>
-                <span style={{ color: "var(--foreground)", fontWeight: 600 }}>Duplicate dispatch — #2088</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">Medium severity</span>
+              <div className="flex items-center justify-between py-3 text-sm">
+                <span className="font-semibold text-foreground">Duplicate dispatch — #2088</span>
+                <Badge variant="secondary" className="bg-warning/15 text-foreground font-medium">Medium severity</Badge>
               </div>
-            </div>
+            </Card>
           </Reveal>
           <Reveal delay={120}>
-            <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: 40, margin: 0 }}>Exceptions, resolved</h2>
-            <p style={{ color: "var(--foreground)", fontSize: 18, marginTop: 16 }}>
+            <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">Exceptions, resolved</h2>
+            <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
               Every mismatch between Shopify, scans, and Tally surfaces in one queue with severity, history, and one-click resolution.
             </p>
-            <div style={{ marginTop: 24 }}>
-              <Link to="/exceptions" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+            <div className="mt-6">
+              <Link to="/exceptions" className={buttonVariants({ size: "lg" })}>
                 View exceptions
               </Link>
             </div>
@@ -191,25 +193,25 @@ export default function Landing() {
       </section>
 
       {/* Workflow band */}
-      <section id="resources" style={sectionPad}>
+      <section id="resources" className="py-20 lg:py-24 bg-background">
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <h2 className="font-bold tracking-tight text-foreground" style={h2Style}>How it works</h2>
+            <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">How it works</h2>
           </Reveal>
-          <div className="grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3" style={{ marginTop: 32 }}>
+          <div className="mt-8 grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3">
             {[
               { n: "1", title: "Connect", body: "Link Shopify and Tally; orders flow into one ledger automatically." },
               { n: "2", title: "Scan", body: "Validate every dispatch and return at the station with a fast scan flow." },
               { n: "3", title: "Close", body: "Resolve exceptions and close month-end in hours, not days." },
             ].map((s, i) => (
               <Reveal key={s.n} delay={i * 100}>
-                <div style={cardStyle}>
-                  <span className="tabular-nums" style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--muted-foreground)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600 }}>
+                <Card className="h-full p-6">
+                  <span className="tabular-nums inline-flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
                     {s.n}
                   </span>
-                  <h3 className="font-bold tracking-tight text-foreground" style={{ fontSize: 18, margin: "16px 0 8px" }}>{s.title}</h3>
-                  <p style={{ margin: 0, fontSize: 14, color: "var(--foreground)" }}>{s.body}</p>
-                </div>
+                  <h3 className="mt-4 mb-2 font-bold tracking-tight text-foreground text-lg">{s.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{s.body}</p>
+                </Card>
               </Reveal>
             ))}
           </div>
@@ -217,23 +219,23 @@ export default function Landing() {
       </section>
 
       {/* Testimonials */}
-      <section id="customers" style={sectionPad}>
+      <section id="customers" className="py-20 lg:py-24 bg-muted/40 border-y border-border">
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <h2 className="font-bold tracking-tight text-foreground" style={h2Style}>Loved by operators</h2>
+            <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">Loved by operators</h2>
           </Reveal>
-          <div className="grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3" style={{ marginTop: 32 }}>
+          <div className="mt-8 grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3">
             {testimonials.map((t, i) => (
               <Reveal key={t.name} delay={i * 100}>
-                <div style={cardStyle}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--muted-foreground)", color: "var(--foreground)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 13 }}>
+                <Card className="h-full p-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 items-center justify-center rounded-full bg-muted font-bold text-xs text-foreground">
                       {t.initials}
                     </span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--foreground)" }}>{t.name}</span>
+                    <span className="font-semibold text-foreground text-sm">{t.name}</span>
                   </div>
-                  <p style={{ marginTop: 12, marginBottom: 0, fontSize: 14, color: "var(--foreground)" }}>{t.quote}</p>
-                </div>
+                  <p className="mt-4 text-sm text-muted-foreground italic leading-relaxed">"{t.quote}"</p>
+                </Card>
               </Reveal>
             ))}
           </div>
@@ -241,35 +243,41 @@ export default function Landing() {
       </section>
 
       {/* Pricing 3-up */}
-      <section id="pricing" style={{ ...sectionPad, background: "var(--muted-foreground)" }}>
+      <section id="pricing" className="py-20 lg:py-24 bg-background">
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <h2 className="font-bold tracking-tight text-foreground" style={h2Style}>Pricing</h2>
-            <p style={bodyStyle}>Start free, upgrade when ops grow.</p>
+            <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">Pricing</h2>
+            <p className="mt-3 text-base text-muted-foreground">Start free, upgrade when ops grow.</p>
           </Reveal>
-          <div className="grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3" style={{ marginTop: 32 }}>
+          <div className="mt-8 grid grid-cols-1 gap-6 min-[769px]:grid-cols-2 min-[1025px]:grid-cols-3">
             {tiers.map((p) => (
               <Reveal key={p.name} delay={0}>
-                <div
-                  style={
-                    p.featured
-                      ? { ...cardStyle, border: "2px solid var(--primary)" }
-                      : cardStyle
-                  }
+                <Card
+                  className={`h-full p-6 relative flex flex-col justify-between ${
+                    p.featured ? "border-2 border-primary ring-1 ring-primary/20 shadow-md" : ""
+                  }`}
                 >
-                  {p.featured && (
-                    <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[13px] font-medium text-foreground">Most popular</span>
-                  )}
-                  <div className="font-bold tracking-tight text-foreground" style={{ fontSize: 16, fontWeight: 600 }}>{p.name}</div>
-                  <p style={{ fontSize: 14, color: "var(--muted-foreground)" }}>{p.blurb}</p>
-                  <ul style={{ listStyle: "none", padding: 0, margin: "16px 0 0", display: "grid", gap: 8 }}>
-                    {p.features.map((f) => (
-                      <li key={f} style={{ fontSize: 13, color: "var(--foreground)" }}>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                  <div>
+                    {p.featured && (
+                      <Badge variant="secondary" className="mb-3 bg-accent text-accent-foreground font-semibold">
+                        Most popular
+                      </Badge>
+                    )}
+                    <div className="font-bold tracking-tight text-foreground text-xl">{p.name}</div>
+                    <p className="mt-1 text-sm text-muted-foreground">{p.blurb}</p>
+                    <ul className="mt-6 flex flex-col gap-2.5">
+                      {p.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2 text-sm text-foreground">
+                          <span className="size-1.5 rounded-full bg-primary" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="mt-8 pt-4 border-t border-border">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{p.price}</span>
+                  </div>
+                </Card>
               </Reveal>
             ))}
           </div>
@@ -277,18 +285,18 @@ export default function Landing() {
       </section>
 
       {/* CTA band */}
-      <section style={sectionPad}>
+      <section className="py-20 lg:py-24 bg-muted/40">
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <div style={{ background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: 12, padding: 80, textAlign: "center" }}>
-              <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: 32, margin: 0 }}>Start reconciling today</h2>
-              <p style={{ color: "var(--foreground)", fontSize: 16, marginTop: 12 }}>Connect Shopify and close your first exceptions in minutes.</p>
-              <div style={{ marginTop: 20 }}>
-                <Link to="/dashboard" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+            <Card className="p-12 sm:p-16 text-center bg-card border-border">
+              <h2 className="font-bold tracking-tight text-foreground text-3xl sm:text-4xl">Start reconciling today</h2>
+              <p className="mt-3 text-base text-muted-foreground">Connect Shopify and close your first exceptions in minutes.</p>
+              <div className="mt-6">
+                <Link to="/dashboard" className={buttonVariants({ size: "lg" })}>
                   Sign up free
                 </Link>
               </div>
-            </div>
+            </Card>
           </Reveal>
         </div>
       </section>

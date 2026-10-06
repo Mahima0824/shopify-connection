@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { Button, Card, Input, Label } from "../components/primitives";
 import { IconAlert } from "../components/icons";
 
 export default function LoginPage() {
@@ -35,64 +36,33 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen min-h-dvh" style={{
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "var(--background)",
-      padding: "20px"
-    }}>
-      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-
+    <div className="flex min-h-screen min-h-dvh w-full items-center justify-center bg-background p-5">
+      <Card className="w-full max-w-[440px] p-8 sm:p-10 shadow-none">
         {/* Brand Header */}
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div style={{
-            width: "48px",
-            height: "48px",
-            borderRadius: "12px",
-            background: "var(--muted)",
-            border: "1px solid var(--border)",
-            color: "var(--muted-foreground)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "24px",
-            fontWeight: 600,
-            margin: "0 auto 16px auto"
-          }}>
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl border border-border bg-muted text-xl font-bold text-foreground">
             R
           </div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>
+          <h1 className="font-bold tracking-tight text-foreground text-2xl mb-2">Welcome Back</h1>
+          <p className="text-sm text-muted-foreground">
             Sign in to access your Shopify Order Reconciliation platform
           </p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{
-            padding: "12px 16px",
-            borderRadius: "12px",
-            fontSize: "14px",
-            marginBottom: "24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px"
-          }}>
+          <div role="alert" className="mb-6 flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive border border-destructive/20">
             <IconAlert size={16} />
             <span>{error}</span>
           </div>
         )}
 
         {/* Login Form */}
-        <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted-foreground)" }}>
-              Email Address
-            </label>
-            <input
-              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+        <form onSubmit={onSubmit} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email Address</Label>
+            <Input
+              id="email"
               type="email"
               placeholder="name@company.com"
               value={email}
@@ -101,12 +71,10 @@ export default function LoginPage() {
             />
           </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted-foreground)" }}>
-              Password
-            </label>
-            <input
-              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
               type="password"
               placeholder="••••••••"
               value={password}
@@ -115,42 +83,42 @@ export default function LoginPage() {
             />
           </div>
 
-          <button
+          <Button
             type="submit"
-            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
             disabled={loading}
-            style={{ marginTop: "8px", padding: "14px", minHeight: "44px" }}
+            className="mt-2 w-full"
           >
             {loading ? "Signing in..." : "Sign In to ReconHub"}
-          </button>
+          </Button>
         </form>
 
         {/* Demo Credentials Quick Fill */}
-        <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--border)", textAlign: "center" }}>
-          <p style={{ fontSize: "12px", color: "var(--muted-foreground)", marginBottom: "12px" }}>
+        <div className="mt-8 border-t border-border pt-6 text-center">
+          <p className="mb-3 text-xs text-muted-foreground">
             Testing locally? Click to fill test accounts:
           </p>
-          <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
-            <button
+          <div className="flex justify-center gap-2">
+            <Button
               type="button"
-              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"
-              style={{ fontSize: "12px", padding: "6px 12px" }}
+              variant="outline"
+              size="sm"
+              className="min-h-8 px-3 text-xs"
               onClick={() => fillDemoCreds("admin@t.in")}
             >
               Admin Account
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"
-              style={{ fontSize: "12px", padding: "6px 12px" }}
+              variant="outline"
+              size="sm"
+              className="min-h-8 px-3 text-xs"
               onClick={() => fillDemoCreds("dash@t.in")}
             >
               Dashboard User
-            </button>
+            </Button>
           </div>
         </div>
-
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,9 +1,9 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import ScanBanner from "../components/ScanBanner";
 import BarcodeScanner from "../components/scanner/BarcodeScanner";
 import ManualBarcodeInput from "../components/scanner/ManualBarcodeInput";
+import { Button, Card, Input } from "../components/primitives";
 import { CONDITIONS } from "../lib/return-options";
 
 type Info = { parcel: any; order: any; customer: any } | null;
@@ -63,97 +63,94 @@ export default function RtoPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--background)" }}>
-
+    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>RTO Station</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">RTO Station</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Scan courier-returned parcels to record RTO events and update order state
         </p>
       </div>
 
       {/* Lookup card */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <form onSubmit={lookup} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--foreground)" }}>
+      <Card className="p-6">
+        <form onSubmit={lookup} className="flex flex-col gap-4">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             SCAN RTO BARCODE
           </label>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <input
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
               ref={ref}
               autoFocus
-              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+              className="min-h-12 flex-1 text-lg font-semibold"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Scan barcode to inspect parcel (e.g. P00000001)..."
               aria-label="Parcel barcode"
-              style={{ fontSize: "20px", fontWeight: 600, padding: "16px 20px" }}
             />
-            <button type="submit" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ padding: "16px 28px", whiteSpace: "nowrap" }}>
+            <Button type="submit" className="min-h-12 whitespace-nowrap px-6">
               Inspect Parcel
-            </button>
+            </Button>
           </div>
         </form>
 
         {msg && !info && (
-          <div style={{ marginTop: "24px" }}>
+          <div className="mt-6">
             <ScanBanner kind={msg.kind} text={msg.text} />
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Camera + manual entry */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
-          <button type="button" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" onClick={() => setCamOn((v) => !v)}>
+      <Card className="p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => setCamOn((v) => !v)}>
             {camOn ? "Stop camera" : "Use camera"}
-          </button>
-          <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>Phone camera scanning via ZXing (Code128).</span>
+          </Button>
+          <span className="text-xs text-muted-foreground">Phone camera scanning via ZXing (Code128).</span>
         </div>
         <BarcodeScanner
           active={camOn}
           onDetected={(v) => { setCode(v.trim()); lookupBarcode(v.trim()); }}
-          onError={(code, message) => setMsg({ kind: "error", text: message })}
+          onError={(_code, message) => setMsg({ kind: "error", text: message })}
         />
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-4">
           <ManualBarcodeInput onSubmit={(v) => { setCode(v); lookupBarcode(v); }} />
         </div>
-      </div>
+      </Card>
 
       {/* Inspection & Confirmation Workspace */}
       {info && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-          <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "22px", marginBottom: "16px" }}>
-            RTO Inspection: <span style={{ color: "var(--foreground)" }}>{info.order?.shopify_order_name || "Order"}</span>
+        <Card className="p-6">
+          <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">
+            RTO Inspection: <span>{info.order?.shopify_order_name || "Order"}</span>
           </h2>
 
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "8px" }}>
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               PARCEL ITEM CONDITION
             </label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            <div className="flex flex-wrap gap-2">
               {CONDITIONS.map((c) => (
-                <button
+                <Button
                   key={c}
                   type="button"
+                  variant={cond === c ? "default" : "outline"}
+                  size="sm"
                   onClick={() => setCond(c)}
                   aria-pressed={cond === c}
-                  className={cond === c ? "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" : "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"}
-                  style={{ fontSize: "13px", padding: "8px 16px" }}
                 >
                   {c}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
 
-          <div style={{ marginBottom: "24px" }}>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted-foreground)", marginBottom: "6px" }}>
+          <div className="mb-6 flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               NOTES / REASON (OPTIONAL)
             </label>
-            <input
-              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+            <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Door locked, address incomplete..."
@@ -161,17 +158,16 @@ export default function RtoPage() {
             />
           </div>
 
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button type="button" onClick={confirm} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ flex: 1, padding: "14px" }}>
-              Confirm & Save RTO Event
-            </button>
-            <button type="button" onClick={() => setInfo(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ padding: "14px 24px" }}>
+          <div className="flex gap-3">
+            <Button type="button" onClick={confirm} className="flex-1">
+              Confirm &amp; Save RTO Event
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setInfo(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
-
     </div>
   );
 }

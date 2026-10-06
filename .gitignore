@@ -37,3 +37,6 @@ Thumbs.db
 # Shopify orders-export samples (root copies stay untracked; fixture under backend/tests/fixtures/ is the committed one)
 orders_export_*.csv
 !backend/tests/fixtures/orders_export_*.csv
+
+# Session / IDE assistant logs
+session-*.md

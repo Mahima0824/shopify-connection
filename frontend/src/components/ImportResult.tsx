@@ -1,12 +1,48 @@
 import React from "react";
-export type ImportSummary = { parsed: number; created: number; updated: number; skipped: number; errors: { row: number | null; name?: string; reason: string }[] };
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./primitives";
+
+export type ImportSummary = {
+  parsed: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number | null; name?: string; reason: string }[];
+};
+
 export default function ImportResult({ summary }: { summary: ImportSummary }) {
   return (
-    <div>
-      <p>{summary.parsed} parsed · {summary.created} created · {summary.updated} updated · {summary.skipped} skipped</p>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm font-medium text-foreground">
+        {summary.parsed} parsed · {summary.created} created · {summary.updated} updated · {summary.skipped} skipped
+      </p>
       {summary.errors.length > 0 && (
-        <table><thead><tr><th>Row</th><th>Order</th><th>Reason</th></tr></thead>
-          <tbody>{summary.errors.map((e, ix) => <tr key={ix}><td>{e.row ?? "-"}</td><td>{e.name ?? "-"}</td><td>{e.reason}</td></tr>)}</tbody></table>
+        <div className="overflow-hidden rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Row</TableHead>
+                <TableHead>Order</TableHead>
+                <TableHead>Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {summary.errors.map((e, ix) => (
+                <TableRow key={ix}>
+                  <TableCell className="font-mono text-xs">{e.row ?? "-"}</TableCell>
+                  <TableCell className="font-medium">{e.name ?? "-"}</TableCell>
+                  <TableCell className="text-destructive">{e.reason}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );

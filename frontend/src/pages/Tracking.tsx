@@ -2,6 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { bandTone, cooldownMessage } from "../lib/tracking";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  buttonVariants,
+} from "../components/primitives";
 
 type Ship = {
   id: string;
@@ -34,10 +47,10 @@ type TrackingEvent = {
   source?: string;
 };
 
-const TONE_STYLE: Record<string, React.CSSProperties> = {
-  critical: { borderLeft: "4px solid var(--destructive)" },
-  warn: { borderLeft: "4px solid var(--warning)" },
-  ok: {},
+const TONE_STYLE: Record<string, string> = {
+  critical: "border-l-4 border-l-destructive",
+  warn: "border-l-4 border-l-warning",
+  ok: "",
 };
 
 export default function GeneralTrackingPage() {
@@ -164,56 +177,60 @@ export default function GeneralTrackingPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Order Tracking Center</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Order Tracking Center</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Real-time multi-carrier shipment status, India Post &amp; DTDC tracking events, and exception monitoring
           </p>
         </div>
-        <button onClick={runSweep} disabled={sweeping} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
+        <Button onClick={runSweep} disabled={sweeping} variant="outline">
           {sweeping ? "Running Sweep…" : "Run Global Tracking Sweep"}
-        </button>
+        </Button>
       </div>
 
       {sweepResult && (
-        <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground" style={{ padding: "10px 16px", borderRadius: "8px", background: "var(--card)" }}>
+        <Badge variant="secondary" className="px-4 py-2 text-sm font-medium self-start">
           {sweepResult}
-        </div>
+        </Badge>
       )}
 
       {/* KPI Band */}
-      <div className="grid grid-cols-1 gap-4 min-[769px]:grid-cols-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--accent, #3b82f6)" }}>
-          <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>Total Tracked</div>
-          <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.total}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--destructive)" }}>
-          <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>Critical / NDR</div>
-          <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.critical}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--warning)" }}>
-          <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>Delayed / Warning</div>
-          <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.warn}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--success)" }}>
-          <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>On Track</div>
-          <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.ok}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-t-4 border-t-primary p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Tracked</div>
+          <div className="mt-1 text-3xl font-extrabold text-foreground">{counts.total}</div>
+        </Card>
+        <Card className="border-t-4 border-t-destructive p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Critical / NDR</div>
+          <div className="mt-1 text-3xl font-extrabold text-destructive">{counts.critical}</div>
+        </Card>
+        <Card className="border-t-4 border-t-warning p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delayed / Warning</div>
+          <div className="mt-1 text-3xl font-extrabold text-warning">{counts.warn}</div>
+        </Card>
+        <Card className="border-t-4 border-t-success p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">On Track</div>
+          <div className="mt-1 text-3xl font-extrabold text-foreground">{counts.ok}</div>
+        </Card>
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+      <Card className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+        <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by Order #, Courier AWB, or Barcode…"
           aria-label="Search order tracking"
-          style={{ flex: 2, minWidth: "240px" }}
+          className="flex-[2] min-w-[240px]"
         />
-        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={carrier} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select
+          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          value={carrier}
+          onChange={(e) => setCarrier(e.target.value)}
+          aria-label="Carrier Filter"
+        >
           <option value="">All Carriers</option>
           <option value="INDIA_POST">India Post</option>
           <option value="DTDC">DTDC</option>
@@ -223,137 +240,157 @@ export default function GeneralTrackingPage() {
             !["INDIA_POST", "DTDC", "TIRUPATI", "MANUAL"].includes(c) && <option key={c}>{c}</option>
           ))}
         </select>
-        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select
+          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          aria-label="Status Filter"
+        >
           <option value="">All Statuses</option>
           {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "NDR_REATTEMPT", "DELIVERY_EXCEPTION", "RTO_INITIATED", "RTO_DELIVERED", "RETURNED", "LOST"].map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
-        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={band} onChange={(e) => setBand(e.target.value)} aria-label="Band Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select
+          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          value={band}
+          onChange={(e) => setBand(e.target.value)}
+          aria-label="Band Filter"
+        >
           <option value="">All Bands</option>
           <option value="critical">Critical</option>
           <option value="warn">Warning</option>
           <option value="ok">On Track</option>
         </select>
-      </div>
+      </Card>
 
-      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
       {/* Main Table */}
-      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+      <Card className="overflow-hidden p-0">
         {shown.length === 0 ? (
-          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
+          <p className="p-10 text-center text-sm text-muted-foreground">
             No order tracking records found. Try searching for another Order # or AWB.
           </p>
         ) : (
-          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ border: "none" }}>
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>AWB / Consignment</th>
-                <th>Carrier</th>
-                <th>Status</th>
-                <th>Current Location</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((s) => (
-                <tr key={s.id} style={TONE_STYLE[bandTone(s.tracking_status)]}>
-                  <td style={{ fontWeight: 600 }}>{names[s.id] || "Order"}</td>
-                  <td style={{ fontWeight: 600, fontFamily: "monospace" }}>{s.awb_number}</td>
-                  <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{s.carrier_code}</span>
-                  </td>
-                  <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{s.tracking_status}</span>
-                    {cool[s.id] && <div role="status" style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px" }}>{cool[s.id]}</div>}
-                  </td>
-                  <td style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>
-                    {s.current_location || s.last_checkpoint_message || "-"}
-                  </td>
-                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button onClick={() => refreshShipment(s.id)} disabled={!!syncing[s.id]} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginRight: "8px" }}>
-                      {syncing[s.id] ? "Syncing…" : "Sync"}
-                    </button>
-                    <button onClick={() => openTimeline(s)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginRight: "8px" }}>
-                      Timeline
-                    </button>
-                    <Link to={`/shipments/${s.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
-                      Details
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>AWB / Consignment</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Current Location</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shown.map((s) => (
+                  <TableRow
+                    key={s.id}
+                    className={`transition-colors ${TONE_STYLE[bandTone(s.tracking_status)]}`}
+                  >
+                    <TableCell className="font-semibold text-foreground">
+                      {names[s.id] || "Order"}
+                    </TableCell>
+                    <TableCell className="font-mono font-semibold text-foreground">
+                      {s.awb_number}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{s.carrier_code}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{s.tracking_status}</Badge>
+                      {cool[s.id] && (
+                        <div role="status" className="mt-1 text-xs text-warning">
+                          {cool[s.id]}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {s.current_location || s.last_checkpoint_message || "-"}
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => refreshShipment(s.id)}
+                          disabled={!!syncing[s.id]}
+                        >
+                          {syncing[s.id] ? "Syncing…" : "Sync"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openTimeline(s)}
+                        >
+                          Timeline
+                        </Button>
+                        <Link
+                          to={`/shipments/${s.id}`}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          Details
+                        </Link>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
+      </Card>
 
       {/* Timeline Modal */}
       {selectedShipment && (
         <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "20px",
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4"
           onClick={() => setSelectedShipment(null)}
         >
-          <div
-            className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"
-            style={{ maxWidth: "600px", width: "100%", maxHeight: "80vh", overflowY: "auto", background: "var(--card)", padding: "24px" }}
+          <Card
+            className="w-full max-w-xl max-h-[80vh] overflow-y-auto p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
               <div>
-                <h3 style={{ fontSize: "18px", fontWeight: 700 }}>
+                <h3 className="text-lg font-bold text-foreground">
                   Tracking Timeline: {selectedShipment.awb_number}
                 </h3>
-                <p style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Carrier: {selectedShipment.carrier_code} | Status: {selectedShipment.tracking_status}
                 </p>
               </div>
-              <button onClick={() => setSelectedShipment(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Close</button>
+              <Button variant="outline" size="sm" onClick={() => setSelectedShipment(null)}>
+                Close
+              </Button>
             </div>
 
             {loadingEvents ? (
-              <p style={{ color: "var(--muted-foreground)", padding: "20px 0" }}>Loading event history…</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">Loading event history…</p>
             ) : events.length === 0 ? (
-              <p style={{ color: "var(--muted-foreground)", padding: "20px 0" }}>No checkpoints recorded yet for this consignment.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">No checkpoints recorded yet for this consignment.</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", borderLeft: "2px solid var(--border)", paddingLeft: "16px", marginTop: "12px" }}>
+              <div className="relative border-l-2 border-border pl-4 flex flex-col gap-4 mt-2">
                 {events.map((ev, i) => (
-                  <div key={ev.id || i} style={{ position: "relative" }}>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: "-23px",
-                        top: "4px",
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        background: "var(--accent, #3b82f6)",
-                      }}
-                    />
-                    <div style={{ fontWeight: 600, fontSize: "14px" }}>{ev.normalized_status}</div>
-                    <div style={{ fontSize: "13px", marginTop: "2px" }}>{ev.message}</div>
-                    <div style={{ fontSize: "12px", color: "var(--muted-foreground)", marginTop: "4px" }}>
+                  <div key={ev.id || i} className="relative">
+                    <div className="absolute -left-[23px] top-1 size-3 rounded-full bg-primary" />
+                    <div className="text-sm font-semibold text-foreground">{ev.normalized_status}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{ev.message}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
                       {ev.location ? `📍 ${ev.location} • ` : ""}{ev.event_time ? new Date(ev.event_time).toLocaleString() : ""}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </div>

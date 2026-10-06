@@ -1,9 +1,9 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import ScanBanner from "../components/ScanBanner";
 import BarcodeScanner from "../components/scanner/BarcodeScanner";
 import ManualBarcodeInput from "../components/scanner/ManualBarcodeInput";
+import { Badge, Button, Card, Input } from "../components/primitives";
 
 type Last = { barcode: string; order: string; total: number; status: string } | null;
 
@@ -117,170 +117,164 @@ export default function DispatchPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--background)" }}>
-
-     
-
+    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Warehouse Dispatch Station</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Warehouse Dispatch Station</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Scan physical parcel barcodes to record dispatch events and update Shopify order state
         </p>
       </div>
 
       {/* Scanner card */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--foreground)" }}>
+      <Card className="p-6">
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               BARCODE INPUT (SCANNER ACTIVE)
             </label>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground" style={{ fontSize: "11px" }}>Press / to focus</span>
+            <Badge variant="secondary" className="text-[11px] font-normal">
+              Press / to focus
+            </Badge>
           </div>
 
-          <div style={{ display: "flex", gap: "12px" }}>
-            <input
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
               ref={ref}
               autoFocus
-              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+              className="min-h-12 flex-1 text-lg font-semibold"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Scan or type barcode (e.g. P00000001)..."
               aria-label="Parcel barcode"
-              style={{ fontSize: "20px", fontWeight: 600, padding: "16px 20px" }}
             />
-            <button type="submit" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" style={{ padding: "16px 28px", whiteSpace: "nowrap" }}>
+            <Button type="submit" className="min-h-12 whitespace-nowrap px-6">
               Confirm Dispatch
-            </button>
+            </Button>
           </div>
         </form>
 
         {/* Feedback Banner */}
         {msg && (
-          <div style={{ marginTop: "24px" }}>
+          <div className="mt-6">
             <ScanBanner kind={msg.kind} text={msg.text} />
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Camera + manual entry */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
-          <button type="button" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" onClick={() => setCamOn((v) => !v)}>
+      <Card className="p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => setCamOn((v) => !v)}>
             {camOn ? "Stop camera" : "Use camera"}
-          </button>
-          <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>Phone camera scanning via ZXing (Code128).</span>
+          </Button>
+          <span className="text-xs text-muted-foreground">Phone camera scanning via ZXing (Code128).</span>
         </div>
         <BarcodeScanner
           active={camOn}
           onDetected={(v) => submitBarcode(v.trim())}
-          onError={(code, message) => setMsg({ kind: "error", text: message })}
+          onError={(_code, message) => setMsg({ kind: "error", text: message })}
         />
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-4">
           <ManualBarcodeInput onSubmit={(v) => submitBarcode(v)} />
         </div>
-      </div>
+      </Card>
 
       {/* Courier booking */}
       {parcel && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-          <h2 style={{ fontSize: "16px", marginBottom: "4px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
+        <Card className="p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
             Courier booking
           </h2>
-          <p style={{ fontSize: "14px", color: "var(--muted-foreground)", marginBottom: "16px" }}>
+          <p className="mb-4 text-sm text-muted-foreground">
             {parcel.orderName} · {parcel.barcode}
           </p>
           {existing ? (
-            <p role="status" style={{ fontSize: "14px" }}>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">BOOKED</span>{" "}
-              <span style={{ fontWeight: 600 }}>{existing.carrier_code} · {existing.awb_number}</span>{" "}
-              <span style={{ color: "var(--muted-foreground)" }}>— shipment exists, booking skipped.</span>
+            <p role="status" className="flex items-center gap-2 text-sm text-foreground">
+              <Badge variant="secondary" className="bg-success/15 text-foreground font-semibold">BOOKED</Badge>{" "}
+              <span className="font-semibold">{existing.carrier_code} · {existing.awb_number}</span>{" "}
+              <span className="text-muted-foreground">— shipment exists, booking skipped.</span>
             </p>
           ) : (
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={courier}
                 onChange={(e) => setCourier(e.target.value)}
                 aria-label="Courier"
-                className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
-                style={{ width: "180px" }}
+                className="min-h-11 w-44 rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                 disabled={booking === "BOOKING"}
               >
                 {COURIERS.map((c) => <option key={c}>{c}</option>)}
               </select>
-              <input
-                className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+              <Input
                 value={awb}
                 onChange={(e) => setAwb(e.target.value)}
                 placeholder="AWB number (required for MANUAL)"
                 aria-label="AWB number"
-                style={{ flex: 1, minWidth: "200px" }}
+                className="flex-1 min-w-[200px]"
                 disabled={booking === "BOOKING"}
               />
-              <button
+              <Button
                 type="button"
                 onClick={bookShipment}
                 disabled={booking === "BOOKING"}
-                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
               >
                 {booking === "BOOKING" ? "Booking…" : "Book shipment"}
-              </button>
+              </Button>
               {booking === "BOOKED" && (
-                <span role="status" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">BOOKED</span>
+                <Badge variant="secondary" className="bg-success/15 text-foreground font-semibold">
+                  BOOKED
+                </Badge>
               )}
               {booking === "BOOKING_ERROR" && bookingError && (
-                <span role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
+                <span role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {bookingError}
                 </span>
               )}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Grid: Last Scanned Card & History */}
-      <div className="grid grid-cols-1 gap-4 min-[769px]:grid-cols-2" style={{ gap: "24px" }}>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Last Dispatched Card */}
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
+        <Card className="p-6">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Last Dispatched Parcel
           </h2>
           {last ? (
             <div>
-              <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--foreground)" }}>{last.order}</div>
-              <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-muted text-muted-foreground">{last.barcode}</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">{last.status}</span>
+              <div className="text-2xl font-extrabold text-foreground">{last.order}</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Badge variant="outline">{last.barcode}</Badge>
+                <Badge variant="secondary" className="bg-success/15 text-foreground">{last.status}</Badge>
               </div>
             </div>
           ) : (
-            <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>No scans recorded in this session.</p>
+            <p className="text-sm text-muted-foreground">No scans recorded in this session.</p>
           )}
-        </div>
+        </Card>
 
         {/* Recent Session History */}
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-          <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
+        <Card className="p-6">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Recent Session Barcodes
           </h2>
           {hist.length === 0 ? (
-            <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>History will populate as you scan barcodes.</p>
+            <p className="text-sm text-muted-foreground">History will populate as you scan barcodes.</p>
           ) : (
-            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <ul className="flex flex-col gap-2">
               {hist.map((h, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "12px", fontSize: "14px" }}>
-                  <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{h}</span>
-                  <span style={{ color: "var(--success)", fontSize: "12px", fontWeight: 600 }}>Dispatched</span>
+                <li key={i} className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="font-semibold text-foreground font-mono">{h}</span>
+                  <Badge variant="secondary" className="bg-success/15 text-foreground text-xs font-medium">Dispatched</Badge>
                 </li>
               ))}
             </ul>
           )}
-        </div>
-
+        </Card>
       </div>
-
     </div>
   );
 }

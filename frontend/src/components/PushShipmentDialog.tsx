@@ -7,6 +7,7 @@ import {
 } from "../lib/api";
 import { COURIER_OPTIONS, validatePush } from "../lib/shipments";
 import { IconAlert, IconTruck } from "./icons";
+import { Badge, Button } from "./primitives";
 
 export type PushShipmentDialogProps = {
   open: boolean;
@@ -32,9 +33,9 @@ const FIELD_BY_CODE: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition shadow-xs";
+  "w-full min-h-11 px-3.5 py-2.5 bg-background border border-input rounded-md text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 transition";
 const labelClass =
-  "block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5";
+  "block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5";
 
 type ApiError = Error & { code?: string; status?: number };
 
@@ -132,7 +133,7 @@ export default function PushShipmentDialog({
   const renderError = (key: string) =>
     errors[key] ? (
       <span
-        className="text-xs font-medium text-red-600 flex items-center gap-1 mt-1"
+        className="text-xs font-medium text-destructive flex items-center gap-1 mt-1"
         role="alert"
       >
         <IconAlert size={12} /> {errors[key]}
@@ -141,21 +142,21 @@ export default function PushShipmentDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-background/80 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Push Shipment"
     >
-      <div className="w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="w-full max-w-2xl max-h-[90vh] bg-card text-card-foreground rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border">
+        <div className="px-6 py-4 border-b border-border bg-muted/40 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <IconTruck size={20} /> Push Shipment
-              <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+              <Badge variant="secondary" className="bg-accent text-accent-foreground font-semibold">
                 ShipSagar
-              </span>
+              </Badge>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Register a tracking number with ShipSagar and start live tracking
             </p>
           </div>
@@ -163,7 +164,7 @@ export default function PushShipmentDialog({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full w-8 h-8 flex items-center justify-center transition"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full w-8 h-8 flex items-center justify-center transition"
           >
             ✕
           </button>
@@ -179,7 +180,7 @@ export default function PushShipmentDialog({
             {submitError && (
               <div
                 role="alert"
-                className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-4 py-3"
+                className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-lg px-4 py-3"
               >
                 {submitError}
               </div>
@@ -189,8 +190,8 @@ export default function PushShipmentDialog({
                 role="status"
                 className={
                   retrying
-                    ? "bg-sky-50 border border-sky-200 text-sky-900 text-sm rounded-lg px-4 py-3"
-                    : "bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-lg px-4 py-3"
+                    ? "bg-primary/10 border border-primary/20 text-foreground text-sm rounded-lg px-4 py-3"
+                    : "bg-warning/10 border border-warning/20 text-foreground text-sm rounded-lg px-4 py-3"
                 }
               >
                 {retrying && (
@@ -216,7 +217,7 @@ export default function PushShipmentDialog({
                 <option value="">Choose an order…</option>
                 {orders.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.order_no ?? o.id} — {o.customer_name ?? "No name"} (
+                    {o.internal_order_number ?? o.order_no ?? o.shopify_order_name ?? o.id} — {o.customer_name ?? "No name"} (
                     {o.receiver_city ?? "—"}
                     {o.receiver_pincode ? ` ${o.receiver_pincode}` : ""})
                   </option>
@@ -238,7 +239,7 @@ export default function PushShipmentDialog({
                 onChange={(e) => setTrackingNo(e.target.value)}
               />
               {renderError("tracking_no")}
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Tracking number issued by the India Post worker. This becomes the parcel
                 barcode and the AWB.
               </p>
@@ -275,47 +276,46 @@ export default function PushShipmentDialog({
                 </>
               )}
               {renderError("courier_code")}
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 ShipSagar courier code from the client profile page.
               </p>
             </div>
 
-            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 flex flex-col gap-3">
-              <p className="text-sm font-bold text-slate-800">Payload preview</p>
+            <div className="border border-border rounded-xl p-4 bg-muted/30 flex flex-col gap-3">
+              <p className="text-sm font-bold text-foreground">Payload preview</p>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <dt className="text-slate-500">Customer</dt>
-                <dd className="text-slate-900">
+                <dt className="text-muted-foreground">Customer</dt>
+                <dd className="text-foreground">
                   {order?.customer_name || "—"}
                   {order?.receiver_city ? ` · ${order.receiver_city}` : ""}
                 </dd>
-                <dt className="text-slate-500">Company Name</dt>
-                <dd className="text-slate-900">—</dd>
-                <dt className="text-slate-500">Country</dt>
-                <dd className="text-slate-900">India</dd>
-                <dt className="text-slate-500">Shipment Type</dt>
-                <dd className="text-slate-900">Road</dd>
+                <dt className="text-muted-foreground">Company Name</dt>
+                <dd className="text-foreground">—</dd>
+                <dt className="text-muted-foreground">Country</dt>
+                <dd className="text-foreground">India</dd>
+                <dt className="text-muted-foreground">Shipment Type</dt>
+                <dd className="text-foreground">Road</dd>
               </dl>
             </div>
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
-          <button
+        <div className="px-6 py-4 border-t border-border bg-muted/40 flex items-center justify-end gap-3">
+          <Button
             type="button"
+            variant="outline"
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             form="push-shipment-form"
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 shadow-xs transition disabled:opacity-60"
           >
             {submitting ? "Pushing…" : "Push shipment"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -565,6 +565,8 @@ export type ShipmentSyncResult = {
 export type PushOrderOption = {
   id: string;
   order_no?: string | null;
+  internal_order_number?: string | null;
+  shopify_order_name?: string | null;
   customer_name?: string | null;
   receiver_city?: string | null;
   receiver_pincode?: string | null;

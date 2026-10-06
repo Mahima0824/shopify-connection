@@ -4,9 +4,35 @@ import { api } from "../lib/api";
 import SeverityBadge from "../components/SeverityBadge";
 import Timeline, { TNode } from "../components/Timeline";
 import { IconAlert, IconSpark } from "../components/icons";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/primitives";
 
 type ReconIssue = { code: string; severity: string; message: string };
 type ReconState = { status: string; issues: ReconIssue[] } | null;
+
+function getFinancialBadgeVariant(status?: string): "success" | "warning" | "destructive" | "secondary" {
+  if (!status) return "secondary";
+  const s = status.toUpperCase();
+  if (s === "PAID") return "success";
+  if (s === "PENDING" || s === "AUTHORIZED") return "warning";
+  if (s === "REFUNDED" || s === "VOIDED") return "destructive";
+  return "secondary";
+}
+
+function getOpBadgeVariant(status?: string): "success" | "warning" | "destructive" | "info" | "secondary" {
+  if (!status) return "secondary";
+  const s = status.toUpperCase();
+  if (s === "DELIVERED" || s === "FULFILLED") return "success";
+  if (s === "IN_TRANSIT" || s === "OUT_FOR_DELIVERY") return "info";
+  if (s === "RTO" || s === "RETURNED" || s === "LOST") return "destructive";
+  if (s === "NEW" || s === "PENDING") return "warning";
+  return "secondary";
+}
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -34,9 +60,11 @@ export default function OrderDetailPage() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ maxWidth: "900px", background: "var(--background)" }}>
-        <Link to="/orders" style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>← Back to Orders Directory</Link>
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ marginTop: "16px", padding: "24px", borderRadius: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 bg-background px-6 py-6 max-[480px]:px-4">
+        <Link to="/orders" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+          ← Back to Orders Directory
+        </Link>
+        <div role="alert" className="flex items-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-sm text-destructive">
           <IconAlert size={16} /> {error}
         </div>
       </div>
@@ -45,97 +73,126 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ maxWidth: "900px", padding: "40px", textAlign: "center", color: "var(--muted-foreground)", background: "var(--background)" }}>
+      <div className="mx-auto w-full max-w-[1000px] bg-background px-6 py-12 text-center text-muted-foreground max-[480px]:px-4">
         Loading Order Details...
       </div>
     );
   }
 
+  const finStatus = order.financial_status || "PENDING";
+  const opStatus = order.operational_status || "NEW";
+
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--background)" }}>
-
-     
-
+    <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 bg-background px-6 py-6 max-[480px]:px-4">
       {/* Back Link & Header */}
       <div>
-        <Link to="/orders" style={{ color: "var(--muted-foreground)", fontSize: "14px", display: "inline-block", marginBottom: "8px" }}>
+        <Link to="/orders" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
           ← Back to Orders Directory
         </Link>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>
-            Order {order.shopify_order_name || order.internal_order_number || order.id}
-          </h1>
-          <span className="tabular-nums" style={{ fontSize: "24px", fontWeight: 800, color: "var(--foreground)" }}>
-            ₹{Number(order.total_amount || 0).toLocaleString()}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Order {order.shopify_order_name || order.internal_order_number || order.id}
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Internal ID: <span className="font-mono">{order.id}</span> · Created: {order.created_at ? new Date(order.created_at).toLocaleDateString() : "N/A"}
+            </p>
+          </div>
+          <div className="text-right">
+            <span className="tabular-nums text-3xl font-extrabold text-foreground">
+              ₹{Number(order.total_amount || 0).toLocaleString()}
+            </span>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{order.currency || "INR"} Net</p>
+          </div>
         </div>
       </div>
 
       {/* Order Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Financial Status</div>
-          <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "4px", color: "var(--foreground)" }}>{order.financial_status || "PENDING"}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Fulfillment / Op Status</div>
-          <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "4px", color: "var(--foreground)" }}>{order.operational_status || "NEW"}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Currency</div>
-          <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "4px", color: "var(--foreground)" }}>{order.currency || "INR"}</div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financial Status</div>
+          <div className="mt-3 flex items-center gap-2">
+            <Badge variant={getFinancialBadgeVariant(finStatus)} className="text-xs font-bold uppercase tracking-wider">
+              {finStatus}
+            </Badge>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fulfillment / Op Status</div>
+          <div className="mt-3 flex items-center gap-2">
+            <Badge variant={getOpBadgeVariant(opStatus)} className="text-xs font-bold uppercase tracking-wider">
+              {opStatus}
+            </Badge>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment Details</div>
+          <div className="mt-2 text-base font-bold text-foreground">
+            {order.payment_gateway || "Standard Gateway"}
+          </div>
+          <p className="text-xs text-muted-foreground">Currency: {order.currency || "INR"}</p>
+        </Card>
       </div>
 
       {/* Reconciliation Engine Alert Block */}
       {recon && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderLeft: recon.status === "RECONCILED" ? "4px solid var(--success)" : "4px solid var(--destructive)" }}>
-          <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "18px", marginBottom: "12px" }}>Reconciliation Engine Status</h2>
+        <Card className={`p-6 transition-colors ${recon.status === "RECONCILED" ? "border-emerald-500/40 bg-emerald-500/[0.03]" : "border-destructive/40 bg-destructive/[0.03]"}`}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold tracking-tight text-foreground">Reconciliation Engine Status</h2>
+            <Badge variant={recon.status === "RECONCILED" ? "success" : "destructive"}>
+              {recon.status}
+            </Badge>
+          </div>
           {recon.status === "RECONCILED" ? (
-            <div style={{ color: "var(--success)", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
               <IconSpark size={16} /> <span>Fully Reconciled — Operational state agrees across Shopify, physical scans, payments, and returns.</span>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div className="flex flex-col gap-2.5">
               {(recon.issues ?? []).map((issue) => (
-                <div key={issue.code} style={{ background: "var(--muted-foreground)", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "12px" }}>
+                <div key={issue.code} className="flex items-center gap-3 rounded-xl border border-border/80 bg-background/90 p-3 shadow-xs">
                   <SeverityBadge severity={issue.severity} />
                   <div>
-                    <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{issue.code}</span>
-                    <p style={{ fontSize: "13px", color: "var(--muted-foreground)", marginTop: "2px" }}>{issue.message}</p>
+                    <span className="font-semibold text-foreground text-sm">{issue.code}</span>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{issue.message}</p>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Order Timeline Section */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "20px", marginBottom: "20px" }}>Order Lifecycle Timeline</h2>
+      <Card className="p-6">
+        <h2 className="mb-5 text-xl font-bold tracking-tight text-foreground">Order Lifecycle Timeline</h2>
         <Timeline items={timeline} />
-      </div>
+      </Card>
 
       {/* Courier & Money Section */}
       {shipments.length > 0 && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-          <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "20px", marginBottom: "20px" }}>Courier & Money</h2>
-          {shipments.map((s) => (
-            <div key={s.id} style={{ marginBottom: "12px", fontSize: "14px" }}>
-              <Link to={`/shipments/${s.id}`} style={{ fontWeight: 700 }}>
-                {s.carrier_code} · {s.awb_number}
-              </Link>
-              <div style={{ color: "var(--muted-foreground)", marginTop: "4px" }}>
-                Tracking: {s.tracking_status}
-                {s.current_location ? ` · ${s.current_location}` : ""}
-                {s.last_checkpoint_at ? ` · updated ${s.last_checkpoint_at}` : ""}
+        <Card className="p-6">
+          <h2 className="mb-4 text-xl font-bold tracking-tight text-foreground">Courier &amp; Money</h2>
+          <div className="flex flex-col gap-3">
+            {shipments.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 p-3.5 hover:bg-muted/30 transition-colors">
+                <div>
+                  <Link to={`/shipments/${s.id}`} className="font-bold text-foreground text-sm hover:underline">
+                    {s.carrier_code} · {s.awb_number}
+                  </Link>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {s.current_location ? `${s.current_location} · ` : ""}
+                    {s.last_checkpoint_at ? `Updated: ${new Date(s.last_checkpoint_at).toLocaleString()}` : "No checkpoints"}
+                  </div>
+                </div>
+                <Badge variant={s.tracking_status === "DELIVERED" ? "success" : s.tracking_status === "IN_TRANSIT" ? "info" : "secondary"}>
+                  {s.tracking_status || "UNKNOWN"}
+                </Badge>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Card>
       )}
-
     </div>
   );
 }

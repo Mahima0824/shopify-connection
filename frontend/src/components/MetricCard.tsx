@@ -38,7 +38,7 @@ export default function MetricCard({
       : null;
 
   return (
-    <Card className="gap-0">
+    <Card className="p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-border/90">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[13px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {title}

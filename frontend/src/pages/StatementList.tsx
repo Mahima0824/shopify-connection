@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { API } from "../lib/api";
-import { api } from "../lib/api";
+import { API, api } from "../lib/api";
 import {
   BankMismatchItem,
   BankSummary,
@@ -12,13 +11,23 @@ import {
 } from "../lib/api";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/primitives";
 
 type Upload = { id: string; statement_type: string; provider: string; status: string; row_count: number };
 
 function inr(v: string | number): string {
   const n = Number(v ?? 0);
-  // "U+20B9" (rupee sign) as a unicode escape keeps this file pure ASCII,
-  // immune to encoding misinterpretation at any layer (editor/git/server/browser).
   return `\u20B9${Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
 }
 
@@ -46,25 +55,35 @@ export default function StatementsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   function load() {
     const token = localStorage.getItem("token") ?? undefined;
-    api<{ items: Upload[] }>(`/api/v1/statements`, {}, token).then((d) => setItems(d.items ?? [])).catch(() => {});
+    api<{ items: Upload[] }>(`/api/v1/statements`, {}, token)
+      .then((d) => setItems(d.items ?? []))
+      .catch(() => {});
   }
+
   useEffect(load, []);
+
   async function upload() {
     if (!file) return;
-    setError(null); setMsg(null); setBusy(true);
+    setError(null);
+    setMsg(null);
+    setBusy(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       const token = localStorage.getItem("token") ?? "";
       const r = await fetch(`${API}/api/v1/statements/upload?type=${stype}`, {
-        method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd,
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.error?.message ?? j.detail ?? "Upload failed");
       setMsg(`Uploaded ${j.data.row_count} rows - open it to dry-run and process.`);
-      setFile(null); load();
+      setFile(null);
+      load();
     } catch (e: any) {
       setError(e?.message ?? "Upload failed");
     } finally {
@@ -72,7 +91,7 @@ export default function StatementsPage() {
     }
   }
 
-  // --- Reconciliation mismatch board (FE2, additive: upload flow above untouched) ---
+  // --- Reconciliation mismatch board ---
   const [summary, setSummary] = useState<BankSummary | null>(null);
   const [mismatches, setMismatches] = useState<BankMismatchItem[]>([]);
   const [reconLoading, setReconLoading] = useState(true);
@@ -99,10 +118,11 @@ export default function StatementsPage() {
         if (!isCurrent()) return;
         setSummary(null);
         setMismatches([]);
-        const msg = e?.status === 404
-          ? "Reconciliation API not found on the backend. Restart the backend server (and run migrations) so it serves the latest code, then Retry."
-          : (e?.message ?? "Failed to load reconciliation");
-        setReconError(msg);
+        const errMessage =
+          e?.status === 404
+            ? "Reconciliation API not found on the backend. Restart the backend server (and run migrations) so it serves the latest code, then Retry."
+            : (e?.message ?? "Failed to load reconciliation");
+        setReconError(errMessage);
       })
       .finally(() => {
         if (isCurrent()) setReconLoading(false);
@@ -138,126 +158,211 @@ export default function StatementsPage() {
   const selEligible = selected ? isPotential(selected) : false;
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       <div>
-        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Settlement statements</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Settlement statements</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Upload courier / bank / gateway statements to match money against orders and shipments
         </p>
       </div>
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-        <select value={stype} onChange={(e) => setStype(e.target.value)} aria-label="Type" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" style={{ width: "240px" }}>
-          <option>COURIER_SETTLEMENT</option><option>BANK_STATEMENT</option>
-          <option>PAYMENT_GATEWAY_STATEMENT</option><option>COURIER_SHIPMENT_REPORT</option>
+
+      <Card className="flex flex-wrap items-center gap-3 p-5">
+        <select
+          value={stype}
+          onChange={(e) => setStype(e.target.value)}
+          aria-label="Type"
+          className="min-h-11 w-full max-w-[260px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        >
+          <option value="COURIER_SETTLEMENT">COURIER_SETTLEMENT</option>
+          <option value="BANK_STATEMENT">BANK_STATEMENT</option>
+          <option value="PAYMENT_GATEWAY_STATEMENT">PAYMENT_GATEWAY_STATEMENT</option>
+          <option value="COURIER_SHIPMENT_REPORT">COURIER_SHIPMENT_REPORT</option>
         </select>
-        <input type="file" accept=".csv,.xlsx" aria-label="Statement file"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button onClick={upload} disabled={!file || busy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+        <Input
+          type="file"
+          accept=".csv,.xlsx"
+          aria-label="Statement file"
+          className="w-auto flex-1 min-w-[200px]"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <Button onClick={upload} disabled={!file || busy}>
           {busy ? "Uploading..." : "Upload"}
-        </button>
-      </div>
-      {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
-      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Uploads</h2>
+        </Button>
+      </Card>
+
+      {msg && (
+        <p role="status" className="text-sm font-semibold text-success">
+          {msg}
+        </p>
+      )}
+
+      {error && (
+        <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <Card className="p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          Uploads
+        </h2>
         {items.length === 0 ? (
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>No statements yet. Upload a courier settlement CSV to match your first money.</p>
+          <p className="text-sm text-muted-foreground">
+            No statements yet. Upload a courier settlement CSV to match your first money.
+          </p>
         ) : (
-          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div className="flex flex-col gap-2">
             {items.map((u) => (
-              <li key={u.id} style={{ padding: "12px 16px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-                <Link to={`/statements/${u.id}`} style={{ fontWeight: 600 }}>
+              <div
+                key={u.id}
+                className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 text-sm"
+              >
+                <Link
+                  to={`/statements/${u.id}`}
+                  className="font-semibold text-foreground hover:underline"
+                >
                   {u.provider || u.statement_type} &middot; {u.row_count} rows &middot; {u.status}
                 </Link>
-              </li>
+                <Badge variant="secondary">{u.status}</Badge>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
-      </div>
+      </Card>
 
-      <div id="reconciliation" style={{ scrollMarginTop: "80px" }}>
-        <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "20px", fontWeight: 700 }}>Reconciliation</h2>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+      <div id="reconciliation" className="scroll-mt-20">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Reconciliation</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Expected settlements vs actual bank credits &mdash; clear the mismatch queue
         </p>
       </div>
 
       {reconError && (
-        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {reconError} <button onClick={loadRecon} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          <span>{reconError}</span>
+          <Button variant="outline" size="sm" onClick={loadRecon}>
+            Retry
+          </Button>
         </div>
       )}
-      {matchMsg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{matchMsg}</p>}
+
+      {matchMsg && (
+        <p role="status" className="text-sm font-semibold text-success">
+          {matchMsg}
+        </p>
+      )}
 
       {reconLoading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading reconciliation&hellip;</div>
+        <div className="p-10 text-center text-sm text-muted-foreground">
+          Loading reconciliation&hellip;
+        </div>
       ) : (
         <>
           {summary && (
-            <div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-                <MetricCard title="Expected settlement" value={inr(summary.expected_settlement)} subtitle="from orders + shipments" />
-                <MetricCard title="Actual bank credit" value={inr(summary.actual_bank_credit)} subtitle="from bank statements" />
-                <MetricCard title="Difference" value={inr(summary.difference)} subtitle={`matched ${summary.matched} \u00B7 pending ${summary.pending} \u00B7 mismatch ${summary.mismatch}`} />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <MetricCard
+                title="Expected settlement"
+                value={inr(summary.expected_settlement)}
+                subtitle="from orders + shipments"
+              />
+              <MetricCard
+                title="Actual bank credit"
+                value={inr(summary.actual_bank_credit)}
+                subtitle="from bank statements"
+              />
+              <MetricCard
+                title="Difference"
+                value={inr(summary.difference)}
+                subtitle={`matched ${summary.matched} \u00B7 pending ${summary.pending} \u00B7 mismatch ${summary.mismatch}`}
+              />
             </div>
           )}
-          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+
+          <Card className="overflow-hidden p-0">
+            <div className="border-b border-border px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Mismatch queue &middot; {mismatches.length} rows
             </div>
             {mismatches.length === 0 ? (
-              <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>No mismatches. Every bank credit matches its expected settlement.</p>
+              <p className="p-10 text-center text-sm text-muted-foreground">
+                No mismatches. Every bank credit matches its expected settlement.
+              </p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Bank reference</th>
-                      <th style={{ textAlign: "right" }}>Expected</th>
-                      <th style={{ textAlign: "right" }}>Actual</th>
-                      <th style={{ textAlign: "right" }}>Difference</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: "right" }}>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Bank reference</TableHead>
+                      <TableHead className="text-right">Expected</TableHead>
+                      <TableHead className="text-right">Actual</TableHead>
+                      <TableHead className="text-right">Difference</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {mismatches.map((r) => {
                       const st = rowStatus(r);
                       return (
-                        <tr key={r.bank_row_id}>
-                          <td style={{ fontWeight: 600 }}>{r.order_name || r.order_id || "-"}</td>
-                          <td style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{r.bank_reference || "-"}</td>
-                          <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(r.expected_amount)}</td>
-                          <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(r.actual_amount)}</td>
-                          <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{inr(r.difference)}</td>
-                          <td>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                        <TableRow key={r.bank_row_id}>
+                          <TableCell className="font-semibold text-foreground">
+                            {r.order_name || r.order_id || "-"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground font-mono">
+                            {r.bank_reference || "-"}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground">
+                            {inr(r.expected_amount)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground">
+                            {inr(r.actual_amount)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                            {inr(r.difference)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="inline-flex items-center gap-2">
                               <SeverityBadge severity={statusSeverity(st)} />
-                              <span style={{ fontSize: "12px", fontWeight: 700 }}>{st}</span>
-                            </span>
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            <span style={{ display: "inline-flex", gap: "8px", justifyContent: "flex-end" }}>
-                              <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" aria-label={`Details for ${r.bank_reference || r.bank_row_id}`}>
+                              <span className="text-xs font-bold text-foreground">{st}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelected(r);
+                                  setShipId("");
+                                  setMatchMsg(null);
+                                }}
+                                aria-label={`Details for ${r.bank_reference || r.bank_row_id}`}
+                              >
                                 Details
-                              </button>
+                              </Button>
                               {privileged && isPotential(r) && (
-                                <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" aria-label={`Manual match ${r.bank_reference || r.bank_row_id}`}>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelected(r);
+                                    setShipId("");
+                                    setMatchMsg(null);
+                                  }}
+                                  aria-label={`Manual match ${r.bank_reference || r.bank_row_id}`}
+                                >
                                   Manual match
-                                </button>
+                                </Button>
                               )}
-                            </span>
-                          </td>
-                        </tr>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
-          </div>
+          </Card>
         </>
       )}
 
@@ -265,71 +370,69 @@ export default function StatementsPage() {
         <div
           role="dialog"
           aria-label="Mismatch drill-down"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "20px",
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4"
         >
-          <div style={{ width: "100%", maxWidth: "560px", padding: "32px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-            <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "22px", marginBottom: "8px" }}>Drill-down</h2>
-            <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginBottom: "20px" }}>
+          <Card className="w-full max-w-lg p-6">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Drill-down</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
               Order &rarr; payment &rarr; settlement &rarr; bank reference &middot; {selStatus}
             </p>
-            <dl style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "14px", marginBottom: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Order</dt>
-                <dd style={{ fontWeight: 600 }}>{selected.order_name || selected.order_id || "-"}</dd>
+            <div className="my-5 flex flex-col gap-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Order</span>
+                <span className="font-semibold text-foreground">
+                  {selected.order_name || selected.order_id || "-"}
+                </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Payment</dt>
-                <dd style={{ fontWeight: 600 }}>{selected.payment_reference || selected.payment_id || "-"}</dd>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Payment</span>
+                <span className="font-semibold text-foreground">
+                  {selected.payment_reference || selected.payment_id || "-"}
+                </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Settlement</dt>
-                <dd style={{ fontWeight: 600 }}>{selected.gateway_settlement_reference || selected.shipment_id || "-"}</dd>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Settlement</span>
+                <span className="font-semibold text-foreground">
+                  {selected.gateway_settlement_reference || selected.shipment_id || "-"}
+                </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Bank reference</dt>
-                <dd style={{ fontWeight: 600 }}>{selected.bank_reference || "-"}</dd>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Bank reference</span>
+                <span className="font-semibold text-foreground font-mono">
+                  {selected.bank_reference || "-"}
+                </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Expected / Actual / Difference</dt>
-                <dd className="tabular-nums" style={{ fontWeight: 600 }}>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expected / Actual / Diff</span>
+                <span className="font-semibold text-foreground tabular-nums">
                   {inr(selected.expected_amount)} / {inr(selected.actual_amount)} / {inr(selected.difference)}
-                </dd>
+                </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted-foreground)" }}>Match level</dt>
-                <dd style={{ fontWeight: 600 }}>{selected.match_level || "-"}</dd>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Match level</span>
+                <span className="font-semibold text-foreground">{selected.match_level || "-"}</span>
               </div>
-            </dl>
+            </div>
+
             {privileged && selEligible && (
-              <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-                <input
-                  className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+              <div className="mb-4 flex gap-2">
+                <Input
                   value={shipId}
                   onChange={(e) => setShipId(e.target.value)}
                   placeholder="Shipment ID"
                   aria-label="Shipment ID"
-                  style={{ flex: 1 }}
+                  className="flex-1"
                 />
-                <button onClick={doManualMatch} disabled={!shipId.trim() || matchBusy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+                <Button onClick={doManualMatch} disabled={!shipId.trim() || matchBusy}>
                   {matchBusy ? "Matching\u2026" : "Manual match"}
-                </button>
+                </Button>
               </div>
             )}
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button onClick={() => setSelected(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ padding: "12px 20px" }}>
-                Close
-              </button>
-            </div>
-          </div>
+
+            <Button variant="outline" onClick={() => setSelected(null)}>
+              Close
+            </Button>
+          </Card>
         </div>
       )}
     </div>
