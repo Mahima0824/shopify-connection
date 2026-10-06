@@ -14,7 +14,7 @@ import {
   TableRow,
   buttonVariants,
 } from "../components/primitives";
-import { IconTruck, IconTag, IconReceipt } from "../components/icons";
+import { IconTruck, IconTag, IconReceipt, IconAlert } from "../components/icons";
 
 const features = [
   {
@@ -35,10 +35,38 @@ const features = [
 ];
 
 const metrics = [
-  { value: "128,400", label: "Orders synced" },
-  { value: "96,210", label: "Parcels scanned" },
-  { value: "12,840", label: "Exceptions resolved" },
-  { value: "99.98%", label: "Export accuracy" },
+  {
+    value: "128,400",
+    label: "Orders Synced",
+    subtext: "Automated from Shopify stores",
+    badge: "+18.4% MoM",
+    badgeVariant: "success" as const,
+    icon: <IconTruck size={20} />,
+  },
+  {
+    value: "96,210",
+    label: "Parcels Scanned",
+    subtext: "Dispatches & returns verified",
+    badge: "99.2% on-time",
+    badgeVariant: "secondary" as const,
+    icon: <IconTag size={20} />,
+  },
+  {
+    value: "12,840",
+    label: "Exceptions Resolved",
+    subtext: "Zero backlog before month-close",
+    badge: "Auto-cleared",
+    badgeVariant: "outline" as const,
+    icon: <IconAlert size={20} />,
+  },
+  {
+    value: "99.98%",
+    label: "Export Accuracy",
+    subtext: "Direct ledger vouchers in Tally",
+    badge: "Tally Verified",
+    badgeVariant: "success" as const,
+    icon: <IconReceipt size={20} />,
+  },
 ];
 
 const ledgerRows = [
@@ -66,15 +94,61 @@ export default function Landing() {
       {/* Brand Hero Section matching reference */}
       <HeroSection />
 
-      {/* Metric strip */}
-      <section className="border-y border-border bg-card py-8">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-wrap gap-12 px-6 max-[480px]:px-4">
-          {metrics.map((m) => (
-            <div key={m.label}>
-              <div className="tabular-nums text-2xl sm:text-3xl font-bold text-foreground">{m.value}</div>
-              <div className="mt-1 text-sm text-muted-foreground">{m.label}</div>
+      {/* Metric strip - Modern B2B SaaS Performance Grid */}
+      <section className="relative border-b border-border bg-muted/30 py-12 lg:py-16">
+        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Platform Scale &amp; Performance
+              </p>
+              <h2 className="text-xl sm:text-2xl font-bold font-heading tracking-tight text-foreground mt-1">
+                Real-time operational scale
+              </h2>
             </div>
-          ))}
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-sm">
+              Continuous live sync across all connected Shopify storefronts, courier hubs, and accounting ledgers.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {metrics.map((m, i) => (
+              <Reveal key={m.label} delay={i * 80}>
+                <Card className="h-full p-6 flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:border-primary/40 group">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/15 transition-transform duration-300 group-hover:scale-105">
+                        {m.icon}
+                      </span>
+                      <Badge variant={m.badgeVariant} className="text-[11px] font-medium">
+                        {m.badge}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-5">
+                      <div className="tabular-nums font-heading font-bold text-3xl sm:text-[32px] tracking-tight text-foreground">
+                        {m.value}
+                      </div>
+                      <div className="text-sm font-semibold text-foreground mt-1">
+                        {m.label}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        {m.subtext}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                      <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live telemetry
+                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">24/7 Sync</span>
+                  </div>
+                </Card>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 
