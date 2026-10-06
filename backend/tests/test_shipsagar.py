@@ -1,4 +1,4 @@
-# backend/tests/test_shipsagar.py — SDD Task 4: ShipSagar integration.
+﻿# backend/tests/test_shipsagar.py â€” SDD Task 4: ShipSagar integration.
 import hashlib
 import hmac
 import json
@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.database import Base
-import app.models  # noqa: F401 — register all models
+import app.models  # noqa: F401 â€” register all models
 from app.main import app
 from app.database import get_db
 
@@ -969,11 +969,17 @@ def test_track_shipment_unparseable_date_falls_back_to_now(monkeypatch):
 
 
 def test_track_shipment_handles_empty_tracking_details(monkeypatch):
+    """A SUCCESS with zero records is a known AWB that has no scans yet.
+
+    distinct from ShipSagar's "Invalid TrackingNo", which means it has never
+    heard of the AWB at all - hence registered=True here and False there.
+    """
     from app.services import shipsagar_service as ss
     _configured(monkeypatch)
     monkeypatch.setattr(ss, "_post", lambda path, pl: {
         "status": "SUCCESS", "message": "0 Record Found", "TrackingDetails": []})
-    assert ss.track_shipment("NOPE") == {"awb": "NOPE", "events": []}
+    assert ss.track_shipment("NOPE") == {
+        "awb": "NOPE", "events": [], "registered": True}
 
 
 # --- ShipsagarProvider wiring ---
@@ -1205,7 +1211,7 @@ def test_india_post_stub_payload_flushes_through_ingest_event(monkeypatch):
     """The India Post stub branch returns datetimes; ingest_event absorbs them.
 
     This is the same latent bug ShipSagar would have hit, in a provider that
-    predates it — the coercion must not be ShipSagar-specific.
+    predates it â€” the coercion must not be ShipSagar-specific.
     """
     import json
     from datetime import datetime
@@ -1240,7 +1246,7 @@ def test_india_post_stub_payload_flushes_through_ingest_event(monkeypatch):
 def test_shipment_routing_threads_the_instance_courier_into_normalization():
     """Provider key alone is not enough: the per-shipment courier picks the matrix.
 
-    'Redirected to another address' is a disagreement case on purpose — the
+    'Redirected to another address' is a disagreement case on purpose â€” the
     India-Post rows map 'redirected' to RTO, the generic matrix has no such row
     and falls through to EXCEPTION, and the India Post provider itself has no
     keyword for it and returns UNKNOWN. Reverting the instance courier to ''
@@ -1260,7 +1266,7 @@ def test_shipment_routing_threads_the_instance_courier_into_normalization():
     assert normalize_for_shipment(_Pushed(), raw) == "RTO"
     assert provider_for_shipment(_Pushed()).normalize_status(raw) == "RTO"
     # The registry singleton is courier-less, so it can only reach the generic
-    # matrix — which is exactly why the resolver builds a per-shipment instance.
+    # matrix â€” which is exactly why the resolver builds a per-shipment instance.
     assert get_provider("SHIPSAGAR").normalize_status(raw) == "EXCEPTION"
 
     class _Direct:
@@ -4670,7 +4676,7 @@ def test_push_refusal_is_audited_and_reads_as_rejected(monkeypatch):
     This is the end-to-end pin for the read path's only refusal signal. The push
     route calls ss.push_shipment directly rather than going through
     register_tracking, so before the shared audit helper it wrote no
-    SHIPSAGAR_PUSH_REJECTED row at all — and since both paths persist
+    SHIPSAGAR_PUSH_REJECTED row at all â€” and since both paths persist
     SS-{awb} before reading the verdict, the Orders page then reported a
     refused shipment as "pushed", which is the exact lie this state machine
     exists to prevent. The hand-built test above isolates the read logic; this
@@ -5675,3 +5681,167 @@ def test_ensure_awaiting_shipment_returns_none_without_a_parcel(monkeypatch):
         assert db.query(Shipment).filter_by(order_id=oid).count() == 0
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# An AWB ShipSagar has no scans for is not a gateway failure.
+#
+# ShipSagar answers TrackShipment for an unknown or not-yet-scanned AWB with a
+# processed business response, not an exception:
+#
+#     {"status": "ERROR", "message": "Invalid TrackingNo .!", "trackingDetails": ""}
+#
+# That is the normal state of a freshly pushed India Post AWB before its first
+# scan. It used to be raised as SHIPSAGAR_API_ERROR and mapped to 502 Bad
+# Gateway by GET /shipments/{sid}/history, so a routine empty timeline reached
+# the browser as an upstream outage and the 60s page poll kept retrying it.
+#
+# Two states are genuinely different and must stay different:
+#   pushed, no scans yet -> 200 with an empty events list, so the page renders
+#                           "no scans yet".
+#   never registered     -> the AWB never reached ShipSagar (a refused push), so
+#                           tracking can never succeed and an operator has to
+#                           push it. Reporting that as an empty timeline would
+#                           hide a broken registration behind a cheerful page.
+# ---------------------------------------------------------------------------
+
+_UNKNOWN_AWB_RESPONSE = {
+    "status": "ERROR",
+    "message": "Invalid TrackingNo .!",
+    "trackingDetails": "",
+}
+
+
+def test_unknown_awb_is_empty_history_not_an_exception(monkeypatch):
+    """track_shipment reports an unknown AWB as registered=False, not a raise."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: dict(_UNKNOWN_AWB_RESPONSE))
+
+    out = ss.track_shipment("EG080972974IN")
+
+    assert out["awb"] == "EG080972974IN"
+    assert out["events"] == []
+    assert out["registered"] is False
+
+
+def test_known_awb_is_reported_as_registered(monkeypatch):
+    """A real scan list stays registered=True so the route can tell them apart."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "SUCCESS",
+        "TrackingDetails": [{
+            "CourierCode": "IP",
+            "TrackingHistory": [{
+                "ActionDate": "2026-10-05", "ActionTime": "12:27:00",
+                "ActionDescription": "Item Booked", "ActionLocation": "Delhi",
+            }],
+        }],
+    })
+
+    out = ss.track_shipment("EG080972974IN")
+
+    assert out["registered"] is True
+    assert len(out["events"]) == 1
+
+
+def test_empty_details_for_a_known_awb_stays_registered(monkeypatch):
+    """An empty TrackingDetails array is a real answer, not an unknown AWB."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "SUCCESS", "TrackingDetails": [],
+    })
+
+    out = ss.track_shipment("EG080972974IN")
+
+    assert out["events"] == []
+    assert out["registered"] is True
+
+
+def test_a_genuine_api_error_still_raises(monkeypatch):
+    """Only the unknown-AWB message is demoted; real failures keep raising."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "ERROR", "message": "Invalid Client Code",
+    })
+
+    with pytest.raises(ss.ShipsagarError) as err:
+        ss.track_shipment("EG080972974IN")
+
+    assert err.value.code == "SHIPSAGAR_API_ERROR"
+    assert "Invalid Client Code" in err.value.message
+
+
+def _unknown_awb_provider(monkeypatch, registered=False):
+    """Provider stub standing in for ShipSagar not knowing the AWB yet."""
+    from app.services import shipsagar_service as ss
+
+    def _track(tracking_no, courier_code=""):
+        return {"awb": tracking_no, "events": [], "registered": registered}
+
+    monkeypatch.setattr(ss, "track_shipment", _track)
+
+
+def test_history_endpoint_returns_200_with_no_scans_for_a_pushed_awb(monkeypatch):
+    """A pushed shipment with no scans is an empty timeline, not a 502."""
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        sid, _ = _seed_pushed_shipment(mk, business_id=bid)
+        _configured(monkeypatch)
+        _unknown_awb_provider(monkeypatch, registered=True)
+
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["events"] == []
+
+        db = mk()
+        try:
+            assert db.query(Shipment).filter_by(id=sid).first().awb_number == "EG080960145IN"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_reports_an_unregistered_awb(monkeypatch):
+    """An AWB that never reached ShipSagar says so instead of 502-ing forever.
+
+    A refused push leaves no SS- id, and provider_for_shipment selects the
+    provider on that id alone - so this shipment never even reached ShipSagar
+    and used to come back as "Unknown carrier 'IP'" behind a 502, which reads
+    as an outage rather than as an operator-actionable registration gap.
+    """
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    try:
+        sid, _ = _seed_pushed_shipment(mk, business_id=bid)
+        _configured(monkeypatch)
+        db = mk()
+        try:
+            row = db.query(Shipment).filter_by(id=sid).first()
+            row.shipsagar_tracking_id = None
+            db.commit()
+        finally:
+            db.close()
+
+        def _must_not_be_called(*a, **kw):
+            raise AssertionError("history called ShipSagar for an unpushed AWB")
+
+        monkeypatch.setattr(
+            "app.services.shipsagar_service.track_shipment", _must_not_be_called)
+
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+
+        assert r.status_code == 409, r.text
+        body = r.json()
+        assert body["error"]["code"] == "SHIPMENT_NOT_REGISTERED"
+        assert "not registered" in body["error"]["message"].lower()
+    finally:
+        app.dependency_overrides.clear()

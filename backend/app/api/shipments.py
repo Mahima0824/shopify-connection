@@ -544,6 +544,7 @@ def shipment_history(sid: str, db: Session = Depends(get_db),
     from app.carriers.base import CarrierError
     from app.carriers.registry import provider_for_shipment
     from app.models.shipment import Shipment
+    from app.services import shipsagar_service as ss
     from app.services.shipment_service import is_awaiting_awb
     s = db.query(Shipment).filter_by(id=sid, business_id=u.get("business_id")).first()
     if s is None:
@@ -555,6 +556,18 @@ def shipment_history(sid: str, db: Session = Depends(get_db),
     if is_awaiting_awb(awb):
         return _err(400, "NO_TRACKING_NUMBER",
                     "This shipment has no tracking number yet.")
+    # provider_for_shipment picks the provider on shipsagar_tracking_id, so a
+    # shipment that never registered cannot be tracked at all - it used to fall
+    # through to "Unknown carrier 'IP'" behind a 502, which reads as an outage
+    # rather than as the operator-actionable gap it is. Checking our own state
+    # first also skips a pointless call to ShipSagar. Scoped to the codes this
+    # app routes through ShipSagar, so a genuinely direct-courier shipment is
+    # untouched.
+    if (not (s.shipsagar_tracking_id or "").strip()
+            and (s.carrier_code or "").strip().upper() in ss.ACCEPTED_COURIER_CODES):
+        return _err(409, "SHIPMENT_NOT_REGISTERED",
+                    f"Tracking number {awb} is not registered with ShipSagar. "
+                    "Push this shipment before tracking it.")
     try:
         # provider_for_shipment, not the carrier code: a pushed shipment keeps
         # its ShipSagar courier (IP, FEDEX) in carrier_code and is discriminated
