@@ -17,8 +17,7 @@ import ScanHub from "./pages/ScanHub";
 import Dispatch from "./pages/Dispatch";
 import ReturnScan from "./pages/ReturnScan";
 import RtoScan from "./pages/RtoScan";
-import Shipments from "./pages/Shipments";
-import ShipmentDetail from "./pages/ShipmentDetail";
+import ShipmentHistory from "./pages/ShipmentHistory";
 import Outstanding from "./pages/Outstanding";
 import StatementList from "./pages/StatementList";
 import StatementDetail from "./pages/StatementDetail";
@@ -62,10 +61,9 @@ export function AppRoutes() {
         <Route path="/scan/dispatch" element={<Dispatch />} />
         <Route path="/scan/return" element={<ReturnScan />} />
         <Route path="/scan/rto" element={<RtoScan />} />
-        <Route path="/shipments" element={<Shipments />} />
         <Route path="/shipments/outstanding" element={<Outstanding />} />
         <Route path="/shipments/tracking" element={<ShipmentsTracking />} />
-        <Route path="/shipments/:id" element={<ShipmentDetail />} />
+        <Route path="/shipments/:id" element={<ShipmentHistory />} />
         <Route path="/statements" element={<StatementList />} />
         <Route path="/statements/:id" element={<StatementDetail />} />
         <Route path="/reports/monthly" element={<MonthlyReport />} />
