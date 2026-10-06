@@ -1,8 +1,14 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      jsxRuntime: "automatic",
+    }),
+    tailwindcss(),
+  ],
   test: { environment: "jsdom", globals: true },
 });

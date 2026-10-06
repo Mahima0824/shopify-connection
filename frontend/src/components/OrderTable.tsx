@@ -1,28 +1,27 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { API } from "../lib/api";
+import { downloadXlsx } from "../lib/india-post";
 import { isAwaiting, pushStateLabel, statusTone, type OrderShipment } from "../lib/shipments";
 
-const FINANCIAL_DOTS: Record<string, string> = {
-  PAID: "var(--success)",
-  PENDING: "var(--warning)",
-  REFUNDED: "var(--error)",
+const FINANCIAL_CLASSES: Record<string, { bg: string; text: string; dot: string }> = {
+  PAID: { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-600" },
+  PENDING: { bg: "bg-amber-50", text: "text-amber-800", dot: "bg-amber-500" },
+  REFUNDED: { bg: "bg-red-50", text: "text-red-800", dot: "bg-red-600" },
 };
 
-const OPERATIONAL_DOTS: Record<string, string> = {
-  DISPATCHED: "var(--success)",
-  PACKED: "var(--accent)",
-  RETURN_RECEIVED: "var(--warning)",
-  RTO: "var(--error)",
+const OPERATIONAL_CLASSES: Record<string, { bg: string; text: string; dot: string }> = {
+  DISPATCHED: { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-600" },
+  PACKED: { bg: "bg-teal-50", text: "text-teal-800", dot: "bg-teal-600" },
+  RETURN_RECEIVED: { bg: "bg-amber-50", text: "text-amber-800", dot: "bg-amber-500" },
+  RTO: { bg: "bg-red-50", text: "text-red-800", dot: "bg-red-600" },
 };
 
-function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
-  const dot = dotMap[status?.toUpperCase()] ?? "var(--muted)";
+function StatusBadge({ status, styleMap }: { status: string; styleMap: Record<string, { bg: string; text: string; dot: string }> }) {
+  const conf = styleMap[status?.toUpperCase()] ?? { bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" };
   return (
-    <span className="badge-pill">
-      <span
-        aria-hidden="true"
-        style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}
-      />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${conf.bg} ${conf.text}`}>
+      <span className={`w-2 h-2 rounded-full ${conf.dot} shrink-0`} aria-hidden="true" />
       <span>{status}</span>
     </span>
   );
@@ -110,55 +109,77 @@ export default function OrderTable({
 }) {
   if (!orders || orders.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
+      <div className="text-center py-10 text-slate-500 text-sm">
         No orders found. Click "Sync Shopify Orders" to import data.
       </div>
     );
   }
 
   return (
-    <div style={{ overflowX: "auto", background: "#ffffff", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
-      <table className="modern-table" style={{ border: "none" }}>
+    <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-xs">
+      <table className="w-full text-left border-collapse">
         <thead>
-          <tr>
-            <th>Order Name</th>
-            <th>Shipment</th>
-            <th>Financial Status</th>
-            <th>Fulfillment / Op Status</th>
-            <th>Total Amount</th>
-            <th>Date</th>
-            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Action</th>
+          <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <th className="px-4 py-3.5">Order Name</th>
+            <th className="px-4 py-3.5">Shipment</th>
+            <th className="px-4 py-3.5">Financial Status</th>
+            <th className="px-4 py-3.5">Fulfillment / Op Status</th>
+            <th className="px-4 py-3.5">Total Amount</th>
+            <th className="px-4 py-3.5">COD</th>
+            <th className="px-4 py-3.5">City / Pincode</th>
+            <th className="px-4 py-3.5">Date</th>
+            <th className="px-4 py-3.5 text-right whitespace-nowrap">Action</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100 text-sm text-slate-800">
           {orders.map((o) => (
-            <tr key={o.id}>
-              <td style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
+            <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
+              <td className="px-4 py-3.5 font-semibold text-emerald-800 hover:underline">
                 <Link to={`/orders/${o.id}`}>
                   {o.shopify_order_name || o.internal_order_number || o.id}
                 </Link>
               </td>
-              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
+              <td className="px-4 py-3.5">
                 <ShipmentCell shipment={o.shipment} onAdd={() => onAddShipment(o)} />
               </td>
-              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
-                <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
+              <td className="px-4 py-3.5">
+                <StatusBadge status={o.financial_status || "PENDING"} styleMap={FINANCIAL_CLASSES} />
               </td>
-              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
-                <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
+              <td className="px-4 py-3.5">
+                <StatusBadge status={o.operational_status || "NEW"} styleMap={OPERATIONAL_CLASSES} />
               </td>
-              <td className="tnum" style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
+              <td className="px-4 py-3.5 font-bold tabular-nums text-slate-900">
                 ₹{Number(o.total_amount || 0).toLocaleString()}
               </td>
-              <td style={{ color: "var(--muted)", fontSize: "13px", borderBottom: "1px solid var(--hairline)" }}>
+              <td className="px-4 py-3.5 text-slate-600">
+                {(!o.cod_mode && (o.cod_value === undefined || o.cod_value === null || o.cod_value === ""))
+                  ? "-"
+                  : `${o.cod_mode ?? ""}${o.cod_mode && o.cod_value !== undefined && o.cod_value !== null && o.cod_value !== "" ? " " : ""}${o.cod_value !== undefined && o.cod_value !== null && o.cod_value !== "" ? `₹${o.cod_value}` : ""}`}
+              </td>
+              <td className="px-4 py-3.5 text-slate-600">
+                {`${o.receiver_city ?? ""} ${o.receiver_pincode ?? ""}`.trim() || "-"}
+              </td>
+              <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                 {(o.order_date ?? o.shopify_created_at ?? o.created_at)
                   ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
                   : "-"}
               </td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap", borderBottom: "1px solid var(--hairline)" }}>
-                <Link to={`/orders/${o.id}`} className="btn-secondary" style={{ whiteSpace: "nowrap" }}>
-                  View Timeline
-                </Link>
+              <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                <div className="flex items-center justify-end gap-2">
+                  <Link
+                    to={`/orders/${o.id}`}
+                    className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md text-xs font-medium hover:bg-slate-50 transition"
+                  >
+                    Timeline
+                  </Link>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 rounded-md text-xs font-medium hover:bg-slate-50 transition cursor-pointer"
+                    onClick={() => downloadXlsx(`${API}/api/v1/orders/${o.id}/export/india-post.xlsx`, "india-post.xlsx")}
+                  >
+                    XLSX
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

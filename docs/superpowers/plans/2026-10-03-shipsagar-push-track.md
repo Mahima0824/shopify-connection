@@ -541,7 +541,16 @@ Two pre-existing tests will now fail, because they forced configured mode throug
 
 - [ ] **Step 5: Update the helpers and tests that forced configured mode**
 
-In `backend/tests/test_shipsagar.py`, replace the two `shipsagar_api_*` monkeypatches inside `_client` (lines 51-52) with:
+Four sites in `backend/tests/test_shipsagar.py` force stub/live mode by patching `shipsagar_api_base_url` / `shipsagar_api_key`. Under the new `is_configured()` those patches are no-ops, so **all four** must be repointed at the new fields.
+
+In `_client` (lines 51-52), replace:
+
+```python
+    monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+```
+
+with:
 
 ```python
     monkeypatch.setattr(config.settings, "shipsagar_token", "")
@@ -549,7 +558,9 @@ In `backend/tests/test_shipsagar.py`, replace the two `shipsagar_api_*` monkeypa
     monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
 ```
 
-Inside `test_retry_drain_marks_done_and_dead_letters`, replace:
+In `test_register_tracking_stub_keeps_identity_chain` (lines 267-268), make the same three-line replacement.
+
+In `test_retry_drain_marks_done_and_dead_letters` (lines 426-427), make the same three-line replacement. Then at lines 448-449, replace:
 
 ```python
         monkeypatch.setattr(config.settings, "shipsagar_api_base_url", "https://example.invalid")
@@ -563,10 +574,14 @@ with:
         monkeypatch.setattr(config.settings, "shipsagar_client_code", "C1001")
 ```
 
+A test that leaves a stub-mode site unpatched would silently attempt a live network call to `https://app.shipsagar.com` the moment real credentials land in `.env`.
+
 - [ ] **Step 6: Run the ShipSagar and final-fixes suites**
 
 Run: `cd backend; python -m pytest tests/test_shipsagar.py tests/test_final_fixes.py -q`
-Expected: only `test_retry_drain_marks_done_and_dead_letters` fails, and it fails on the stub-id assertion (`SS-STUB-DTDC-D-DRAIN`) rather than crashing — Task 5 resolves it.
+Expected: fully green. (Verified during execution — this step originally predicted
+one surviving failure, but Step 5's repointing clears it. If your run is green,
+that is the correct outcome; only investigate if something fails.)
 
 - [ ] **Step 7: Commit**
 
@@ -1091,7 +1106,8 @@ Expected: PASS (6 tests)
 - [ ] **Step 8: Run the full backend suite for regressions**
 
 Run: `cd backend; python -m pytest tests -q`
-Expected: no failures other than the one known Task-2-deferred ShipSagar register test.
+Expected: no failures. (Verified during execution — this step originally predicted one
+surviving Task-2-deferred failure; Task 5 already landed by then.)
 
 - [ ] **Step 9: Commit**
 
