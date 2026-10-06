@@ -43,8 +43,12 @@ def list_orders(
 
 
 def _shipment_no_today() -> str:
+    # Imported locally, not from the module header: this module's committed
+    # datetime import belongs to unrelated in-flight work, so relying on it
+    # would make this function raise NameError without it.
     # The local business day, not UTC: an IST evening push is still "today" for
     # the warehouse that has to key off the number it is handed.
+    from datetime import datetime
     return datetime.now().strftime("%Y%m%d")
 
 
