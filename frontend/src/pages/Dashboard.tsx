@@ -135,7 +135,7 @@ function SalesOverTimeChart({ currencySymbol }: { currencySymbol: string }) {
         {/* Horizontal Gridlines & Y-Axis Labels */}
         {[3000, 2000, 1000, 0].map((val) => {
           const y = getY(val);
-          const label = val === 0 ? "$0" : `$${val / 1000}K`;
+          const label = val === 0 ? `${currencySymbol}0` : `${currencySymbol}${val / 1000}K`;
           return (
             <g key={val}>
               <text
@@ -260,10 +260,9 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Filter & Currency States
+  // Filter States
   const [dateFilter, setDateFilter] = useState("Today");
   const [compareFilter, setCompareFilter] = useState("Yesterday");
-  const [currency, setCurrency] = useState<"USD" | "INR">("USD");
   const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
 
   useEffect(() => {
@@ -273,14 +272,13 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const currencySymbol = currency === "USD" ? "$" : "₹";
-  const multiplier = currency === "USD" ? 1 : 84;
+  const currencySymbol = "₹";
 
   const grossSalesVal = data?.financials?.gross_sales
-    ? data.financials.gross_sales * multiplier
-    : 2629.95 * multiplier;
+    ? data.financials.gross_sales
+    : 17488.85;
 
-  const formattedGrossSales = `${currencySymbol}${grossSalesVal.toLocaleString(undefined, {
+  const formattedGrossSales = `${currencySymbol}${grossSalesVal.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -311,15 +309,6 @@ export default function DashboardPage() {
               <IconChevronDown size={12} />
             </button>
           </div>
-
-          <button
-            className="shopify-pill-btn"
-            onClick={() => setCurrency(currency === "USD" ? "INR" : "USD")}
-            title="Click to toggle currency"
-          >
-            <IconCurrencyExchange size={15} />
-            <span>{currency === "USD" ? "$⇄ USD $" : "₹⇄ INR ₹"}</span>
-          </button>
         </div>
 
         {/* Header Section */}
