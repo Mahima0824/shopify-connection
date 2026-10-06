@@ -1,29 +1,32 @@
 import React from "react";
+import { Badge } from "./primitives";
 
-const BADGE_CLASSES: Record<string, string> = {
-  CRITICAL: "badge-danger",
-  HIGH: "badge-warning",
-  MEDIUM: "badge-info",
-  LOW: "badge-neutral",
+/* Severity maps onto Badge variants rather than bespoke background colours, so
+   the tones follow the theme instead of hardcoding emerald/amber/red. The dot
+   colour is separate because Badge's variant already sets the text colour. */
+const VARIANT: Record<string, "destructive" | "secondary" | "outline" | "default"> = {
+  CRITICAL: "destructive",
+  HIGH: "secondary",
+  MEDIUM: "default",
+  LOW: "outline",
 };
 
-const DOT_COLORS: Record<string, string> = {
-  CRITICAL: "var(--error)",
-  HIGH: "var(--warning)",
+const DOT: Record<string, string> = {
+  CRITICAL: "var(--destructive)",
+  HIGH: "var(--secondary-foreground)",
   MEDIUM: "var(--primary)",
   LOW: "var(--muted-foreground)",
 };
 
 export default function SeverityBadge({ severity }: { severity: string }) {
-  const cls = BADGE_CLASSES[severity] ?? "badge-neutral";
-  const dot = DOT_COLORS[severity] ?? "var(--muted-foreground)";
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground ${cls}`}>
+    <Badge variant={VARIANT[severity] ?? "outline"}>
       <span
         aria-hidden="true"
-        style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: DOT[severity] ?? "var(--muted-foreground)" }}
       />
-      <span>{severity}</span>
-    </span>
+      {severity}
+    </Badge>
   );
 }

@@ -1,85 +1,89 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./primitives";
 
 const FINANCIAL_DOTS: Record<string, string> = {
-  PAID: "var(--success)",
-  PENDING: "var(--warning)",
-  REFUNDED: "var(--error)",
+  PAID: "var(--destructive)",
+  PENDING: "var(--secondary-foreground)",
+  REFUNDED: "var(--muted-foreground)",
 };
 
 const OPERATIONAL_DOTS: Record<string, string> = {
-  DISPATCHED: "var(--success)",
+  DISPATCHED: "var(--destructive)",
   PACKED: "var(--primary)",
-  RETURN_RECEIVED: "var(--warning)",
-  RTO: "var(--error)",
+  RETURN_RECEIVED: "var(--secondary-foreground)",
+  RTO: "var(--muted-foreground)",
 };
 
+/* Payment states must not read as "bad", so they use Badge's secondary/outline
+   variants rather than destructive; only a genuine failure earns destructive. */
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
   const dot = dotMap[status?.toUpperCase()] ?? "var(--muted-foreground)";
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">
+    <Badge variant="secondary">
       <span
         aria-hidden="true"
-        style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: dot }}
       />
-      <span>{status}</span>
-    </span>
+      {status}
+    </Badge>
   );
 }
 
 export default function OrderTable({ orders }: { orders: any[] }) {
   if (!orders || orders.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "40px", color: "var(--muted-foreground)" }}>
-        No orders found. Click "Sync Shopify Orders" to import data.
+      <div className="p-10 text-center text-muted-foreground">
+        No orders found. Click &quot;Sync Shopify Orders&quot; to import data.
       </div>
     );
   }
 
   return (
-    <div style={{ overflowX: "auto", background: "#ffffff", border: "1px solid var(--border)", borderRadius: "12px" }}>
-      <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ border: "none" }}>
-        <thead>
-          <tr>
-            <th>Order Name</th>
-            <th>Financial Status</th>
-            <th>Fulfillment / Op Status</th>
-            <th>Total Amount</th>
-            <th>Date</th>
-            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Order Name</TableHead>
+            <TableHead>Financial Status</TableHead>
+            <TableHead>Fulfillment / Op Status</TableHead>
+            <TableHead>Total Amount</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead className="text-right">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {orders.map((o) => (
-            <tr key={o.id}>
-              <td style={{ fontWeight: 600, color: "var(--foreground)", borderBottom: "1px solid var(--border)" }}>
+            <TableRow key={o.id}>
+              <TableCell className="font-semibold">
                 <Link to={`/orders/${o.id}`}>
                   {o.shopify_order_name || o.internal_order_number || o.id}
                 </Link>
-              </td>
-              <td style={{ borderBottom: "1px solid var(--border)" }}>
+              </TableCell>
+              <TableCell>
                 <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
-              </td>
-              <td style={{ borderBottom: "1px solid var(--border)" }}>
+              </TableCell>
+              <TableCell>
                 <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
-              </td>
-              <td className="tabular-nums" style={{ fontWeight: 600, color: "var(--foreground)", borderBottom: "1px solid var(--border)" }}>
+              </TableCell>
+              <TableCell className="font-semibold tabular-nums">
                 ₹{Number(o.total_amount || 0).toLocaleString()}
-              </td>
-              <td style={{ color: "var(--muted-foreground)", fontSize: "13px", borderBottom: "1px solid var(--border)" }}>
+              </TableCell>
+              <TableCell className="text-[13px] text-muted-foreground">
                 {(o.order_date ?? o.shopify_created_at ?? o.created_at)
                   ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
                   : "-"}
-              </td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>
-                <Link to={`/orders/${o.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ whiteSpace: "nowrap" }}>
-                  View Timeline
-                </Link>
-              </td>
-            </tr>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/orders/${o.id}`}>View Timeline</Link>
+                </Button>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
