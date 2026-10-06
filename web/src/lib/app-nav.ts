@@ -22,6 +22,7 @@ export const APP_NAV_GROUPS: NavEntry[] = [
     ],
   },
   { label: "Tracking", href: "/tracking" },
+  { label: "Shipments", href: "/shipments" },
   { label: "Exceptions", href: "/exceptions" },
   {
     label: "Finance",
