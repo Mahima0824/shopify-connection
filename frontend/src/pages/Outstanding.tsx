@@ -5,7 +5,7 @@ import { slaTone } from "../lib/sla";
 
 type Row = { shipment_id: string; order_name: string | null; carrier_code: string; awb_number: string; tracking_status: string; age_days: number; sla_status: string; sla_days_used: number; sla_deadline: string | null; amount: number; money_status: string };
 
-const TONE_BG: Record<string, string> = { critical: "var(--error)", warn: "var(--warning)", ok: "transparent" };
+const TONE_BG: Record<string, string> = { critical: "var(--destructive)", warn: "var(--warning)", ok: "transparent" };
 
 export default function OutstandingPage() {
   const [items, setItems] = useState<Row[]>([]);
@@ -32,7 +32,7 @@ export default function OutstandingPage() {
           <option>NORMAL</option><option>APPROACHING</option><option>BREACHED</option>
         </select>
       </div>
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
         {items.length === 0 ? (
           <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
@@ -45,7 +45,7 @@ export default function OutstandingPage() {
               {items.map((r) => (
                 <tr key={r.shipment_id} style={{ borderLeft: `4px solid ${TONE_BG[slaTone(r.sla_status)]}` }}>
                   <td style={{ fontWeight: 600 }}>{r.order_name ?? "-"}</td><td>{r.awb_number}</td><td>{r.tracking_status}</td>
-                  <td>{r.age_days}d</td><td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{r.sla_status} ({r.sla_days_used}d)</span></td><td className="tabular-nums">₹{Number(r.amount || 0).toLocaleString()}</td>
+                  <td>{r.age_days}d</td><td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{r.sla_status} ({r.sla_days_used}d)</span></td><td className="tabular-nums">₹{Number(r.amount || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

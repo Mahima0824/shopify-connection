@@ -1,7 +1,7 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { useLocation } from "react-router-dom";
-import { useState } from "react";
+import React, { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Button } from "./primitives";
+import { cn } from "@/lib/utils";
 import { APP_NAV_GROUPS } from "../lib/app-nav";
 
 function isActive(pathname: string | null, href: string) {
@@ -18,17 +18,10 @@ function isGroupActive(pathname: string | null, href?: string, children?: { href
   return (children ?? []).some((c) => isActive(pathname, c.href));
 }
 
-const pill = (active: boolean, extra?: React.CSSProperties): React.CSSProperties => ({
-  display: "inline-flex",
-  alignItems: "center",
-  minHeight: 44,
-  padding: "8px 16px",
-  borderRadius: 9999,
-  color: active ? "var(--foreground)" : "var(--muted-foreground)",
-  background: active ? "var(--card)" : "transparent",
-  whiteSpace: "nowrap",
-  ...extra,
-});
+/* Nav pills keep a 44px min-height for the handheld scanners; the active state
+   is a surface fill rather than a colour change so it reads at a glance. */
+const PILL =
+  "inline-flex min-h-11 items-center rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
@@ -39,44 +32,14 @@ export default function TopNav() {
   const closeDrop = () => setOpenDrop(null);
 
   return (
-    <header
-      style={{
-        height: 64,
-        background: "var(--background)",
-        borderBottom: "1px solid var(--border)",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      <div
-        className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: 64,
-        }}
-      >
-        <Link
-          to="/"
-          style={{
-            color: "var(--foreground)",
-            fontWeight: 600,
-            fontSize: 18,
-          }}
-        >
+    <header className="sticky top-0 z-50 h-16 border-b border-border bg-background">
+      <div className="mx-auto flex h-16 w-full max-w-[1280px] items-center justify-between px-6 max-[480px]:px-4">
+        <Link to="/" className="text-lg font-semibold text-foreground">
           ReconHub
         </Link>
         <nav
-          className="flex max-w-full gap-5 overflow-x-auto text-sm font-medium min-[769px]:flex max-[768px]:hidden"
           aria-label="Primary"
-          style={{
-            gap: 4,
-            fontFamily: "Inter, sans-serif",
-            fontSize: 14,
-            fontWeight: 500,
-          }}
+          className="hidden max-w-full gap-1 overflow-x-auto text-sm font-medium min-[769px]:flex"
         >
           {APP_NAV_GROUPS.map((g) => {
             const active = isGroupActive(pathname, g.href, g.children);
@@ -86,7 +49,10 @@ export default function TopNav() {
                   key={g.label}
                   to={g.href}
                   aria-current={active ? "page" : undefined}
-                  style={pill(active)}
+                  className={cn(
+                    PILL,
+                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                  )}
                 >
                   {g.label}
                 </Link>
@@ -95,23 +61,16 @@ export default function TopNav() {
             const dropOpen = openDrop === g.label;
             const primaryHref = g.children?.[0]?.href ?? "/";
             return (
-              <div
-                key={g.label}
-                className="group relative inline-flex items-center"
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") closeDrop();
-                }}
-              >
+              <div key={g.label} className="group relative inline-flex items-center">
                 <Link
                   to={primaryHref}
                   aria-current={isExact(pathname, primaryHref) ? "page" : undefined}
                   onClick={closeDrop}
-                  style={{
-                    ...pill(active),
-                    borderTopRightRadius: 0,
-                    borderBottomRightRadius: 0,
-                    paddingRight: 8,
-                  }}
+                  className={cn(
+                    PILL,
+                    "rounded-r-none",
+                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                  )}
                 >
                   {g.label}
                 </Link>
@@ -121,24 +80,15 @@ export default function TopNav() {
                   aria-haspopup="true"
                   aria-label={`${g.label} submenu`}
                   onClick={() => setOpenDrop(dropOpen ? null : g.label)}
-                  style={{
-                    ...pill(active),
-                    borderTopLeftRadius: 0,
-                    borderBottomLeftRadius: 0,
-                    paddingLeft: 4,
-                    paddingRight: 10,
-                    border: "none",
-                    cursor: "pointer",
-                    fontFamily: "Inter, sans-serif",
-                    fontSize: 12,
-                    fontWeight: 500,
-                  }}
+                  className={cn(
+                    PILL,
+                    "gap-0.5 rounded-l-none pl-1 pr-2.5 text-xs",
+                    active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted",
+                  )}
                 >
                   ▾
                 </button>
-                <div
-                  className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-border bg-card p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
-                >
+                <div className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-border bg-card p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                   {(g.children ?? []).map((c) => {
                     const childActive = isActive(pathname, c.href);
                     return (
@@ -147,17 +97,12 @@ export default function TopNav() {
                         to={c.href}
                         aria-current={isExact(pathname, c.href) ? "page" : undefined}
                         onClick={closeDrop}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          minHeight: 44,
-                          padding: "10px 16px",
-                          borderRadius: 8,
-                          fontSize: 14,
-                          color: childActive ? "var(--foreground)" : "var(--foreground)",
-                          background: childActive ? "var(--muted)" : "transparent",
-                          whiteSpace: "nowrap",
-                        }}
+                        className={cn(
+                          "flex min-h-11 items-center rounded-lg px-4 py-2.5 text-sm whitespace-nowrap",
+                          childActive
+                            ? "bg-muted text-foreground"
+                            : "text-body hover:bg-muted",
+                        )}
                       >
                         {c.label}
                       </Link>
@@ -168,31 +113,23 @@ export default function TopNav() {
             );
           })}
         </nav>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <Link to="/login" style={{ fontSize: 14, fontWeight: 500, color: "var(--foreground)" }}>
+        <div className="flex items-center gap-3">
+          <Link to="/login" className="text-sm font-medium text-foreground">
             Sign in
           </Link>
-          <button
-            className="hidden min-h-11 min-w-11 cursor-pointer border-0 bg-transparent text-xl text-foreground max-[768px]:block"
-            onClick={() => setOpen(!open)}
+          <Button
+            variant="ghost"
             aria-label="menu"
             aria-expanded={open}
-            style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}
+            onClick={() => setOpen(!open)}
+            className="hidden max-[768px]:inline-flex"
           >
             ☰
-          </button>
+          </Button>
         </div>
       </div>
       {open && (
-        <nav
-          className="topnav-sheet"
-          aria-label="Mobile"
-          style={{
-            padding: 16,
-            background: "var(--background)",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
+        <nav aria-label="Mobile" className="border-b border-border bg-background p-4">
           {APP_NAV_GROUPS.map((g) => {
             if (g.href) {
               const active = isActive(pathname, g.href);
@@ -200,16 +137,11 @@ export default function TopNav() {
                 <Link
                   key={g.label}
                   to={g.href}
-                  aria-current={active ? "page" : undefined}
                   onClick={() => setOpen(false)}
-                  style={{
-                    display: "block",
-                    minHeight: 44,
-                    padding: "8px 16px",
-                    borderRadius: 9999,
-                    color: active ? "var(--foreground)" : "var(--foreground)",
-                    background: active ? "var(--card)" : "transparent",
-                  }}
+                  className={cn(
+                    "flex min-h-11 items-center rounded-full px-4 py-2 text-sm",
+                    active ? "bg-card text-foreground" : "text-body",
+                  )}
                 >
                   {g.label}
                 </Link>
@@ -223,20 +155,10 @@ export default function TopNav() {
                   type="button"
                   aria-expanded={isExpanded}
                   onClick={() => setExpanded(isExpanded ? null : g.label)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 16px",
-                    borderRadius: 9999,
-                    border: "none",
-                    background: groupActive ? "var(--card)" : "transparent",
-                    color: groupActive ? "var(--foreground)" : "var(--foreground)",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    minHeight: 44,
-                  }}
+                  className={cn(
+                    "flex min-h-11 w-full items-center rounded-full px-4 py-2 text-left text-sm font-medium",
+                    groupActive ? "bg-card text-foreground" : "text-body",
+                  )}
                 >
                   {g.label}
                 </button>
@@ -247,17 +169,11 @@ export default function TopNav() {
                       <Link
                         key={c.href}
                         to={c.href}
-                        aria-current={isExact(pathname, c.href) ? "page" : undefined}
                         onClick={() => setOpen(false)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          minHeight: 44,
-                          padding: "8px 16px 8px 32px",
-                          borderRadius: 9999,
-                          color: childActive ? "var(--foreground)" : "var(--foreground)",
-                          background: childActive ? "var(--card)" : "transparent",
-                        }}
+                        className={cn(
+                          "flex min-h-11 items-center rounded-full py-2 pr-4 pl-8 text-sm",
+                          childActive ? "bg-card text-foreground" : "text-body",
+                        )}
                       >
                         {c.label}
                       </Link>
@@ -269,7 +185,7 @@ export default function TopNav() {
           <Link
             to="/login"
             onClick={() => setOpen(false)}
-            style={{ display: "block", padding: "8px 16px", color: "var(--foreground)" }}
+            className="block px-4 py-2 text-sm text-foreground"
           >
             Sign in
           </Link>

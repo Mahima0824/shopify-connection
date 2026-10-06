@@ -49,14 +49,14 @@ export default function ShipmentDetailPage() {
       setSyncing(false);
     }
   }
-  if (error) return <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"><p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
+  if (error) return <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"><p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
   if (!ship) return <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"><p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading shipment…</p></div>;
   return (
     <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
       <div>
         <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>{ship.carrier_code} · {ship.awb_number}</h1>
         <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
-          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{ship.tracking_status}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{ship.tracking_status}</span>
           <span style={{ marginLeft: "12px" }}>{ship.current_location ?? "No location yet"}</span>
         </p>
         <div style={{ marginTop: "12px", display: "flex", gap: "12px", alignItems: "center" }}>

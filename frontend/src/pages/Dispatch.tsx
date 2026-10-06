@@ -136,7 +136,7 @@ export default function DispatchPage() {
             <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--foreground)" }}>
               BARCODE INPUT (SCANNER ACTIVE)
             </label>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground" style={{ fontSize: "11px" }}>Press / to focus</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground" style={{ fontSize: "11px" }}>Press / to focus</span>
           </div>
 
           <div style={{ display: "flex", gap: "12px" }}>
@@ -193,7 +193,7 @@ export default function DispatchPage() {
           </p>
           {existing ? (
             <p role="status" style={{ fontSize: "14px" }}>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground">BOOKED</span>{" "}
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">BOOKED</span>{" "}
               <span style={{ fontWeight: 600 }}>{existing.carrier_code} · {existing.awb_number}</span>{" "}
               <span style={{ color: "var(--muted-foreground)" }}>— shipment exists, booking skipped.</span>
             </p>
@@ -227,10 +227,10 @@ export default function DispatchPage() {
                 {booking === "BOOKING" ? "Booking…" : "Book shipment"}
               </button>
               {booking === "BOOKED" && (
-                <span role="status" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground">BOOKED</span>
+                <span role="status" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">BOOKED</span>
               )}
               {booking === "BOOKING_ERROR" && bookingError && (
-                <span role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
+                <span role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
                   {bookingError}
                 </span>
               )}
@@ -251,8 +251,8 @@ export default function DispatchPage() {
             <div>
               <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--foreground)" }}>{last.order}</div>
               <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--neutral-bg)] text-muted-foreground">{last.barcode}</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground">{last.status}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-muted text-muted-foreground">{last.barcode}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground">{last.status}</span>
               </div>
             </div>
           ) : (
@@ -270,7 +270,7 @@ export default function DispatchPage() {
           ) : (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
               {hist.map((h, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "12px", fontSize: "14px" }}>
+                <li key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "12px", fontSize: "14px" }}>
                   <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{h}</span>
                   <span style={{ color: "var(--success)", fontSize: "12px", fontWeight: 600 }}>Dispatched</span>
                 </li>

@@ -31,7 +31,9 @@ test("topnav centers app sections with active effect and no underline", () => {
   }
   const active = container.querySelector('[aria-current="page"]');
   expect(active?.textContent).toMatch(/Dashboard/);
-  expect(active?.getAttribute("style") ?? "").toMatch(/9999/);
+  // Pills were styled by an inline style object with borderRadius 9999; they are
+  // now Tailwind, so the pill shape lives in a rounded-full class.
+  expect(active?.className ?? "").toMatch(/rounded-full/);
 });
 
 test("exactly one current-page marker exists", () => {
@@ -42,9 +44,9 @@ test("exactly one current-page marker exists", () => {
 test("topnav uses enterprise canvas background", () => {
   const { container } = renderNav();
   const header = container.querySelector("header") as HTMLElement;
-  // --canvas was the legacy name; it now resolves through shadcn's
-  // --background token, which the preset sets to the same near-white.
-  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/var\(--background\)/i);
+  // --canvas and then --background were both replaced by Tailwind's bg-background
+  // once the legacy palette was deleted.
+  expect(header.className).toMatch(/bg-background/);
 });
 
 test("topnav groups routes with active trail", () => {

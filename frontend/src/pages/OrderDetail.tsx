@@ -36,7 +36,7 @@ export default function OrderDetailPage() {
     return (
       <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ maxWidth: "900px", background: "var(--background)" }}>
         <Link to="/orders" style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>← Back to Orders Directory</Link>
-        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ marginTop: "16px", padding: "24px", borderRadius: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ marginTop: "16px", padding: "24px", borderRadius: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
           <IconAlert size={16} /> {error}
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function OrderDetailPage() {
 
       {/* Reconciliation Engine Alert Block */}
       {recon && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderLeft: recon.status === "RECONCILED" ? "4px solid var(--success)" : "4px solid var(--error)" }}>
+        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderLeft: recon.status === "RECONCILED" ? "4px solid var(--success)" : "4px solid var(--destructive)" }}>
           <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "18px", marginBottom: "12px" }}>Reconciliation Engine Status</h2>
           {recon.status === "RECONCILED" ? (
             <div style={{ color: "var(--success)", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
@@ -98,7 +98,7 @@ export default function OrderDetailPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {(recon.issues ?? []).map((issue) => (
-                <div key={issue.code} style={{ background: "var(--muted)", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "12px" }}>
+                <div key={issue.code} style={{ background: "var(--muted-foreground)", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "12px" }}>
                   <SeverityBadge severity={issue.severity} />
                   <div>
                     <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{issue.code}</span>

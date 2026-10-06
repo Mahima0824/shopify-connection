@@ -157,7 +157,7 @@ export default function StatementsPage() {
         </button>
       </div>
       {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
       <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Uploads</h2>
         {items.length === 0 ? (
@@ -165,7 +165,7 @@ export default function StatementsPage() {
         ) : (
           <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
             {items.map((u) => (
-              <li key={u.id} style={{ padding: "12px 16px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+              <li key={u.id} style={{ padding: "12px 16px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "12px" }}>
                 <Link to={`/statements/${u.id}`} style={{ fontWeight: 600 }}>
                   {u.provider || u.statement_type} &middot; {u.row_count} rows &middot; {u.status}
                 </Link>
@@ -183,7 +183,7 @@ export default function StatementsPage() {
       </div>
 
       {reconError && (
-        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
           {reconError} <button onClick={loadRecon} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}

@@ -79,7 +79,7 @@ export default function ParcelsPage() {
         </select>
         <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{items.length} parcel{items.length === 1 ? "" : "s"}</span>
       </div>
-      {err && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
+      {err && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
       {notice && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{notice}</p>}
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
         {items.length === 0 ? (
@@ -102,7 +102,7 @@ export default function ParcelsPage() {
                   <td style={{ fontWeight: 600 }}>{p.parcel_code}</td>
                   <td>{p.order_name ?? p.order_id}</td>
                   <td>{p.barcode_value}</td>
-                  <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{p.status}</span></td>
+                  <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{p.status}</span></td>
                   <td>{p.courier ?? "—"}</td>
                   <td>{p.awb ?? "—"}</td>
                   <td style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{fmtDate(p.created_at)}</td>

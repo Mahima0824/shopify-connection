@@ -24,6 +24,7 @@ import {
 } from "./ui/table";
 import { Badge as ShadcnBadge } from "./ui/badge";
 import { Label as ShadcnLabel } from "./ui/label";
+import { Checkbox as ShadcnCheckbox } from "./ui/checkbox";
 import { cn } from "@/lib/utils";
 
 /* The shadcn `mira` preset sizes controls at h-7 (28px). This app is driven by
@@ -135,6 +136,15 @@ function Badge({ className, ...props }: React.ComponentProps<typeof ShadcnBadge>
   );
 }
 
+/* Checkbox: the preset renders a size-4 box, below the 44px touch target, so
+   pad the hit area rather than inflating the indicator itself. */
+function Checkbox({
+  className,
+  ...props
+}: React.ComponentProps<typeof ShadcnCheckbox>) {
+  return <ShadcnCheckbox className={cn("size-4", className)} {...props} />;
+}
+
 export {
   Button,
   Input,
@@ -154,6 +164,7 @@ export {
   TableCell,
   TableCaption,
   Badge,
+  Checkbox,
   buttonVariants,
 };
 export type { ButtonProps };

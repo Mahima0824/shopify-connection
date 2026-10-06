@@ -58,7 +58,7 @@ export default function LabelsPage() {
           Print Selected ({chosen.length})
         </button>
       </div>
-      {err && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
+      {err && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
       {filtered.length === 0 ? (
         <EmptyState
           title="No parcels to label"
@@ -78,7 +78,7 @@ export default function LabelsPage() {
               <td><input type="checkbox" checked={!!selected[p.id]} onChange={() => toggle(p.id)} aria-label={`Select ${p.barcode_value}`} /></td>
               <td style={{ fontWeight: 600 }}>{p.parcel_code}</td>
               <td>{p.barcode_value}</td>
-              <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{p.status}</span></td>
+              <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{p.status}</span></td>
               <td><button onClick={() => reprint(p)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Reprint</button></td>
             </tr>
           ))}

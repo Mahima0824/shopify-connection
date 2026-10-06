@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import MetricCard from "../components/MetricCard";
 import EmptyState from "../components/EmptyState";
+import { Button } from "../components/primitives";
 import {
   IconAlert,
   IconBox,
@@ -50,20 +51,19 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", background: "var(--background)" }}>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "16px" }}>Loading Executive Dashboard...</p>
+      <div className="mx-auto flex min-h-[400px] w-full max-w-[1280px] items-center justify-center bg-background px-6 max-[480px]:px-4">
+        <p className="text-base text-muted-foreground">Loading Executive Dashboard...</p>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-       
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
-            Real-time Operational Ledger & Financial Reconciliation Metrics
+          <h1 className="font-bold tracking-tight text-foreground text-2xl">Executive Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Real-time Operational Ledger &amp; Financial Reconciliation Metrics
           </p>
         </div>
         <EmptyState
@@ -80,31 +80,24 @@ export default function DashboardPage() {
   const { kpis, financials } = data;
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "32px", background: "var(--background)" }}>
-
-     
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 bg-background px-6 max-[480px]:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
-            Real-time Operational Ledger & Financial Reconciliation Metrics
+          <h1 className="font-bold tracking-tight text-foreground text-2xl">Executive Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Real-time Operational Ledger &amp; Financial Reconciliation Metrics
           </p>
         </div>
-        <button
-          onClick={handleExcelExport}
-          disabled={exporting}
-          className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
-        >
-          <span style={{ display: "inline-flex", marginRight: "8px" }}><IconReceipt size={16} /></span>
+        <Button onClick={handleExcelExport} disabled={exporting}>
+          <IconReceipt size={16} data-icon="inline-start" />
           {exporting ? "Generating Export..." : "Download Excel Workbook"}
-        </button>
+        </Button>
       </div>
 
       {/* Operational KPI Grid */}
       <div>
-        <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "18px", marginBottom: "16px" }}>Operational Health</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
+        <h2 className="mb-4 font-bold tracking-tight text-lg text-foreground">Operational Health</h2>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
           <MetricCard title="Total Orders" value={kpis.orders_total} icon={<IconBox />} subtitle={`${kpis.paid_orders} Paid`} />
           <MetricCard title="Dispatched Scans" value={kpis.dispatched_orders} icon={<IconTag />} subtitle={`${kpis.packed_orders} Packed`} />
           <MetricCard title="Returns / RTO" value={`${kpis.returns_total}`} icon={<IconReturn />} subtitle={`RTO Total: ${kpis.rto_total}`} />
@@ -114,8 +107,8 @@ export default function DashboardPage() {
 
       {/* Financial Breakdown Grid */}
       <div>
-        <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "18px", marginBottom: "16px" }}>Financial Summary</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
+        <h2 className="mb-4 font-bold tracking-tight text-lg text-foreground">Financial Summary</h2>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5">
           <MetricCard title="Gross Sales" value={`₹${financials.gross_sales.toLocaleString()}`} icon={<IconCoin />} />
           <MetricCard title="Total Tax" value={`₹${financials.total_tax.toLocaleString()}`} icon={<IconReceipt />} />
           <MetricCard title="Total Shipping" value={`₹${financials.total_shipping.toLocaleString()}`} icon={<IconTruck />} />
@@ -123,7 +116,6 @@ export default function DashboardPage() {
           <MetricCard title="Net Revenue" value={`₹${financials.net_revenue.toLocaleString()}`} icon={<IconSpark />} subtitle="Gross Sales minus Refunds" />
         </div>
       </div>
-
     </div>
   );
 }

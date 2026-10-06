@@ -259,7 +259,7 @@ export default function TallySettingsPage() {
 
       {/* Status Notification */}
       {status && (
-        <div role="status" style={{ padding: "14px 20px", background: "var(--success-bg)", border: "1px solid var(--border)", color: "var(--foreground)", borderRadius: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="status" style={{ padding: "14px 20px", background: "var(--success/12)", border: "1px solid var(--border)", color: "var(--foreground)", borderRadius: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px" }}>
           <IconSpark size={16} /> {status}
         </div>
       )}
@@ -296,12 +296,12 @@ export default function TallySettingsPage() {
         </div>
 
         {validateError && (
-          <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
             {validateError} <button onClick={handleValidate} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
           </div>
         )}
         {exportError && (
-          <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
             {exportError}
           </div>
         )}
@@ -315,7 +315,7 @@ export default function TallySettingsPage() {
               <span style={{ fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
                 Validation
               </span>
-              <span className={validation.can_export ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--error-bg)] text-foreground"}>
+              <span className={validation.can_export ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--destructive/10)] text-foreground"}>
                 {validation.can_export ? "PASSED" : "BLOCKED"}
               </span>
               {!validation.can_export && (
@@ -332,7 +332,7 @@ export default function TallySettingsPage() {
             {validation.errors.length > 0 && (
               <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: 0, padding: 0 }}>
                 {validation.errors.map((e, i) => (
-                  <li key={`${e.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
+                  <li key={`${e.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
                     <SeverityBadge severity="HIGH" />
                     <span><strong>{e.code}</strong>: {e.message}</span>
                   </li>
@@ -342,7 +342,7 @@ export default function TallySettingsPage() {
             {validation.warnings.length > 0 && (
               <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: "8px 0 0", padding: 0 }}>
                 {validation.warnings.map((w, i) => (
-                  <li key={`${w.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
+                  <li key={`${w.code}-${i}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
                     <SeverityBadge severity="MEDIUM" />
                     <span><strong>{w.code}</strong>: {w.message}</span>
                   </li>
@@ -464,7 +464,7 @@ export default function TallySettingsPage() {
         </div>
 
         {batchesError && (
-          <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", margin: "16px 24px 0", borderRadius: "12px" }}>
+          <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", margin: "16px 24px 0", borderRadius: "12px" }}>
             {batchesError} <button onClick={loadBatches} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
           </div>
         )}

@@ -1,4 +1,5 @@
 import React from "react";
+import { Card } from "./primitives";
 
 export default function MetricCard({
   title,
@@ -29,50 +30,35 @@ export default function MetricCard({
             return `${x.toFixed(1)},${y.toFixed(1)}`;
           });
           return (
-            <svg width={w} height={h} aria-hidden="true" style={{ display: "block", marginTop: "12px" }}>
-              <polyline
-                points={coords.join(" ")}
-                fill="none"
-                stroke="var(--primary)"
-                strokeWidth="1.5"
-              />
+            <svg width={w} height={h} aria-hidden="true" className="mt-3 block">
+              <polyline points={coords.join(" ")} fill="none" stroke="var(--primary)" strokeWidth="1.5" />
             </svg>
           );
         })()
       : null;
 
   return (
-    <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+    <Card className="gap-0">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {title}
         </span>
         {icon && (
-          <div style={{
-            width: "36px",
-            height: "36px",
-            borderRadius: "50%",
-            background: "var(--neutral-bg)",
-            border: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--foreground)"
-          }}>
+          <div className="flex size-9 items-center justify-center rounded-full border border-border bg-muted text-foreground">
             {icon}
           </div>
         )}
       </div>
-      <div className="font-bold tracking-tight text-foreground tabular-nums" style={{ fontSize: "28px", fontWeight: 600, lineHeight: 1.1 }}>
+      <div className="text-[28px] leading-[1.1] font-semibold tabular-nums text-foreground">
         {value}
       </div>
       {(subtitle || trend) && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", fontSize: "12px" }}>
-          {trend && <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{trend}</span>}
-          {subtitle && <span style={{ color: "var(--muted-foreground)" }}>{subtitle}</span>}
+        <div className="mt-2 flex items-center gap-2 text-xs">
+          {trend && <span className="font-semibold text-foreground">{trend}</span>}
+          {subtitle && <span className="text-muted-foreground">{subtitle}</span>}
         </div>
       )}
       {sparkline}
-    </div>
+    </Card>
   );
 }

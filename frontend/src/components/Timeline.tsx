@@ -8,8 +8,8 @@ const KIND_DOTS: Record<string, string> = {
   PACKED: "var(--primary)",
   DISPATCHED: "var(--success)",
   RETURN: "var(--warning)",
-  REFUND: "var(--error)",
-  CANCELLED: "var(--error)",
+  REFUND: "var(--destructive)",
+  CANCELLED: "var(--destructive)",
   PAYMENT_PENDING: "var(--muted-foreground)",
   AUDIT: "var(--muted-foreground)",
 };

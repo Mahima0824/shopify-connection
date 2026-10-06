@@ -119,7 +119,7 @@ export default function Landing() {
                 </tbody>
               </table>
               <div style={{ marginTop: 16 }}>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground">Sync status: healthy</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground bg-[var(--success/12)] text-foreground">Sync status: healthy</span>
               </div>
             </div>
           </Reveal>
@@ -149,7 +149,7 @@ export default function Landing() {
             {features.map((f, i) => (
               <Reveal key={f.title} delay={i * 100}>
                 <div style={cardStyle}>
-                  <span style={{ width: 40, height: 40, borderRadius: 8, background: "var(--neutral-bg)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ width: 40, height: 40, borderRadius: 8, background: "var(--muted-foreground)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                     {f.icon}
                   </span>
                   <h3 className="font-bold tracking-tight text-foreground" style={{ fontSize: 18, margin: "16px 0 8px" }}>{f.title}</h3>
@@ -162,17 +162,17 @@ export default function Landing() {
       </section>
 
       {/* Product band */}
-      <section id="product" style={{ ...sectionPad, background: "var(--muted)" }}>
+      <section id="product" style={{ ...sectionPad, background: "var(--muted-foreground)" }}>
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4 grid items-center gap-8 min-[769px]:grid-cols-[7fr_5fr]">
           <Reveal>
             <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
               <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--border)", fontSize: 14 }}>
                 <span style={{ color: "var(--foreground)", fontWeight: 600 }}>Missing return scan — #2091</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">High severity</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">High severity</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", fontSize: 14 }}>
                 <span style={{ color: "var(--foreground)", fontWeight: 600 }}>Duplicate dispatch — #2088</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">Medium severity</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">Medium severity</span>
               </div>
             </div>
           </Reveal>
@@ -204,7 +204,7 @@ export default function Landing() {
             ].map((s, i) => (
               <Reveal key={s.n} delay={i * 100}>
                 <div style={cardStyle}>
-                  <span className="tabular-nums" style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--neutral-bg)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600 }}>
+                  <span className="tabular-nums" style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--muted-foreground)", color: "var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600 }}>
                     {s.n}
                   </span>
                   <h3 className="font-bold tracking-tight text-foreground" style={{ fontSize: 18, margin: "16px 0 8px" }}>{s.title}</h3>
@@ -227,7 +227,7 @@ export default function Landing() {
               <Reveal key={t.name} delay={i * 100}>
                 <div style={cardStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--neutral-bg)", color: "var(--foreground)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 13 }}>
+                    <span style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--muted-foreground)", color: "var(--foreground)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 13 }}>
                       {t.initials}
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: "var(--foreground)" }}>{t.name}</span>
@@ -241,7 +241,7 @@ export default function Landing() {
       </section>
 
       {/* Pricing 3-up */}
-      <section id="pricing" style={{ ...sectionPad, background: "var(--muted)" }}>
+      <section id="pricing" style={{ ...sectionPad, background: "var(--muted-foreground)" }}>
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
             <h2 className="font-bold tracking-tight text-foreground" style={h2Style}>Pricing</h2>
@@ -258,7 +258,7 @@ export default function Landing() {
                   }
                 >
                   {p.featured && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground" style={{ background: "var(--neutral-bg)", marginBottom: 12 }}>Most popular</span>
+                    <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[13px] font-medium text-foreground">Most popular</span>
                   )}
                   <div className="font-bold tracking-tight text-foreground" style={{ fontSize: 16, fontWeight: 600 }}>{p.name}</div>
                   <p style={{ fontSize: 14, color: "var(--muted-foreground)" }}>{p.blurb}</p>
@@ -280,7 +280,7 @@ export default function Landing() {
       <section style={sectionPad}>
         <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4">
           <Reveal>
-            <div style={{ background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 12, padding: 80, textAlign: "center" }}>
+            <div style={{ background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: 12, padding: 80, textAlign: "center" }}>
               <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: 32, margin: 0 }}>Start reconciling today</h2>
               <p style={{ color: "var(--foreground)", fontSize: 16, marginTop: 12 }}>Connect Shopify and close your first exceptions in minutes.</p>
               <div style={{ marginTop: 20 }}>

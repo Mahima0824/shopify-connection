@@ -71,7 +71,7 @@ export default function ParcelPage() {
     window.location.reload();
   }
 
-  if (err) return <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--background)" }}><p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
+  if (err) return <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "16px", background: "var(--background)" }}><p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}><IconAlert size={16} /> {err}</p></main>;
   if (!data) return <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ background: "var(--background)" }}><p style={{ color: "var(--muted-foreground)" }}>Loading…</p></main>;
   return (
     <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
@@ -79,7 +79,7 @@ export default function ParcelPage() {
       <Link to="/orders" style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>← Back to Orders Directory</Link>
       <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
         <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700, marginBottom: "8px" }}>Parcel {data.parcel.barcode_value}</h1>
-        <p style={{ color: "var(--foreground)", fontSize: "14px" }}>Status: <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--neutral-bg)] text-muted-foreground">{data.parcel.status}</span></p>
+        <p style={{ color: "var(--foreground)", fontSize: "14px" }}>Status: <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--muted-foreground)] text-foreground bg-[var(--muted-foreground)] text-muted-foreground">{data.parcel.status}</span></p>
         {data.order && (
           <p style={{ color: "var(--foreground)", fontSize: "14px", marginTop: "8px" }}>Order: {data.order.shopify_order_name} — ₹{data.order.total_amount}</p>
         )}

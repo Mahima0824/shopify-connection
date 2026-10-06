@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { API, api } from "../lib/api";
 import OrderTable from "../components/OrderTable";
 import ImportResult, { ImportSummary } from "../components/ImportResult";
+import { Button, Card, Checkbox, Input, Label } from "../components/primitives";
 import { IconAlert, IconRefund } from "../components/icons";
 
 export default function OrdersPage() {
@@ -75,89 +75,80 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
-
-     
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Orders Directory</h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="font-bold tracking-tight text-2xl text-foreground">Orders Directory</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             View and search all synchronized commerce orders
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-        <button
-          onClick={handleSyncShopify}
-          disabled={syncing}
-          className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
-        >
-          <span style={{ display: "inline-flex", marginRight: "8px" }}><IconRefund size={16} /></span>
-          {syncing ? "Syncing Shopify..." : "Sync Shopify Orders"}
-        </button>
-        <input ref={fileRef} type="file" accept=".csv" aria-label="Upload orders CSV" style={{ display: "none" }}
-          onChange={(e) => handleCsvUpload(e.target.files?.[0])} />
-        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
-          {uploading ? "Importing…" : "Import CSV"}
-        </button>
+        <div className="flex items-center gap-3">
+          <Button onClick={handleSyncShopify} disabled={syncing}>
+            <IconRefund size={16} />
+            {syncing ? "Syncing Shopify..." : "Sync Shopify Orders"}
+          </Button>
+          <input ref={fileRef} type="file" accept=".csv" aria-label="Upload orders CSV" className="hidden"
+            onChange={(e) => handleCsvUpload(e.target.files?.[0])} />
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
+            {uploading ? "Importing…" : "Import CSV"}
+          </Button>
         </div>
       </div>
 
       {importSummary && (
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
+        <Card>
           <ImportResult summary={importSummary} />
-        </div>
+        </Card>
       )}
 
       {/* Filter & Search Controls */}
-      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
-        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-          <input
-            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
+      <Card className="py-4">
+        <div className="flex items-center gap-4">
+          <Input
             placeholder="Search orders by name, customer, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1 }}
+            className="flex-1"
           />
-          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} aria-label="Live updates" />
+          <Label className="cursor-pointer gap-1.5 text-[13px] whitespace-nowrap">
+            <Checkbox checked={live} onCheckedChange={(v) => setLive(v === true)} aria-label="Live updates" />
             Live{updatedAt ? ` · updated ${updatedAt}` : ""}
-          </label>
+          </Label>
         </div>
-      </div>
+      </Card>
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-destructive">
           <IconAlert size={16} /> {error}
         </div>
       )}
 
       {/* Main Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
+          <div className="p-10 text-center text-muted-foreground">
             Loading orders directory...
           </div>
         ) : orders.length === 0 ? (
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <p style={{ color: "var(--muted-foreground)", marginBottom: "16px" }}>
+          <div className="p-6 text-center">
+            <p className="mb-4 text-muted-foreground">
               No orders yet. Sync Shopify or import a CSV to populate the directory.
             </p>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button onClick={handleSyncShopify} disabled={syncing} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
+            <div className="flex justify-center gap-3">
+              <Button onClick={handleSyncShopify} disabled={syncing}>
                 Sync Shopify Orders
-              </button>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
+              </Button>
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
                 Import CSV
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <OrderTable orders={orders} />
         )}
       </div>
-
     </div>
   );
 }

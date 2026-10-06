@@ -51,7 +51,7 @@ export default function LoginPage() {
             width: "48px",
             height: "48px",
             borderRadius: "12px",
-            background: "var(--neutral-bg)",
+            background: "var(--muted)",
             border: "1px solid var(--border)",
             color: "var(--muted-foreground)",
             display: "flex",
@@ -71,7 +71,7 @@ export default function LoginPage() {
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{
+          <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{
             padding: "12px 16px",
             borderRadius: "12px",
             fontSize: "14px",

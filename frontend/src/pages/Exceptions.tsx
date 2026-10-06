@@ -132,7 +132,7 @@ export default function ExceptionsPage() {
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
           <IconAlert size={16} /> {error}
         </div>
       )}
@@ -175,7 +175,7 @@ export default function ExceptionsPage() {
                     {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
                   </td>
                   <td>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground ${i.resolved ? "bg-[var(--success-bg)] text-foreground" : "bg-[var(--warning-bg)] text-foreground"}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground ${i.resolved ? "bg-[var(--success/12)] text-foreground" : "bg-[var(--warning/12)] text-foreground"}`}>
                       {i.resolved ? "RESOLVED" : "OPEN"}
                     </span>
                   </td>
@@ -217,7 +217,7 @@ export default function ExceptionsPage() {
               {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--foreground)" }}>{resolving.issue_code}</strong>
             </p>
 
-            <div style={{ background: "var(--muted)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--border)", color: "var(--foreground)" }}>
+            <div style={{ background: "var(--muted-foreground)", padding: "16px", borderRadius: "12px", marginBottom: "20px", fontSize: "14px", border: "1px solid var(--border)", color: "var(--foreground)" }}>
               {resolving.issue_message}
             </div>
 

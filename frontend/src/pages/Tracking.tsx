@@ -35,7 +35,7 @@ type TrackingEvent = {
 };
 
 const TONE_STYLE: Record<string, React.CSSProperties> = {
-  critical: { borderLeft: "4px solid var(--error)" },
+  critical: { borderLeft: "4px solid var(--destructive)" },
   warn: { borderLeft: "4px solid var(--warning)" },
   ok: {},
 };
@@ -178,7 +178,7 @@ export default function GeneralTrackingPage() {
       </div>
 
       {sweepResult && (
-        <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground" style={{ padding: "10px 16px", borderRadius: "8px", background: "var(--card)" }}>
+        <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground" style={{ padding: "10px 16px", borderRadius: "8px", background: "var(--card)" }}>
           {sweepResult}
         </div>
       )}
@@ -189,7 +189,7 @@ export default function GeneralTrackingPage() {
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>Total Tracked</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.total}</div>
         </div>
-        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--error)" }}>
+        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--destructive)" }}>
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>Critical / NDR</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.critical}</div>
         </div>
@@ -237,7 +237,7 @@ export default function GeneralTrackingPage() {
         </select>
       </div>
 
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
 
       {/* Main Table */}
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
@@ -263,10 +263,10 @@ export default function GeneralTrackingPage() {
                   <td style={{ fontWeight: 600 }}>{names[s.id] || "Order"}</td>
                   <td style={{ fontWeight: 600, fontFamily: "monospace" }}>{s.awb_number}</td>
                   <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{s.carrier_code}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{s.carrier_code}</span>
                   </td>
                   <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{s.tracking_status}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{s.tracking_status}</span>
                     {cool[s.id] && <div role="status" style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px" }}>{cool[s.id]}</div>}
                   </td>
                   <td style={{ color: "var(--muted-foreground)", fontSize: "13px" }}>

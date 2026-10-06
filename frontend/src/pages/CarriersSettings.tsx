@@ -51,13 +51,13 @@ export default function CarriersPage() {
         <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "20px", fontWeight: 700 }}>Carrier health</h2>
         <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>Connection state and last sync outcome per provider (credentials never shown).</p>
       </div>
-      {healthError && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{healthError}</p>}
+      {healthError && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{healthError}</p>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
         {health.map((h) => (
           <div key={h.code} className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: `4px solid ${h.configured ? "var(--success)" : "var(--border)"}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <strong>{h.code}</strong>
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground ${h.configured ? "bg-[var(--success-bg)] text-foreground" : "bg-[var(--neutral-bg)] text-muted-foreground"}`}>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground ${h.configured ? "bg-[var(--success/12)] text-foreground" : "bg-muted text-muted-foreground"}`}>
                 {h.configured ? "Connected" : "Not connected"}
               </span>
             </div>
@@ -69,7 +69,7 @@ export default function CarriersPage() {
               Last success: {h.last_success ?? "never"}
             </div>
             {h.last_error && (
-              <div role="status" style={{ fontSize: "13px", marginTop: "4px", color: "var(--error)" }}>
+              <div role="status" style={{ fontSize: "13px", marginTop: "4px", color: "var(--destructive)" }}>
                 Last error: {h.last_error}
               </div>
             )}

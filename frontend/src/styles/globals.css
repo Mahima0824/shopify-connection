@@ -136,26 +136,42 @@
   --radius-4xl: calc(var(--sc-radius) * 2.6);
 }
 
-/* The app's own teal/slate palette. Still the source of truth: the converted
-   markup references these names through var(), which keeps the existing visual
-   design intact while the class names live in the JSX as Tailwind utilities. */
+/* Semantic status tones that shadcn's token set does not cover.
+   The preset supplies destructive, but not success / warning / neutral, so those
+   live here and are exposed to Tailwind through @theme below. */
 :root {
-  --canvas: #ffffff; --surface: #f8fafc; --card: #ffffff;
-  --ink: #0f172a; --body: #334155; --muted: #64748b; --hairline: #e2e8f0;
-  --accent: #0f7665; --accent-strong: #115e59; --on-accent: #ffffff;
-  --success: #15803d; --warning: #b45309; --error: #b91c1c;
-  --success-bg: #dcfce7; --warning-bg: #fef3c7; --error-bg: #fee2e2; --info-bg: #e0f2fe; --neutral-bg: #f1f5f9;
-  --text-muted: #64748b; --border-color: #e2e8f0;
+  --success: oklch(0.55 0.13 155);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.58 0.13 70);
+  --warning-foreground: oklch(0.985 0 0);
+  --neutral: oklch(0.553 0.013 58.071);
+  --neutral-foreground: oklch(0.985 0 0);
+}
+
+.dark {
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.75 0.14 70);
+  --neutral: oklch(0.71 0.01 56.259);
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-neutral: var(--neutral);
+  --color-neutral-foreground: var(--neutral-foreground);
 }
 
 /* Everything below is behavioural, not visual. All visual styling moved to
-   Tailwind utilities in the JSX. What stays cannot be a utility because it is
-   either driven by JavaScript (.reveal / .is-visible come from an
-   IntersectionObserver) or is a print-media rule that Tailwind cannot express. */
+   Tailwind utilities and the shadcn primitives in the JSX. What stays cannot be
+   a utility because it is either driven by JavaScript (.reveal / .is-visible
+   come from an IntersectionObserver) or is a print-media rule Tailwind cannot
+   express. */
 
 body {
-  background: var(--canvas);
-  color: var(--body);
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
 }
 
@@ -165,7 +181,7 @@ a, a:visited {
 
 a:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -213,18 +229,5 @@ button:focus-visible {
 
   .print-container {
     display: block !important;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-
-  html {
-    @apply font-sans;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

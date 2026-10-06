@@ -23,7 +23,7 @@ type OutRow = {
 };
 
 const TONE_STYLE: Record<string, React.CSSProperties> = {
-  critical: { borderLeft: "4px solid var(--error)" },
+  critical: { borderLeft: "4px solid var(--destructive)" },
   warn: { borderLeft: "4px solid var(--warning)" },
   ok: {},
 };
@@ -124,7 +124,7 @@ export default function TrackingPage() {
 
       <div className="grid grid-cols-1 gap-4 min-[769px]:grid-cols-2" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
         {([
-          ["Critical", counts.critical, "var(--error)"],
+          ["Critical", counts.critical, "var(--destructive)"],
           ["Warning", counts.warn, "var(--warning)"],
           ["On track", counts.ok, "var(--success)"],
         ] as const).map(([label, n, color]) => (
@@ -162,7 +162,7 @@ export default function TrackingPage() {
         </select>
       </div>
 
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
 
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
         {shown.length === 0 ? (
@@ -179,7 +179,7 @@ export default function TrackingPage() {
                   <td>{names[s.id] ?? "-"}</td>
                   <td>{s.carrier_code}</td>
                   <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{s.tracking_status}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-muted text-foreground">{s.tracking_status}</span>
                     {cool[s.id] && <div role="status" style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px" }}>{cool[s.id]}</div>}
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

@@ -205,7 +205,7 @@ export default function MonthClosePage() {
           />
         </label>
         {status && (
-          <span className={isClosed ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--neutral-bg)] text-muted-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground"} aria-label={`Period status ${status}`}>
+          <span className={isClosed ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-muted text-muted-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground"} aria-label={`Period status ${status}`}>
             {status}
           </span>
         )}
@@ -226,7 +226,7 @@ export default function MonthClosePage() {
       </div>
 
       {error && (
-        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+        <div role="alert" className="bg-[var(--destructive/10)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
           {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
@@ -260,7 +260,7 @@ export default function MonthClosePage() {
             <span style={{ fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
               Close gates
             </span>
-            <span className={blocked ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--error-bg)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground"}>
+            <span className={blocked ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--destructive/10)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-muted text-foreground bg-[var(--success/12)] text-foreground"}>
               {blocked ? `BLOCKED (${total})` : "CLEAR"}
             </span>
           </div>
@@ -313,7 +313,7 @@ export default function MonthClosePage() {
           {blockerEntries.length > 0 && (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0 0", padding: 0 }}>
               {blockerEntries.map((b) => (
-                <li key={b.gate} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
+                <li key={b.gate} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted-foreground)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
                   <SeverityBadge severity="HIGH" />
                   <span><strong>{b.gate}</strong>: {b.refs.join(", ")}{blockers && (blockers.checks[b.gate] ?? []).length > 5 ? " ..." : ""}</span>
                 </li>

@@ -5,8 +5,9 @@ export default function Loading() {
     height: 14,
     width,
     borderRadius: 7,
-    background: "var(--neutral-bg)",
+    background: "var(--muted)",
   });
+  // (skeleton bars are a surface fill, so --muted is correct here)
   return (
     <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: 16 }} aria-busy="true" aria-label="Loading page">
       <div style={{ ...bar("32%"), height: 28 }} />
