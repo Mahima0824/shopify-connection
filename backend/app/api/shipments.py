@@ -24,16 +24,24 @@ COUNTRY_NAME_DEFAULT = "India"
 
 
 def _order_fields(o) -> dict:
-    """Display columns sourced from the Order. Every one of them is nullable."""
+    """Display columns sourced from the Order. Every one of them is nullable.
+
+    The four receiver_* columns are read through getattr with a None default.
+    They arrive with the India Post order migration, so on a tree that does not
+    carry it the attribute does not exist at all and a plain ``o.receiver_name``
+    raised AttributeError on every shipment list and detail call. Reading them
+    defensively keeps this serializer working on both trees, and a genuinely
+    absent column is honestly reported as null rather than invented.
+    """
     if o is None:
         return {"order_no": None, "customer_name": None, "customer_email": None,
                 "customer_mobile": None, "company_name": None}
     return {
         "order_no": o.internal_order_number or o.shopify_order_name or None,
-        "customer_name": o.receiver_name or None,
-        "customer_email": o.receiver_email or None,
-        "customer_mobile": o.receiver_mobile or None,
-        "company_name": o.receiver_company or None,
+        "customer_name": getattr(o, "receiver_name", None) or None,
+        "customer_email": getattr(o, "receiver_email", None) or None,
+        "customer_mobile": getattr(o, "receiver_mobile", None) or None,
+        "company_name": getattr(o, "receiver_company", None) or None,
     }
 
 
@@ -416,7 +424,15 @@ def add_event(sid: str, body: CheckpointIn, db: Session = Depends(get_db), u: di
     ev, created = ingest_event(db, s, body.carrier_status_raw, body.message, body.location, et, body.carrier_event_id, 'MANUAL')
     db.commit()
     db.refresh(s)
-    return {'success': True, 'data': {'event': edict(ev), 'created': created, 'tracking_status': s.tracking_status}}
+    from app.services.shipsagar_service import normalize_shipsagar_status, stale_reason
+    applied = bool(getattr(ev, 'rollup_applied', True))
+    wanted = normalize_shipsagar_status(s.carrier_code, body.carrier_status_raw or "")
+    suppressed = None if applied else (stale_reason(s, wanted, et)
+                                       or 'a status the rank table does not govern')
+    return {'success': True, 'data': {'event': edict(ev), 'created': created,
+                                      'tracking_status': s.tracking_status,
+                                      'rollup_applied': applied,
+                                      'rollup_suppressed_reason': suppressed}}
 
 
 @router.get('/{sid}/events')

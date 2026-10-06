@@ -1233,9 +1233,7 @@ def _seed_shipment_with_order(mk, awb, courier="DTDC", status="READY_TO_SHIP",
     db.refresh(b)
     o = Order(business_id=b.id, internal_order_number=order_no,
               shopify_order_id=f"MANUAL-{order_no}",
-              order_date=datetime.now(timezone.utc),
-              receiver_name="Dileep", receiver_email="r@e.com",
-              receiver_mobile="9963026645", receiver_company="Reshamgath")
+              order_date=datetime.now(timezone.utc))
     db.add(o)
     db.commit()
     db.refresh(o)
@@ -1607,10 +1605,7 @@ def _authed_with_order(monkeypatch, mk, role="ADMIN", email="a@t.in"):
     db.refresh(b)
     o = Order(business_id=b.id, internal_order_number="MAN-P1",
               shopify_order_id="MANUAL-P1",
-              order_date=datetime.now(timezone.utc),
-              receiver_name="Dileep Kumar", receiver_email="rahul@example.com",
-              receiver_mobile="9963026645", receiver_company="Reshamgath",
-              receiver_city="Nashik", receiver_pincode="422001")
+              order_date=datetime.now(timezone.utc))
     db.add(o)
     db.commit()
     db.refresh(o)
@@ -2022,9 +2017,7 @@ def _seed_list_rows(mk, n=3, courier="IP", days=(0, 1, 2), email="l@t.in",
     now = datetime.now(timezone.utc)
     for i in range(n):
         o = Order(business_id=b.id, internal_order_number=f"{prefix}-{i}",
-                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=now,
-                  receiver_name=f"Customer {i}", receiver_email=f"c{i}@e.com",
-                  receiver_mobile=f"99630266{i:02d}", receiver_company=f"Co {i}")
+                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=now)
         db.add(o)
         db.commit()
         db.refresh(o)
@@ -2077,15 +2070,55 @@ def test_list_returns_joined_display_columns(monkeypatch):
         assert r.status_code == 200, r.text
         row = r.json()["data"]["items"][0]
         assert row["order_no"] == "MAN-0"
-        assert row["customer_name"] == "Customer 0"
-        assert row["customer_email"] == "c0@e.com"
-        assert row["customer_mobile"] == "9963026600"
-        assert row["company_name"] == "Co 0"
+        # DELIBERATE UPDATE (fix wave 2, item 1). These four used to be asserted
+        # as populated from receiver_* columns on Order. Those columns arrive
+        # with the India Post order migration, which is uncommitted, so seeding
+        # them made every list/detail test on this branch red at HEAD with
+        # TypeError/AttributeError. On a tree without those columns the honest
+        # value is null, which is what is asserted here; the mapping itself is
+        # still pinned, directly, by
+        # test_order_fields_maps_the_receiver_columns_when_they_exist.
+        assert row["customer_name"] is None
+        assert row["customer_email"] is None
+        assert row["customer_mobile"] is None
+        assert row["company_name"] is None
         assert row["shipment_type"] == "Road"
         assert row["country_name"] == "India"
         assert row["entry_datetime"] is not None
     finally:
         app.dependency_overrides.clear()
+
+
+def test_order_fields_maps_the_receiver_columns_when_they_exist():
+    """The receiver_* mapping is pinned directly, off a real Order instance.
+
+    The list tests above assert null because the committed Order has no
+    receiver_* columns, which on its own would let the mapping rot unnoticed.
+    Setting the attributes on the instance exercises the same getattr path the
+    serializer takes once the India Post migration lands, so the four display
+    columns are proven to map - without the committed suite depending on a
+    column that does not exist on this branch.
+    """
+    from app.api.shipments import _order_fields
+    from app.models.order import Order
+    o = Order(business_id="b1", internal_order_number="MAN-X",
+              shopify_order_name="#X", order_date=datetime.now(timezone.utc))
+    assert _order_fields(o) == {
+        "order_no": "MAN-X", "customer_name": None, "customer_email": None,
+        "customer_mobile": None, "company_name": None}
+    o.receiver_name = "Dileep Kumar"
+    o.receiver_email = "rahul@example.com"
+    o.receiver_mobile = "9963026645"
+    o.receiver_company = "Reshamgath"
+    assert _order_fields(o) == {
+        "order_no": "MAN-X", "customer_name": "Dileep Kumar",
+        "customer_email": "rahul@example.com", "customer_mobile": "9963026645",
+        "company_name": "Reshamgath"}
+    # shopify_order_name is the fallback when there is no internal number.
+    assert _order_fields(Order(
+        business_id="b1", internal_order_number=None,
+        shopify_order_name="#ONLY", order_date=datetime.now(timezone.utc))
+    )["order_no"] == "#ONLY"
 
 
 def test_list_returns_facets_over_the_filtered_set(monkeypatch):
@@ -2179,7 +2212,12 @@ def test_shipment_detail_includes_display_columns(monkeypatch):
         sid = c.get("/api/v1/shipments", headers=h).json()["data"]["items"][0]["id"]
         r = c.get(f"/api/v1/shipments/{sid}", headers=h)
         assert r.status_code == 200, r.text
-        assert r.json()["data"]["customer_name"] == "Customer 0"
+        # DELIBERATE UPDATE (fix wave 2, item 1) - null because the committed
+        # Order carries no receiver_* columns. See
+        # test_list_returns_joined_display_columns for the full note and
+        # test_order_fields_maps_the_receiver_columns_when_they_exist for the
+        # mapping itself.
+        assert r.json()["data"]["customer_name"] is None
         assert r.json()["data"]["country_name"] == "India"
     finally:
         app.dependency_overrides.clear()
@@ -2448,9 +2486,7 @@ def _seed_rows_at(mk, moments, *, courier="IP", email="lt@t.in", prefix="LT",
     cols = statuses or ["IN_TRANSIT"] * len(moments)
     for i, moment in enumerate(moments):
         o = Order(business_id=b.id, internal_order_number=f"{prefix}-{i}",
-                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=moment,
-                  receiver_name=f"Customer {i}", receiver_email=f"l{i}@e.com",
-                  receiver_mobile=f"99630000{i:02d}", receiver_company=f"Co {i}")
+                  shopify_order_id=f"MANUAL-{prefix}-{i}", order_date=moment)
         db.add(o)
         db.commit()
         db.refresh(o)
@@ -2999,17 +3035,52 @@ def test_terminal_status_vocabulary_is_shared_by_the_backend_and_the_page():
     assert {"RTO_DELIVERED", "CLOSED"} <= set(TERMINAL)
 
 
-# IMPORTANT 8: the push dialog reads order_no / customer_name / shipment_id, so
-# the orders serializer has to actually return them.
+def test_a_refused_push_for_an_already_shipped_order_is_reported(monkeypatch):
+    """The dialog's already-has-a-shipment filter had to be removed.
+
+    GET /api/v1/orders cannot say whether an order already has a shipment - the
+    three fields that used to answer it are not in the committed serializer. So
+    the picker can no longer pre-filter, and the push endpoint's own refusal is
+    the only authority. This pins that refusal on the order field, which is
+    where the dialog maps SHIPMENT_EXISTS, so a user who picks an already-pushed
+    order is told on the Order control rather than silently accepted.
+    """
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk, email="dupe@t.in")
+    _configured(monkeypatch)
+    try:
+        first = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-DUP-1", "courier_code": "IP"})
+        assert first.status_code == 200, first.text
+        again = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-DUP-2", "courier_code": "IP"})
+        assert again.status_code == 400, again.text
+        assert again.json()["error"]["code"] == "SHIPMENT_EXISTS"
+        assert "already has a shipment" in again.json()["error"]["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+# IMPORTANT 8: the push dialog must read only what the orders serializer
+# genuinely returns. The three fields it used to read (order_no, customer_name,
+# shipment_id) are NOT in the committed serializer, so they were reverted out of
+# the dialog rather than added to the serializer.
 
 def test_orders_list_returns_the_fields_the_push_dialog_reads(monkeypatch):
-    """PushOrderOption.order_no / customer_name / shipment_id came back undefined.
+    """Pin the real contract, not the aspirational one.
 
-    The dialog's option label fell back to a raw order uuid, its Customer
-    preview was always an em dash, and its "already has a shipment cannot be
-    selected" filter was a permanent no-op - while the dialog's own tests stubbed
-    exactly these fields and therefore passed against a shape the backend cannot
-    produce.
+    The dialog used to read order_no / customer_name / shipment_id. None of the
+    three is in the committed serializer, so the dialog's label and Customer
+    preview were reading undefined while its own tests stubbed those exact fields
+    and passed against a shape the backend cannot produce.
+
+    Both order numbers are returned under their own column names, so the label
+    the user sees is unchanged; the picker labels from those instead. The
+    already-has-a-shipment filter cannot be derived from this endpoint at all
+    (Shipment has no column on Order and _to_dict is a pure function of one), so
+    the dialog now lets the push endpoint's own SHIPMENT_EXISTS refusal be the
+    authority - see test_a_refused_push_for_an_already_shipped_order_is_reported
+    on the order field. Re-apply the pair when the India Post work lands.
     """
     from app.models.order import Order
     from app.models.parcel import Parcel
@@ -3021,7 +3092,7 @@ def test_orders_list_returns_the_fields_the_push_dialog_reads(monkeypatch):
         db = mk()
         pushed = Order(business_id=bid, internal_order_number="MAN-PUSHED",
                        shopify_order_id="MANUAL-PUSHED",
-                       order_date=datetime.now(timezone.utc), receiver_name="Shipped Away")
+                       order_date=datetime.now(timezone.utc))
         db.add(pushed)
         db.commit()
         db.refresh(pushed)
@@ -3043,11 +3114,26 @@ def test_orders_list_returns_the_fields_the_push_dialog_reads(monkeypatch):
         assert r.status_code == 200, r.text
         items = {row["id"]: row for row in r.json()["data"]["items"]}
         assert oid in items and pushed_id in items
-        assert items[oid]["order_no"] == "MAN-P1"
-        assert items[oid]["customer_name"] == "Dileep Kumar"
-        assert items[oid]["shipment_id"] is None
-        assert items[pushed_id]["order_no"] == "MAN-PUSHED"
-        assert items[pushed_id]["shipment_id"] == sid
+        # DELIBERATE UPDATE (fix wave 2, item 1). This test used to assert the
+        # serializer grew order_no / customer_name / shipment_id, and the shipped
+        # half of that fix lived only in an UNCOMMITTED edit to app/api/orders.py
+        # (mixed into another feature's India Post hunk), so the committed branch
+        # asserted fields its own serializer never returned and failed at HEAD.
+        # The human ruled twice on this exact class of problem - revert the
+        # committed side now, re-apply the pair once the other feature lands - so
+        # the assertions below now pin what the dialog must genuinely be able to
+        # read instead. Both order numbers ARE returned by the committed
+        # serializer under their own column names, which is what the dialog now
+        # reads; the label a user sees is therefore the same string either way.
+        assert items[oid]["internal_order_number"] == "MAN-P1"
+        assert items[oid]["shopify_order_name"] is not None
+        assert items[pushed_id]["internal_order_number"] == "MAN-PUSHED"
+        # And it must NOT claim the three fields the committed tree does not
+        # send, so a future reader cannot mistake them for available again.
+        for row in items.values():
+            assert "order_no" not in row
+            assert "customer_name" not in row
+            assert "shipment_id" not in row
     finally:
         app.dependency_overrides.clear()
 
@@ -3276,3 +3362,59 @@ def test_ip_no_longer_normalizes_a_carton_as_rto():
     assert norm("DTDC", "RTO Delivered back to shipper") == "RETURNED"
     assert norm("IP", "Door Locked") == "FAILED_ATTEMPT"
     assert norm("IP", "Redirected to another address") == "RTO"
+
+
+def _seed_shipment_under(mk, business_id, awb, status):
+    from app.models.shipment import Shipment
+    db = mk()
+    s = Shipment(business_id=business_id, order_id="o-manual", parcel_id="p-manual",
+                 carrier_code="IP", awb_number=awb, tracking_status=status,
+                 shipsagar_tracking_id=f"SS-{awb}")
+    db.add(s)
+    db.commit()
+    sid = s.id
+    db.close()
+    return sid
+
+# --- manual checkpoint corrections must not silently no-op ---
+
+def test_manual_correction_on_a_terminal_shipment_is_reported_not_silently_dropped(monkeypatch):
+    """A warehouse user overriding a DELIVERED status used to get 200 with
+    created:true and an unchanged tracking_status, with nothing signalling the
+    roll-up had been suppressed. It must be reported."""
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    sid = _seed_shipment_under(mk, bid, awb="EG-MANUAL-1", status="DELIVERED")
+    try:
+        r = c.post(f"/api/v1/shipments/{sid}/events", headers=h, json={
+            "carrier_event_id": "manual-1",
+            "carrier_status_raw": "In Transit",
+            "message": "customer says it is not delivered",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["created"] is True
+        assert data["rollup_applied"] is False
+        assert data["tracking_status"] == "DELIVERED"
+        assert data["rollup_suppressed_reason"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_manual_checkpoint_that_does_apply_is_reported_as_applied(monkeypatch):
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    sid = _seed_shipment_under(mk, bid, awb="EG-MANUAL-2", status="IN_TRANSIT")
+    try:
+        r = c.post(f"/api/v1/shipments/{sid}/events", headers=h, json={
+            "carrier_event_id": "manual-2",
+            "carrier_status_raw": "Out for delivery",
+            "message": "out for delivery today",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["rollup_applied"] is True
+        assert data["tracking_status"] == "OUT_FOR_DELIVERY"
+    finally:
+        app.dependency_overrides.clear()

@@ -109,6 +109,9 @@ def ingest_event(db, shipment, raw: str | None, message: str | None = None,
     db.flush()
     if stale_reason(shipment, norm, event_time) is not None:
         # Recorded as history, deliberately not rolled up onto the shipment.
+        # rollup_applied tells the caller this was suppressed, so a manual
+        # correction cannot look like it worked when it silently did nothing.
+        ev.rollup_applied = False
         db.flush()
         return ev, True
     shipment.carrier_status_raw = raw
@@ -130,6 +133,7 @@ def ingest_event(db, shipment, raw: str | None, message: str | None = None,
         reconcile_order(db, shipment.order_id)
     except Exception:
         pass
+    ev.rollup_applied = True
     return ev, True
 
 

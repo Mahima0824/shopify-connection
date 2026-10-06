@@ -5,8 +5,9 @@ import {
   TERMINAL_STATUSES,
   carrierLabel,
   formatEntryDate,
-  isPushable,
+  formatOrderAmount,
   isTerminal,
+  pushOrderLabel,
   statusTone,
   validatePush,
 } from "../src/lib/shipments";
@@ -23,8 +24,10 @@ const EXPECTED_TONES: Record<string, string> = {
   DELIVERED: "success",
   FAILED_ATTEMPT: "warning",
   RTO: "danger",
+  RTO_DELIVERED: "danger",
   RETURNED: "danger",
   LOST: "danger",
+  CLOSED: "neutral",
   EXCEPTION: "warning",
 };
 
@@ -53,6 +56,10 @@ test("terminal statuses are the non-refreshing ones", () => {
   expect(isTerminal("IN_TRANSIT")).toBe(false);
   // RTO is forward-progressible (RTO -> RETURNED), so it keeps refreshing.
   expect(isTerminal("RTO")).toBe(false);
+  // Every terminal status must also be a real, tone-carrying, filterable state.
+  for (const s of TERMINAL_STATUSES) {
+    expect(SHIPMENT_STATUSES).toContain(s);
+  }
 });
 
 test("courier options include IP, DTDC and FEDEX", () => {
@@ -86,10 +93,29 @@ test("push validation requires a tracking number and a courier", () => {
   expect(validatePush({ tracking_no: "EG1", courier_code: "IP" })).toEqual({});
 });
 
-test("isPushable blocks orders that already carry a shipment", () => {
-  expect(isPushable({ shipment_id: null })).toBe(true);
-  expect(isPushable({ shipment_id: "s1" })).toBe(false);
-  expect(isPushable(null)).toBe(false);
+test("the push picker labels an order from fields the orders API actually returns", () => {
+  // DELIBERATE REPLACEMENT (fix wave 2, item 1). This replaces
+  // "isPushable blocks orders that already carry a shipment", which filtered on
+  // shipment_id - a field GET /api/v1/orders never sends, so the filter was a
+  // permanent no-op and the test passed only against a stub that invented the
+  // field. Whether an order already has a shipment is not derivable from that
+  // endpoint; the push endpoint's SHIPMENT_EXISTS refusal is the authority, and
+  // push-shipment-dialog.test.tsx pins that it lands on the Order control.
+  expect(pushOrderLabel({ id: "o1", internal_order_number: "MAN-1" })).toBe("MAN-1");
+  // shopify_order_name is the fallback, then the id, so a row is never blank.
+  expect(pushOrderLabel({ id: "o2", shopify_order_name: "#1002" })).toBe("#1002");
+  expect(pushOrderLabel({ id: "o3" })).toBe("o3");
+  expect(pushOrderLabel(null)).toBe("—");
+  expect(pushOrderLabel({ id: "o4", internal_order_number: "  " })).toBe("o4");
+});
+
+test("order amounts format from the currency the orders API returns", () => {
+  expect(formatOrderAmount({ total_amount: 1499, currency: "INR" })).toContain("INR");
+  expect(formatOrderAmount({ total_amount: 1499, currency: "INR" })).toContain("1,499");
+  expect(formatOrderAmount({ total_amount: 0, currency: "INR" })).toContain("0");
+  expect(formatOrderAmount({ total_amount: null })).toBe("—");
+  expect(formatOrderAmount({ total_amount: NaN })).toBe("—");
+  expect(formatOrderAmount(null)).toBe("—");
 });
 
 test("listShipments unwraps items and facets", async () => {
@@ -200,9 +226,11 @@ test("syncShipment POSTs to the shipment sync route", async () => {
   expect(fetchMock.mock.calls[0][1].method).toBe("POST");
 });
 
+// Shaped as the committed backend/app/api/orders.py::_to_dict answers: only
+// fields that serializer really returns.
 const PUSH_ORDER_ROWS = [
-  { id: "o1", order_no: "MAN-1", customer_name: "D", receiver_city: "N",
-    receiver_pincode: "422001", shipment_id: null },
+  { id: "o1", business_id: "b1", internal_order_number: "MAN-1",
+    shopify_order_name: "#1001", currency: "INR", total_amount: 1499.0 },
 ];
 
 test("listOrdersForPush reads the items envelope shape", async () => {

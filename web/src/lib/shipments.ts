@@ -8,8 +8,10 @@ export const SHIPMENT_STATUSES = [
   "DELIVERED",
   "FAILED_ATTEMPT",
   "RTO",
+  "RTO_DELIVERED",
   "RETURNED",
   "LOST",
+  "CLOSED",
   "EXCEPTION",
 ] as const;
 
@@ -46,8 +48,10 @@ const TONES: Record<string, Tone> = {
   FAILED_ATTEMPT: "warning",
   EXCEPTION: "warning",
   RTO: "danger",
+  RTO_DELIVERED: "danger",
   RETURNED: "danger",
   LOST: "danger",
+  CLOSED: "neutral",
   NOT_CREATED: "neutral",
 };
 
@@ -76,11 +80,34 @@ export function isTerminal(status?: string | null): boolean {
   return (TERMINAL_STATUSES as readonly string[]).includes((status ?? "").toUpperCase());
 }
 
-export function isPushable(
-  order: { shipment_id?: string | null } | null | undefined,
-): boolean {
-  if (!order) return false;
-  return !order.shipment_id;
+/**
+ * Label for one row of the push dialog's order picker.
+ *
+ * Reads only fields GET /api/v1/orders genuinely returns (see
+ * PushOrderOption). It previously read order_no / customer_name /
+ * receiver_city / receiver_pincode, none of which the committed serializer
+ * sends, so the label fell back to a raw order uuid and then appended the
+ * literal "No name" to every row. internal_order_number is the real order
+ * number and is what the shipments list already displays as order_no.
+ */
+export function pushOrderLabel(order: {
+  id?: string | null;
+  internal_order_number?: string | null;
+  shopify_order_name?: string | null;
+} | null | undefined): string {
+  if (!order) return "—";
+  const label = (order.internal_order_number ?? "").trim()
+    || (order.shopify_order_name ?? "").trim();
+  return label || order.id || "—";
+}
+
+export function formatOrderAmount(
+  order: { total_amount?: number | null; currency?: string | null } | null | undefined,
+): string {
+  if (!order || order.total_amount == null) return "—";
+  const amount = Number(order.total_amount);
+  if (!Number.isFinite(amount)) return "—";
+  return `${order.currency ? `${order.currency} ` : ""}${amount.toLocaleString()}`;
 }
 
 export function validatePush(form: {

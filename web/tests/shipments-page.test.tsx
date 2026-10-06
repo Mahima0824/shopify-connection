@@ -225,10 +225,10 @@ test("the push dialog defaults to the order named in the URL", async () => {
     if (String(url).includes("/api/v1/orders")) {
       return { ok: true, json: async () => ({ success: true, data: {
         items: [
-          { id: "oA", order_no: "MAN-A", customer_name: "Alpha",
-            receiver_city: "Delhi", receiver_pincode: "110001", shipment_id: null },
-          { id: "oB", order_no: "MAN-B", customer_name: "Bravo",
-            receiver_city: "Pune", receiver_pincode: "411001", shipment_id: null },
+          { id: "oA", internal_order_number: "MAN-A", shopify_order_name: "#A",
+            receiver_city: "Delhi", receiver_pincode: "110001" },
+          { id: "oB", internal_order_number: "MAN-B", shopify_order_name: "#B",
+            receiver_city: "Pune", receiver_pincode: "411001" },
         ],
         total: 2, page: 1 } }) };
     }
