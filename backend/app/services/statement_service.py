@@ -160,6 +160,7 @@ def match_row(db, business_id: str, row) -> tuple[str, str | None, str | None]:
     from app.models.shipment import Shipment
     from app.models.order import Order
     from app.models.sla import ShipmentFinancial
+    from app.services.shipment_service import is_awaiting_awb
     if row.external_reference:
         fin = db.query(ShipmentFinancial).filter_by(
             business_id=business_id, settlement_reference=row.external_reference).first()
@@ -167,7 +168,13 @@ def match_row(db, business_id: str, row) -> tuple[str, str | None, str | None]:
             return "MATCHED", fin.order_id, fin.shipment_id
     if row.awb_number:
         s = db.query(Shipment).filter_by(business_id=business_id, awb_number=row.awb_number).first()
-        if s is not None:
+        # Guarded even though a real bank row cannot contain our placeholder:
+        # this match decides that money is SETTLED against a shipment. Matching
+        # an order that was never dispatched would be a false financial match,
+        # and one clause is cheaper than proving the collision impossible. The
+        # amount fallback below needs a ShipmentFinancial row, which an
+        # un-pushed awaiting shipment cannot have, so it needs no guard.
+        if s is not None and not is_awaiting_awb(s.awb_number):
             return "MATCHED", s.order_id, s.id
     if row.order_reference:
         ref = row.order_reference.strip()

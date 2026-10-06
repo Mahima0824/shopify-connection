@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
+from app.services import shipment_service
 
 router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
 
@@ -123,7 +124,10 @@ def _sdict(s, order=None) -> dict:
         "order_id": s.order_id,
         "parcel_id": s.parcel_id,
         "carrier_code": s.carrier_code,
-        "awb_number": s.awb_number,
+        # display_awb, not the raw column: an awaiting shipment carries the
+        # placeholder AWB, and the Shipments page would render it as a tracking
+        # number. orders._shipment_dict masks it for the same reason.
+        "awb_number": shipment_service.display_awb(s.awb_number),
         "shipsagar_tracking_id": getattr(s, "shipsagar_tracking_id", None),
         "tracking_status": s.tracking_status,
         "carrier_status_raw": s.carrier_status_raw,
@@ -234,6 +238,13 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         return _err(400, "MISSING_TRACKING_NUMBER", "Tracking number is required.")
     if not courier_code:
         return _err(400, "MISSING_COURIER", "Courier code is required.")
+    # Reserved: the awaiting placeholder is ours, not a carrier's. Adopting one
+    # would leave the row classified as awaiting - so push_state would never
+    # leave "awaiting" and a second push would be accepted forever. is_awaiting_awb
+    # rather than the prefix literal, so the two cannot drift.
+    if is_awaiting_awb(tracking_no):
+        return _err(400, "RESERVED_TRACKING_NUMBER",
+                    "That tracking number is reserved and cannot be pushed.")
     if len(tracking_no) > PARCEL_BARCODE_MAX_LEN:
         return _err(400, "INVALID_TRACKING_NUMBER_LENGTH",
                     f"Tracking number must be {PARCEL_BARCODE_MAX_LEN} characters or fewer.")
@@ -379,7 +390,7 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
     qy would leak another tenant's counts into the chips while the paged items
     stayed correct.
     """
-    from sqlalchemy import func, or_
+    from sqlalchemy import and_, func, or_
     from app.models.order import Order
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
@@ -403,8 +414,15 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
     text = f"%{q.strip()}%" if q and q.strip() else None
     order_text = f"%{order_no.strip()}%" if order_no and order_no.strip() else None
     if text:
+        # An awaiting shipment's placeholder AWB is not a searchable value:
+        # matching it would let a user "find" placeholder rows by typing the
+        # prefix, which is not what they mean. The pattern is built from the
+        # shared constant so the literal lives in exactly one place.
         qy = (qy.outerjoin(Parcel, Parcel.id == Shipment.parcel_id)
-                .filter(or_(Shipment.awb_number.ilike(text),
+                .filter(or_(and_(
+                        Shipment.awb_number.not_like(
+                            shipment_service.AWAITING_AWB_PREFIX + "%"),
+                        Shipment.awb_number.ilike(text)),
                             Order.internal_order_number.ilike(text),
                             Order.shopify_order_name.ilike(text),
                             Parcel.barcode_value.ilike(text))))

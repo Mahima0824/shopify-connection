@@ -77,6 +77,7 @@ def outstanding(status: str | None = None, carrier: str | None = None, sla: str 
     from app.models.shipment import Shipment
     from app.models.order import Order
     from app.models.sla import SLARule, ShipmentFinancial
+    from app.services.shipment_service import display_awb
     from app.services.sla_service import sla_status, shipment_clock
     bid = u.get("business_id")
     now = datetime.now(timezone.utc)
@@ -98,7 +99,10 @@ def outstanding(status: str | None = None, carrier: str | None = None, sla: str 
         age = (now - s.shipped_at).days if s.shipped_at else 0
         items.append({"shipment_id": s.id, "order_id": s.order_id,
                       "order_name": o.shopify_order_name if o else None,
-                      "carrier_code": s.carrier_code, "awb_number": s.awb_number,
+                      "carrier_code": s.carrier_code,
+                      # An awaiting shipment's placeholder AWB is not a tracking
+                      # number, so it is masked rather than shown as one.
+                      "awb_number": display_awb(s.awb_number),
                       "tracking_status": s.tracking_status, "location": s.current_location,
                       "last_event_at": s.last_checkpoint_at.isoformat() if s.last_checkpoint_at else None,
                       "age_days": max(age, 0), "sla_status": st["status"],
@@ -211,7 +215,7 @@ def evaluate(db: Session = Depends(get_db), u: dict = Depends(get_current_user))
     from app.models.order import Order
     from app.models.reconciliation import Reconciliation
     from app.models.sla import SLARule
-    from app.services.shipment_service import TERMINAL
+    from app.services.shipment_service import TERMINAL, display_awb
     from app.services.sla_service import sla_status, shipment_clock
     if u.get("role") != "ADMIN":
         raise HTTPException(403, "Admin role required")
@@ -246,14 +250,14 @@ def evaluate(db: Session = Depends(get_db), u: dict = Depends(get_current_user))
             last = _aware(s.last_checkpoint_at)
             if last is not None and now - last > timedelta(hours=24):
                 if _open_issue(db, o, "WAREHOUSE_DELAY", "HIGH",
-                               f"Shipment {s.awb_number} idle at hub over 24h."):
+                               f"Shipment {display_awb(s.awb_number)} idle at hub over 24h."):
                     opened += 1
         # TRACKING_STALE: UNKNOWN + >24h unsynced.
         if (s.tracking_status or "") == "UNKNOWN":
             sync_at = _aware(s.last_synced_at) or _aware(s.created_at) or _aware(s.shipped_at)
             if sync_at is not None and now - sync_at > timedelta(hours=24):
                 if _open_issue(db, o, "TRACKING_STALE", "MEDIUM",
-                               f"Shipment {s.awb_number} status unknown over 24h."):
+                               f"Shipment {display_awb(s.awb_number)} status unknown over 24h."):
                     opened += 1
         # RTO_DELAY fallback per SLA rules (covers no-rule 45d default via shipment_clock).
         if (s.tracking_status or "") in ("RTO_INITIATED", "RTO_IN_TRANSIT", "RETURN_AT_HUB"):
@@ -266,7 +270,7 @@ def evaluate(db: Session = Depends(get_db), u: dict = Depends(get_current_user))
                 st = {"status": "NORMAL", "days_used": 0}
             if st.get("status") in ("APPROACHING", "BREACHED"):
                 if _open_issue(db, o, "RTO_DELAY", "HIGH",
-                               f"RTO shipment {s.awb_number} aged {st.get('days_used', 0)}d."):
+                               f"RTO shipment {display_awb(s.awb_number)} aged {st.get('days_used', 0)}d."):
                     opened += 1
     db.commit()
     return {"success": True, "data": {"checked": checked, "opened": opened}}

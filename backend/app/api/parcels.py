@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
+from app.services.shipment_service import display_awb
 
 router = APIRouter(prefix="/api/v1/parcels", tags=["parcels"])
 
@@ -104,7 +105,10 @@ def list_parcels(status: str | None = None, page: int = 1, page_size: int = 50,
         items.append({"id": p.id, "parcel_code": p.parcel_code, "barcode_value": p.barcode_value,
                       "status": p.status, "order_id": p.order_id,
                       "order_name": o.shopify_order_name if o else None,
-                      "courier": s.carrier_code if s else None, "awb": s.awb_number if s else None,
+                      "courier": s.carrier_code if s else None,
+                      # Masked: an awaiting shipment's placeholder AWB is not a
+                      # tracking number and must not be printed as one.
+                      "awb": display_awb(s.awb_number) if s else None,
                       "created_at": p.created_at.isoformat() if p.created_at else None})
     return {"success": True, "data": {"items": items, "total": total, "page": page}}
 

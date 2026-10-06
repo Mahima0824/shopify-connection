@@ -5002,6 +5002,7 @@ def test_resyncing_an_order_never_adds_a_second_shipment(monkeypatch):
     """A second sync of the same order is a no-op on the shipment."""
     from app.models.business import Business
     from app.models.shipment import Shipment
+    from app.services.shipment_service import is_awaiting_awb
     mk = _mk()
     db = mk()
     b = Business(name="B", email="resync@t.in")
@@ -5011,13 +5012,22 @@ def test_resyncing_an_order_never_adds_a_second_shipment(monkeypatch):
     bid = b.id
     db.close()
     oid = _upsert_shopify_order(mk, bid, 1)
+    db = mk()
+    try:
+        before = db.query(Shipment).filter_by(order_id=oid).first().awb_number
+        db.close()
+    finally:
+        pass
     again = _upsert_shopify_order(mk, bid, 1)
     assert again == oid
     db = mk()
     try:
         ships = db.query(Shipment).filter_by(order_id=oid).all()
         assert len(ships) == 1, "re-sync duplicated the awaiting shipment"
-        assert ships[0].awb_number  # still the placeholder, not reset
+        # Unchanged, not merely truthy: a re-sync must not re-issue the
+        # placeholder either, or any consumer keyed on it would drift.
+        assert ships[0].awb_number == before, (ships[0].awb_number, before)
+        assert is_awaiting_awb(ships[0].awb_number)
     finally:
         db.close()
 
@@ -5151,7 +5161,10 @@ def test_history_refuses_an_order_that_has_never_been_pushed(monkeypatch):
     def _boom(*a, **kw):  # the provider must never be reached
         raise AssertionError("history called ShipSagar for a placeholder AWB")
 
-    monkeypatch.setattr(ss, "track_shipment", _boom, raising=False)
+    # The endpoint resolves a provider through app.carriers.registry, not
+    # shipsagar_service, so patching ss.track_shipment would never be reached.
+    from app.carriers import registry
+    monkeypatch.setattr(registry, "provider_for_shipment", _boom)
     c = _client(monkeypatch, mk)
     try:
         tok = c.post("/api/v1/auth/login",
@@ -5176,3 +5189,256 @@ def test_is_awaiting_awb_recognises_only_the_placeholder():
     assert not is_awaiting_awb(" EM123456789IN ")
     assert not is_awaiting_awb("AWAIT")
     assert not is_awaiting_awb("X" + AWAITING_AWB_PREFIX + "abc")
+
+
+# --- the placeholder must not leak where a tracking number is expected ---
+
+
+def _awaiting_tenant(mk, email: str):
+    """Business + admin user + one synced (awaiting) order. Returns (bid, oid)."""
+    from app.models.business import Business
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    db = mk()
+    b = Business(name="B", email=email)
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email=email,
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    return bid, _upsert_shopify_order(mk, bid, 1)
+
+
+def _awaiting_shipment(mk, oid) -> str:
+    from app.models.shipment import Shipment
+    db = mk()
+    try:
+        return db.query(Shipment).filter_by(order_id=oid).first().id
+    finally:
+        db.close()
+
+
+def _tok(c, email):
+    return c.post("/api/v1/auth/login",
+                  json={"email": email, "password": "x"}).json()["data"]["token"]
+
+
+def test_a_synced_order_opens_no_reconciliation_exception(monkeypatch):
+    """Awaiting is the intended state, not an operational anomaly.
+
+    Pins the direction: check_r010 flags a shipment with no AWB, so treating the
+    placeholder as "still missing" would open a HIGH exception on every freshly
+    synced order. It does not.
+    """
+    from app.services.reconciliation_service import reconcile_order
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "recon@t.in")
+    db = mk()
+    try:
+        codes = [i["code"] for i in reconcile_order(db, oid)["issues"]]
+        assert codes == [], f"a synced order opened {codes}"
+    finally:
+        db.close()
+
+
+def test_dispatched_parcel_with_only_an_awaiting_shipment_is_flagged(monkeypatch):
+    """The awaiting row must not satisfy "dispatched but no shipment".
+
+    R009 exists to catch a parcel that physically went out with no shipment
+    record. An awaiting row is a row, not a shipment with a tracking number, so
+    without this the exception is silenced for exactly the case it exists for.
+    """
+    from app.models.scan_event import ScanEvent
+    from app.models.shipment import Shipment
+    from app.services.reconciliation_service import reconcile_order
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "r009@t.in")
+    db = mk()
+    try:
+        pid = db.query(Shipment).filter_by(order_id=oid).first().parcel_id
+        db.add(ScanEvent(business_id=bid, parcel_id=pid, order_id=oid,
+                         event_type="DISPATCHED", performed_by="tester"))
+        db.commit()
+        codes = {i["code"] for i in reconcile_order(db, oid)["issues"]}
+        assert "DISPATCHED_WITHOUT_SHIPMENT" in codes, codes
+    finally:
+        db.close()
+
+
+def test_shipment_detail_masks_the_awaiting_placeholder(monkeypatch):
+    """The Shipments page must not show AWAIT-<uuid> as a tracking number."""
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "sdetail@t.in")
+    sid = _awaiting_shipment(mk, oid)
+    c = _client(monkeypatch, mk)
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'sdetail@t.in')}"}
+        for url in (f"/api/v1/shipments/{sid}", "/api/v1/shipments?page_size=50"):
+            r = c.get(url, headers=h)
+            assert r.status_code == 200, r.text
+            body = r.json()["data"]
+            rows = ([body] if "awb_number" in body
+                    else body.get("items", []))
+            for row in rows:
+                assert "AWAIT-" not in str(row.get("awb_number") or ""), row
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_searching_the_placeholder_prefix_finds_no_shipment(monkeypatch):
+    """`q` matches the AWB, so the prefix must not be a searchable value."""
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "search@t.in")
+    c = _client(monkeypatch, mk)
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'search@t.in')}"}
+        r = c.get("/api/v1/shipments?q=AWAIT-&page_size=50", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["items"] == [], r.json()["data"]["items"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_outstanding_sla_payload_masks_the_placeholder(monkeypatch):
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "outst@t.in")
+    c = _client(monkeypatch, mk)
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'outst@t.in')}"}
+        r = c.get("/api/v1/shipments/outstanding", headers=h)
+        assert r.status_code == 200, r.text
+        for row in r.json()["data"]["items"]:
+            assert "AWAIT-" not in str(row.get("awb_number") or ""), row
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_parcel_list_masks_the_awaiting_placeholder(monkeypatch):
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "parcl@t.in")
+    c = _client(monkeypatch, mk)
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'parcl@t.in')}"}
+        r = c.get("/api/v1/parcels?page_size=50", headers=h)
+        assert r.status_code == 200, r.text
+        rows = r.json()["data"]["items"]
+        assert rows, "expected the synced order's parcel"
+        for row in rows:
+            assert "AWAIT-" not in str(row.get("awb") or ""), row
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_courier_report_excludes_awaiting_shipments(monkeypatch):
+    """A courier report counts parcels handed to a courier.
+
+    An awaiting shipment has none, so counting it would inflate the shipment
+    total and add a row whose AWB is a placeholder. Masking the value instead
+    would leave a phantom shipment in the courier's numbers, so the row is
+    excluded.
+    """
+    from app.services import report_service as rs
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "rpt@t.in")
+    db = mk()
+    try:
+        out = rs.courier_report(db, bid, datetime(2020, 1, 1, tzinfo=timezone.utc),
+                                datetime(2100, 1, 1, tzinfo=timezone.utc))
+        assert out["shipments"] == 0, out
+        assert out["rows"] == [], out["rows"]
+        assert out["by_courier"] == {}, out["by_courier"]
+    finally:
+        db.close()
+
+
+def test_push_refuses_a_placeholder_shaped_tracking_number(monkeypatch):
+    """A client must not be able to push one of our own placeholders.
+
+    Adopting `AWAIT-x` would leave the row classified as awaiting - so
+    push_state never leaves awaiting and a second push is allowed through.
+    """
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    from app.models.user import User
+    from app.services import shipsagar_service as ss
+    from app.services.auth_service import hash_password
+    from app.services.shipment_service import AWAITING_AWB_PREFIX
+    from app.services.shipment_service import is_awaiting_awb
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="fake@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="fake@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    oid = _upsert_shopify_order(mk, bid, 1)
+    c = _client(monkeypatch, mk)
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+        "ok": True, "message": "ok"})
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'fake@t.in')}"}
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": AWAITING_AWB_PREFIX + "sneaky",
+            "courier_code": "IP"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "RESERVED_TRACKING_NUMBER", r.text
+        db = mk()
+        try:
+            s = db.query(Shipment).filter_by(order_id=oid).first()
+            assert is_awaiting_awb(s.awb_number), "the push overwrote the placeholder"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_awaiting_awb_fits_the_column_and_is_unique_per_order():
+    """The placeholder depends on Order.id fitting the AWB column.
+
+    Nothing in the schema pins that, so a longer id would silently truncate and
+    two orders could collide on uq_ship_biz_carrier_awb - the exact blocker round
+    1 removed. Assert the width rather than trusting the uuid.
+    """
+    from app.services.shipment_service import AWAITING_AWB_MAX_LEN, awaiting_awb_for
+    import uuid
+    for _ in range(50):
+        oid = str(uuid.uuid4())
+        awb = awaiting_awb_for(oid)
+        assert len(awb) <= AWAITING_AWB_MAX_LEN, f"{oid} -> {len(awb)} chars"
+        assert awb.endswith(oid), "the order id must survive intact"
+    # Two orders, two placeholders - that uniqueness IS the fix.
+    a, b = awaiting_awb_for(str(uuid.uuid4())), awaiting_awb_for(str(uuid.uuid4()))
+    assert a != b
+
+
+def test_ensure_awaiting_shipment_returns_none_without_a_parcel(monkeypatch):
+    """shipments.parcel_id is NOT NULL, so there is nothing to attach to.
+
+    Reached when the parcel autocreate failed and its rollback took the parcel
+    with it: the helper must decline rather than build a row that cannot commit.
+    """
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ensure_awaiting_shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    db = mk()
+    try:
+        o = db.query(Order).filter_by(id=oid).first()
+        assert db.query(Parcel).filter_by(order_id=oid).first() is None
+        assert ensure_awaiting_shipment(db, o) is None
+        db.flush()
+        assert db.query(Shipment).filter_by(order_id=oid).count() == 0
+    finally:
+        db.close()

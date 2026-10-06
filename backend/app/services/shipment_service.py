@@ -56,6 +56,18 @@ def awaiting_awb_for(order_id: str) -> str:
     """The placeholder AWB for one order's awaiting shipment."""
     return f"{AWAITING_AWB_PREFIX}{order_id}"[:AWAITING_AWB_MAX_LEN]
 
+
+def display_awb(value) -> str | None:
+    """The AWB as a user-facing tracking number, or None when there is none yet.
+
+    Every payload that shows an AWB to a person goes through this rather than
+    reading the column, so the placeholder cannot surface as a tracking number
+    in one report and stay masked in another. `is_awaiting_awb` decides what
+    counts as "not a tracking number"; this only decides how to present it.
+    """
+    text = (value or "").strip()
+    return None if is_awaiting_awb(text) else text
+
 # Terminal for the backend only: there is no tracking number to poll, so sync
 # and poll-sweep must skip the row instead of asking ShipSagar about nothing.
 # The frontend deliberately does NOT treat it as terminal - it is the state
