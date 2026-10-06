@@ -3696,3 +3696,74 @@ def test_push_payload_treats_a_blank_order_no_as_absent(monkeypatch):
     p = build_push_payload(tracking_no="EG1", courier_code="IP",
                            order=_OrderStub(), order_no="   ")
     assert p["OrderNo"] == "MAN-AB12CD34"
+
+
+# --- sequential shipment order numbers ---
+
+def test_next_shipment_order_no_starts_at_001_then_increments(monkeypatch):
+    from datetime import datetime as _dt
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.services.order_service import next_shipment_order_no
+    monkeypatch.setattr(
+        "app.services.order_service._shipment_no_today",
+        lambda: _dt.now().strftime("%Y%m%d"))
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    assert next_shipment_order_no(db, b.id) == f"{_dt.now():%Y%m%d}-001"
+    o = Order(business_id=b.id, internal_order_number=f"{_dt.now():%Y%m%d}-001",
+              shopify_order_id="S1", order_date=_dt.now(_dt.now().astimezone().tzinfo))
+    db.add(o)
+    db.commit()
+    assert next_shipment_order_no(db, b.id) == f"{_dt.now():%Y%m%d}-002"
+    db.close()
+
+
+def test_next_shipment_order_no_ignores_other_days_and_shapes(monkeypatch):
+    from datetime import datetime as _dt
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.services.order_service import next_shipment_order_no
+    today = _dt.now().strftime("%Y%m%d")
+    monkeypatch.setattr("app.services.order_service._shipment_no_today",
+                        lambda: today)
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    for num in ("19990101-099", "MAN-AB12CD34", "ORD-77", f"{today}-007"):
+        db.add(Order(business_id=b.id, internal_order_number=num,
+                     shopify_order_id=f"S{num}", order_date=_dt.now()))
+    db.commit()
+    assert next_shipment_order_no(db, b.id) == f"{today}-008"
+    db.close()
+
+
+def test_next_shipment_order_no_is_per_business(monkeypatch):
+    from datetime import datetime as _dt
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.services.order_service import next_shipment_order_no
+    today = _dt.now().strftime("%Y%m%d")
+    monkeypatch.setattr("app.services.order_service._shipment_no_today",
+                        lambda: today)
+    mk = _mk()
+    db = mk()
+    b1 = Business(name="B1", email="b1@t.in")
+    b2 = Business(name="B2", email="b2@t.in")
+    db.add_all([b1, b2])
+    db.commit()
+    db.refresh(b1)
+    db.refresh(b2)
+    db.add(Order(business_id=b1.id, internal_order_number=f"{today}-004",
+                 shopify_order_id="S1", order_date=_dt.now()))
+    db.commit()
+    assert next_shipment_order_no(db, b1.id) == f"{today}-005"
+    assert next_shipment_order_no(db, b2.id) == f"{today}-001"
+    db.close()
