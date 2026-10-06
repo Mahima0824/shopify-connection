@@ -224,6 +224,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     from app.services import shipsagar_service as ss
     from app.services.order_service import (ShipmentOrderNoError,
                                             assign_shipment_order_no)
+    from app.services.shipment_service import is_awaiting_awb
     if u.get("role") not in ("ADMIN", "WAREHOUSE"):
         return _err(403, "FORBIDDEN", "Warehouse role required")
     bid = u.get("business_id")
@@ -252,7 +253,13 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     order = db.query(Order).filter_by(id=body.order_id, business_id=bid).first()
     if order is None:
         return _err(404, "ORDER_NOT_FOUND", "Order not found in this business.")
-    if db.query(Shipment).filter_by(order_id=order.id).first() is not None:
+    # An order synced from Shopify already has an awaiting shipment, carrying a
+    # placeholder AWB. That row is a placeholder to be filled in, not a shipment
+    # to refuse, so the push adopts it instead of creating a second row. Any
+    # other existing shipment is still SHIPMENT_EXISTS: a real one means the
+    # order was already pushed, and pushing again would double-book the AWB.
+    awaiting = db.query(Shipment).filter_by(order_id=order.id).first()
+    if awaiting is not None and not is_awaiting_awb(awaiting.awb_number):
         return _err(400, "SHIPMENT_EXISTS", "This order already has a shipment.")
     if db.query(Shipment).filter_by(
             business_id=bid, carrier_code=courier_code,
@@ -274,17 +281,28 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     except ShipmentOrderNoError as exc:
         return _err(503, "SHIPMENT_ORDER_NO_UNAVAILABLE", str(exc))
 
-    parcel = Parcel(business_id=bid, order_id=order.id,
-                    parcel_code=tracking_no, barcode_value=tracking_no,
-                    status="CREATED")
-    db.add(parcel)
-    db.flush()
-    shipment = Shipment(business_id=bid, order_id=order.id, parcel_id=parcel.id,
-                        carrier_code=courier_code, awb_number=tracking_no,
-                        tracking_status="READY_TO_SHIP",
-                        shipped_at=datetime.now(timezone.utc))
-    db.add(shipment)
-    db.flush()
+    if awaiting is not None:
+        # Adopt the awaiting row: replace the placeholder with the real AWB and
+        # keep its parcel, so the parcel_id -> shipment_id -> awb_number chain
+        # the shipment model documents is never broken by a push.
+        shipment = awaiting
+        shipment.carrier_code = courier_code
+        shipment.awb_number = tracking_no
+        shipment.tracking_status = "READY_TO_SHIP"
+        shipment.shipped_at = datetime.now(timezone.utc)
+        db.flush()
+    else:
+        parcel = Parcel(business_id=bid, order_id=order.id,
+                        parcel_code=tracking_no, barcode_value=tracking_no,
+                        status="CREATED")
+        db.add(parcel)
+        db.flush()
+        shipment = Shipment(business_id=bid, order_id=order.id, parcel_id=parcel.id,
+                            carrier_code=courier_code, awb_number=tracking_no,
+                            tracking_status="READY_TO_SHIP",
+                            shipped_at=datetime.now(timezone.utc))
+        db.add(shipment)
+        db.flush()
 
     if not ss.is_configured():
         shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
@@ -479,11 +497,15 @@ def shipment_history(sid: str, db: Session = Depends(get_db),
     from app.carriers.base import CarrierError
     from app.carriers.registry import provider_for_shipment
     from app.models.shipment import Shipment
+    from app.services.shipment_service import is_awaiting_awb
     s = db.query(Shipment).filter_by(id=sid, business_id=u.get("business_id")).first()
     if s is None:
         return _err(404, "SHIPMENT_NOT_FOUND", "Shipment not found")
     awb = (s.awb_number or "").strip()
-    if not awb:
+    # is_awaiting_awb, not `if not awb`: an order synced from Shopify arrives
+    # with a placeholder AWB, and asking ShipSagar to track a placeholder would
+    # report scans for a tracking number that was never issued.
+    if is_awaiting_awb(awb):
         return _err(400, "NO_TRACKING_NUMBER",
                     "This shipment has no tracking number yet.")
     try:

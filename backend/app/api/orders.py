@@ -72,9 +72,15 @@ def _push_state(s, refused) -> str:
     carrier_code, not on push_state. A fifth value such as "manual" was
     considered and rejected: it would push a carrier-code detail into the state
     machine, and carrier_code is already on the payload for exactly this decision.
+
+    An awaiting shipment carries a placeholder AWB rather than an empty one -
+    shipments is UNIQUE(business_id, carrier_code, awb_number), so an empty AWB
+    capped a tenant at one awaiting shipment. is_awaiting_awb covers the
+    placeholder and the empty string, so this test is unchanged in meaning.
     """
+    from app.services import shipment_service
     awb = (getattr(s, "awb_number", "") or "").strip()
-    if not awb:
+    if not awb or shipment_service.is_awaiting_awb(awb):
         return "awaiting"
     tracking_id = (getattr(s, "shipsagar_tracking_id", "") or "").strip()
     if not tracking_id or tracking_id.startswith("SS-STUB-"):
@@ -85,6 +91,8 @@ def _push_state(s, refused) -> str:
 
 
 def _shipment_dict(s, refused) -> dict:
+    from app.services import shipment_service
+
     def iso(v):
         try:
             return v.isoformat() if v is not None else None
@@ -95,8 +103,10 @@ def _shipment_dict(s, refused) -> dict:
     return {
         "id": s.id,
         # None, not "": the field is nullable downstream and an empty string
-        # would read as a tracking number that happens to be blank.
-        "awb_number": awb or None,
+        # would read as a tracking number that happens to be blank. The awaiting
+        # placeholder is not a tracking number either, so it is masked the same
+        # way - the Orders page shows Add Shipment instead of a link.
+        "awb_number": None if shipment_service.is_awaiting_awb(awb) else awb,
         "carrier_code": getattr(s, "carrier_code", None),
         "tracking_status": getattr(s, "tracking_status", None),
         "current_location": getattr(s, "current_location", None),
