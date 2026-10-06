@@ -164,56 +164,56 @@ export default function GeneralTrackingPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Order Tracking Center</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Order Tracking Center</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time multi-carrier shipment status, India Post &amp; DTDC tracking events, and exception monitoring
           </p>
         </div>
-        <button onClick={runSweep} disabled={sweeping} className="btn-secondary">
+        <button onClick={runSweep} disabled={sweeping} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">
           {sweeping ? "Running Sweep…" : "Run Global Tracking Sweep"}
         </button>
       </div>
 
       {sweepResult && (
-        <div className="badge-pill" style={{ padding: "10px 16px", borderRadius: "8px", background: "var(--card)" }}>
+        <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]" style={{ padding: "10px 16px", borderRadius: "8px", background: "var(--card)" }}>
           {sweepResult}
         </div>
       )}
 
       {/* KPI Band */}
-      <div className="cols-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-        <div className="content-card" style={{ borderTop: "4px solid var(--accent, #3b82f6)" }}>
+      <div className="grid grid-cols-1 gap-4 min-[769px]:grid-cols-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--accent, #3b82f6)" }}>
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted)" }}>Total Tracked</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.total}</div>
         </div>
-        <div className="content-card" style={{ borderTop: "4px solid var(--error)" }}>
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--error)" }}>
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted)" }}>Critical / NDR</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.critical}</div>
         </div>
-        <div className="content-card" style={{ borderTop: "4px solid var(--warning)" }}>
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--warning)" }}>
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted)" }}>Delayed / Warning</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.warn}</div>
         </div>
-        <div className="content-card" style={{ borderTop: "4px solid var(--success)" }}>
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: "4px solid var(--success)" }}>
           <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted)" }}>On Track</div>
           <div style={{ fontSize: "32px", fontWeight: 800 }}>{counts.ok}</div>
         </div>
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="content-card" style={{ padding: "16px 24px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
         <input
-          className="input-control"
+          className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by Order #, Courier AWB, or Barcode…"
           aria-label="Search order tracking"
           style={{ flex: 2, minWidth: "240px" }}
         />
-        <select className="input-control" value={carrier} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={carrier} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier Filter" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All Carriers</option>
           <option value="INDIA_POST">India Post</option>
           <option value="DTDC">DTDC</option>
@@ -223,13 +223,13 @@ export default function GeneralTrackingPage() {
             !["INDIA_POST", "DTDC", "TIRUPATI", "MANUAL"].includes(c) && <option key={c}>{c}</option>
           ))}
         </select>
-        <select className="input-control" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status Filter" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All Statuses</option>
           {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "NDR_REATTEMPT", "DELIVERY_EXCEPTION", "RTO_INITIATED", "RTO_DELIVERED", "RETURNED", "LOST"].map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
-        <select className="input-control" value={band} onChange={(e) => setBand(e.target.value)} aria-label="Band Filter" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={band} onChange={(e) => setBand(e.target.value)} aria-label="Band Filter" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All Bands</option>
           <option value="critical">Critical</option>
           <option value="warn">Warning</option>
@@ -237,7 +237,7 @@ export default function GeneralTrackingPage() {
         </select>
       </div>
 
-      {error && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
 
       {/* Main Table */}
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
@@ -246,7 +246,7 @@ export default function GeneralTrackingPage() {
             No order tracking records found. Try searching for another Order # or AWB.
           </p>
         ) : (
-          <table className="modern-table" style={{ border: "none" }}>
+          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]" style={{ border: "none" }}>
             <thead>
               <tr>
                 <th>Order</th>
@@ -263,23 +263,23 @@ export default function GeneralTrackingPage() {
                   <td style={{ fontWeight: 600 }}>{names[s.id] || "Order"}</td>
                   <td style={{ fontWeight: 600, fontFamily: "monospace" }}>{s.awb_number}</td>
                   <td>
-                    <span className="badge-pill">{s.carrier_code}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{s.carrier_code}</span>
                   </td>
                   <td>
-                    <span className="badge-pill">{s.tracking_status}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{s.tracking_status}</span>
                     {cool[s.id] && <div role="status" style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px" }}>{cool[s.id]}</div>}
                   </td>
                   <td style={{ color: "var(--muted)", fontSize: "13px" }}>
                     {s.current_location || s.last_checkpoint_message || "-"}
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button onClick={() => refreshShipment(s.id)} disabled={!!syncing[s.id]} className="btn-secondary" style={{ marginRight: "8px" }}>
+                    <button onClick={() => refreshShipment(s.id)} disabled={!!syncing[s.id]} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginRight: "8px" }}>
                       {syncing[s.id] ? "Syncing…" : "Sync"}
                     </button>
-                    <button onClick={() => openTimeline(s)} className="btn-secondary" style={{ marginRight: "8px" }}>
+                    <button onClick={() => openTimeline(s)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginRight: "8px" }}>
                       Timeline
                     </button>
-                    <Link to={`/shipments/${s.id}`} className="btn-secondary">
+                    <Link to={`/shipments/${s.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">
                       Details
                     </Link>
                   </td>
@@ -309,7 +309,7 @@ export default function GeneralTrackingPage() {
           onClick={() => setSelectedShipment(null)}
         >
           <div
-            className="content-card"
+            className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"
             style={{ maxWidth: "600px", width: "100%", maxHeight: "80vh", overflowY: "auto", background: "var(--card)", padding: "24px" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -322,7 +322,7 @@ export default function GeneralTrackingPage() {
                   Carrier: {selectedShipment.carrier_code} | Status: {selectedShipment.tracking_status}
                 </p>
               </div>
-              <button onClick={() => setSelectedShipment(null)} className="btn-secondary">Close</button>
+              <button onClick={() => setSelectedShipment(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Close</button>
             </div>
 
             {loadingEvents ? (

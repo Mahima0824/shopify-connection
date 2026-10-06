@@ -35,7 +35,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="fullscreen-center" style={{
+    <div className="min-h-screen min-h-dvh" style={{
       width: "100%",
       display: "flex",
       alignItems: "center",
@@ -63,7 +63,7 @@ export default function LoginPage() {
           }}>
             R
           </div>
-          <h1 className="display" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px" }}>
             Sign in to access your Shopify Order Reconciliation platform
           </p>
@@ -71,7 +71,7 @@ export default function LoginPage() {
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" className="badge-danger" style={{
+          <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{
             padding: "12px 16px",
             borderRadius: "12px",
             fontSize: "14px",
@@ -92,7 +92,7 @@ export default function LoginPage() {
               Email Address
             </label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               type="email"
               placeholder="name@company.com"
               value={email}
@@ -106,7 +106,7 @@ export default function LoginPage() {
               Password
             </label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               type="password"
               placeholder="••••••••"
               value={password}
@@ -117,7 +117,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="btn-primary"
+            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
             disabled={loading}
             style={{ marginTop: "8px", padding: "14px", minHeight: "44px" }}
           >
@@ -133,7 +133,7 @@ export default function LoginPage() {
           <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
             <button
               type="button"
-              className="btn-secondary"
+              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
               style={{ fontSize: "12px", padding: "6px 12px" }}
               onClick={() => fillDemoCreds("admin@t.in")}
             >
@@ -141,7 +141,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
               style={{ fontSize: "12px", padding: "6px 12px" }}
               onClick={() => fillDemoCreds("dash@t.in")}
             >

@@ -117,40 +117,40 @@ export default function DispatchPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
 
      
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Warehouse Dispatch Station</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Warehouse Dispatch Station</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Scan physical parcel barcodes to record dispatch events and update Shopify order state
         </p>
       </div>
 
       {/* Scanner card */}
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
               BARCODE INPUT (SCANNER ACTIVE)
             </label>
-            <span className="badge-pill" style={{ fontSize: "11px" }}>Press / to focus</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]" style={{ fontSize: "11px" }}>Press / to focus</span>
           </div>
 
           <div style={{ display: "flex", gap: "12px" }}>
             <input
               ref={ref}
               autoFocus
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Scan or type barcode (e.g. P00000001)..."
               aria-label="Parcel barcode"
               style={{ fontSize: "20px", fontWeight: 600, padding: "16px 20px" }}
             />
-            <button type="submit" className="btn-primary" style={{ padding: "16px 28px", whiteSpace: "nowrap" }}>
+            <button type="submit" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" style={{ padding: "16px 28px", whiteSpace: "nowrap" }}>
               Confirm Dispatch
             </button>
           </div>
@@ -165,9 +165,9 @@ export default function DispatchPage() {
       </div>
 
       {/* Camera + manual entry */}
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
         <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
-          <button type="button" className="btn-secondary" onClick={() => setCamOn((v) => !v)}>
+          <button type="button" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" onClick={() => setCamOn((v) => !v)}>
             {camOn ? "Stop camera" : "Use camera"}
           </button>
           <span style={{ fontSize: "13px", color: "var(--muted)" }}>Phone camera scanning via ZXing (Code128).</span>
@@ -184,7 +184,7 @@ export default function DispatchPage() {
 
       {/* Courier booking */}
       {parcel && (
-        <div className="content-card">
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
           <h2 style={{ fontSize: "16px", marginBottom: "4px", color: "var(--muted)", textTransform: "uppercase" }}>
             Courier booking
           </h2>
@@ -193,7 +193,7 @@ export default function DispatchPage() {
           </p>
           {existing ? (
             <p role="status" style={{ fontSize: "14px" }}>
-              <span className="badge badge-success">BOOKED</span>{" "}
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]">BOOKED</span>{" "}
               <span style={{ fontWeight: 600 }}>{existing.carrier_code} · {existing.awb_number}</span>{" "}
               <span style={{ color: "var(--muted)" }}>— shipment exists, booking skipped.</span>
             </p>
@@ -203,14 +203,14 @@ export default function DispatchPage() {
                 value={courier}
                 onChange={(e) => setCourier(e.target.value)}
                 aria-label="Courier"
-                className="input-control"
+                className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                 style={{ width: "180px" }}
                 disabled={booking === "BOOKING"}
               >
                 {COURIERS.map((c) => <option key={c}>{c}</option>)}
               </select>
               <input
-                className="input-control"
+                className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                 value={awb}
                 onChange={(e) => setAwb(e.target.value)}
                 placeholder="AWB number (required for MANUAL)"
@@ -222,15 +222,15 @@ export default function DispatchPage() {
                 type="button"
                 onClick={bookShipment}
                 disabled={booking === "BOOKING"}
-                className="btn-primary"
+                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
               >
                 {booking === "BOOKING" ? "Booking…" : "Book shipment"}
               </button>
               {booking === "BOOKED" && (
-                <span role="status" className="badge badge-success">BOOKED</span>
+                <span role="status" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]">BOOKED</span>
               )}
               {booking === "BOOKING_ERROR" && bookingError && (
-                <span role="alert" className="badge-danger" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
+                <span role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "8px 12px", borderRadius: "12px", fontSize: "13px" }}>
                   {bookingError}
                 </span>
               )}
@@ -240,10 +240,10 @@ export default function DispatchPage() {
       )}
 
       {/* Grid: Last Scanned Card & History */}
-      <div className="cols-2" style={{ gap: "24px" }}>
+      <div className="grid grid-cols-1 gap-4 min-[769px]:grid-cols-2" style={{ gap: "24px" }}>
 
         {/* Last Dispatched Card */}
-        <div className="content-card">
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
           <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Last Dispatched Parcel
           </h2>
@@ -251,8 +251,8 @@ export default function DispatchPage() {
             <div>
               <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--ink)" }}>{last.order}</div>
               <div style={{ display: "flex", gap: "12px", marginTop: "8px", alignItems: "center" }}>
-                <span className="badge badge-neutral">{last.barcode}</span>
-                <span className="badge badge-success">{last.status}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--neutral-bg)] text-[var(--muted)]">{last.barcode}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]">{last.status}</span>
               </div>
             </div>
           ) : (
@@ -261,7 +261,7 @@ export default function DispatchPage() {
         </div>
 
         {/* Recent Session History */}
-        <div className="content-card">
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
           <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>
             Recent Session Barcodes
           </h2>

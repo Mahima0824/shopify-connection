@@ -63,7 +63,7 @@ export default function Timeline({ items }: { items: TNode[] }) {
                   flexShrink: 0,
                 }}
               />
-              <div className="content-card" style={{ flex: 1, padding: "12px 16px" }}>
+              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ flex: 1, padding: "12px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14px" }}>{n.label}</span>
                   {fmtTime(n.at) && <span style={{ fontSize: "12px", color: "var(--muted)" }}>{fmtTime(n.at)}</span>}

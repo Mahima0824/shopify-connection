@@ -6,207 +6,190 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn's theme tokens live under the --sc- prefix (see the --sc-* block below the
-   legacy rules) so they cannot shadow this app's own --accent / --muted / --card.
-   @theme inline maps Tailwind's color-* utilities onto the --sc-* names. */
-:root{
-  --canvas:#ffffff; --surface:#f8fafc; --card:#ffffff;
-  --ink:#0f172a; --body:#334155; --muted:#64748b; --hairline:#e2e8f0;
-  --accent:#0f7665; --accent-strong:#115e59; --on-accent:#ffffff;
-  --success:#15803d; --warning:#b45309; --error:#b91c1c;
-  --success-bg:#dcfce7; --warning-bg:#fef3c7; --error-bg:#fee2e2; --info-bg:#e0f2fe; --neutral-bg:#f1f5f9;
-  --text-muted:#64748b; --border-color:#e2e8f0;
+/* shadcn's theme tokens live under the --sc- prefix so they cannot shadow this
+   app's own --accent / --muted / --card, which the converted markup still reads
+   through var(). @theme inline maps Tailwind's color-* utilities onto --sc-*. */
+:root {
+  --sc-background: oklch(1 0 0); --sc-foreground: oklch(0.147 0.004 49.25);
+  --sc-card: oklch(1 0 0); --sc-card-foreground: oklch(0.147 0.004 49.25);
+  --sc-popover: oklch(1 0 0); --sc-popover-foreground: oklch(0.147 0.004 49.25);
+  --sc-primary: oklch(0.5 0.134 242.749); --sc-primary-foreground: oklch(0.977 0.013 236.62);
+  --sc-secondary: oklch(0.967 0.001 286.375); --sc-secondary-foreground: oklch(0.21 0.006 285.885);
+  --sc-muted: oklch(0.967 0.001 286.375); --sc-muted-foreground: oklch(0.553 0.013 58.071);
+  --sc-accent: oklch(0.97 0.001 106.424); --sc-accent-foreground: oklch(0.216 0.006 56.043);
+  --sc-destructive: oklch(0.577 0.245 27.325); --sc-border: oklch(0.923 0.003 48.717);
+  --sc-input: oklch(0.923 0.003 48.717); --sc-ring: oklch(0.709 0.01 56.259);
+  --sc-chart-1: oklch(0.828 0.111 230.318); --sc-chart-2: oklch(0.685 0.169 237.323);
+  --sc-chart-3: oklch(0.588 0.158 241.966); --sc-chart-4: oklch(0.5 0.134 242.749);
+  --sc-chart-5: oklch(0.443 0.11 240.79); --sc-radius: 0.45rem;
+  --sc-sidebar: oklch(0.985 0.001 106.423); --sc-sidebar-foreground: oklch(0.147 0.004 49.25);
+  --sc-sidebar-primary: oklch(0.588 0.158 241.966); --sc-sidebar-primary-foreground: oklch(0.977 0.013 236.62);
+  --sc-sidebar-accent: oklch(0.97 0.001 106.424); --sc-sidebar-accent-foreground: oklch(0.216 0.006 56.043);
+  --sc-sidebar-border: oklch(0.923 0.003 48.717); --sc-sidebar-ring: oklch(0.709 0.01 56.259);
 }
-:root{
-  --sc-background:oklch(1 0 0); --sc-foreground:oklch(0.147 0.004 49.25);
-  --sc-card:oklch(1 0 0); --sc-card-foreground:oklch(0.147 0.004 49.25);
-  --sc-popover:oklch(1 0 0); --sc-popover-foreground:oklch(0.147 0.004 49.25);
-  --sc-primary:oklch(0.5 0.134 242.749); --sc-primary-foreground:oklch(0.977 0.013 236.62);
-  --sc-secondary:oklch(0.967 0.001 286.375); --sc-secondary-foreground:oklch(0.21 0.006 285.885);
-  --sc-muted:oklch(0.967 0.001 286.375); --sc-muted-foreground:oklch(0.553 0.013 58.071);
-  --sc-accent:oklch(0.97 0.001 106.424); --sc-accent-foreground:oklch(0.216 0.006 56.043);
-  --sc-destructive:oklch(0.577 0.245 27.325); --sc-border:oklch(0.923 0.003 48.717);
-  --sc-input:oklch(0.923 0.003 48.717); --sc-ring:oklch(0.709 0.01 56.259);
-  --sc-chart-1:oklch(0.828 0.111 230.318); --sc-chart-2:oklch(0.685 0.169 237.323);
-  --sc-chart-3:oklch(0.588 0.158 241.966); --sc-chart-4:oklch(0.5 0.134 242.749);
-  --sc-chart-5:oklch(0.443 0.11 240.79); --sc-radius:0.45rem;
-  --sc-sidebar:oklch(0.985 0.001 106.423); --sc-sidebar-foreground:oklch(0.147 0.004 49.25);
-  --sc-sidebar-primary:oklch(0.588 0.158 241.966); --sc-sidebar-primary-foreground:oklch(0.977 0.013 236.62);
-  --sc-sidebar-accent:oklch(0.97 0.001 106.424); --sc-sidebar-accent-foreground:oklch(0.216 0.006 56.043);
-  --sc-sidebar-border:oklch(0.923 0.003 48.717); --sc-sidebar-ring:oklch(0.709 0.01 56.259);
-}
-body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;}
-a,a:visited{text-decoration:none;}
-.tnum{font-variant-numeric:tabular-nums;}
-.display{font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;font-weight:700;letter-spacing:-0.02em;color:var(--ink);}
-.display-xl{font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;font-weight:700;font-size:56px;line-height:1.05;letter-spacing:-0.02em;color:var(--ink);}
-.container{max-width:1280px;margin:0 auto;padding:0 24px;}
-.section{padding:96px 0;}
-.btn-primary{background:var(--accent);color:var(--on-accent);padding:12px 20px;min-height:44px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
-.btn-primary:active{transform:translateY(1px);}
-.btn-secondary{background:#ffffff;color:var(--ink);border:1px solid var(--hairline);padding:10px 20px;min-height:44px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
-.btn-on-color{background:var(--on-accent);color:var(--ink);padding:12px 20px;min-height:44px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
-.input-control{width:100%;background:#ffffff;border:1px solid var(--hairline);color:var(--ink);padding:10px 14px;border-radius:8px;font-size:16px;min-height:44px;}
-.input-control:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
-a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-.badge-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;font-size:13px;font-weight:500;background:var(--neutral-bg);color:var(--ink);}
-.feature-card-pink{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.feature-card-pink h1,.feature-card-pink h2,.feature-card-pink h3{color:var(--ink);}
-.feature-card-teal{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.feature-card-teal h1,.feature-card-teal h2,.feature-card-teal h3{color:var(--ink);}
-.feature-card-lavender{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.feature-card-peach{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.feature-card-ochre{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.feature-card-cream{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:32px;color:var(--ink);}
-.content-card{background:#ffffff;border:1px solid var(--hairline);border-radius:12px;padding:24px;color:var(--ink);}
-
-/* Cream maps for classes Task 6-7 still reference this cycle. */
-.glass-card{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:24px;color:var(--ink);}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:600;background:var(--neutral-bg);color:var(--ink);}
-.badge-success{background:var(--success-bg);color:var(--ink);}
-.badge-warning{background:var(--warning-bg);color:var(--ink);}
-.badge-danger{background:var(--error-bg);color:var(--ink);}
-.badge-info{background:var(--info-bg);color:var(--ink);}
-.badge-neutral{background:var(--neutral-bg);color:var(--muted);}
-.modern-table{width:100%;border-collapse:separate;border-spacing:0;}
-.modern-table thead th{background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:14px 16px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--hairline);}
-.modern-table td{padding:16px;border-bottom:1px solid var(--hairline);font-size:14px;color:var(--ink);vertical-align:middle;}
-.modern-table tbody tr:hover{background:var(--surface);}
-.app-container{display:flex;min-height:100vh;background:var(--canvas);}
-.sidebar{width:260px;background:var(--canvas);border-right:1px solid var(--hairline);display:flex;flex-direction:column;padding:24px 16px;}
-.main-content{flex:1;padding:32px;overflow-y:auto;background:var(--canvas);}
-
-/* Grid + topnav base hooks (Task 6: class-driven so breakpoints apply). */
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;}
-.hero-grid{display:grid;grid-template-columns:7fr 5fr;gap:32px;align-items:center;}
-.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:32px;}
-.topnav-links{display:flex;gap:20px;font-size:14px;font-weight:500;overflow-x:auto;scrollbar-width:none;max-width:100%;}
-.topnav-menu-btn{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink);min-width:44px;min-height:44px;}
-.fullscreen-center{min-height:100vh;min-height:100dvh;}
-
-@keyframes fadeRise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
-.reveal{opacity:0;}
-.reveal.is-visible{animation:fadeRise 250ms ease-out forwards;}
-@media (prefers-reduced-motion: reduce){.reveal{opacity:1;}.reveal.is-visible{animation:none;opacity:1;transform:none;}}
-
-/* Responsive breakpoints (Task 6). !important beats page-level inline grid styles. */
-@media (max-width: 1024px){.grid-3{grid-template-columns:repeat(2,1fr) !important;}.grid-4{grid-template-columns:repeat(2,1fr) !important;}}
-@media (max-width: 768px){.hero-grid{grid-template-columns:1fr !important;}.footer-grid{grid-template-columns:1fr !important;}.display-xl{font-size:36px !important;}.grid-3,.grid-4{grid-template-columns:1fr !important;}.topnav-links{display:none !important;}.topnav-menu-btn{display:block !important;}}
-
-/* Label printing: hide app chrome, one compact label per block. */
-@media print {
-  header, footer, nav, .no-print { display: none !important; }
-  main { padding: 0 !important; }
-  body { background: #fff !important; }
-  .label { break-inside: avoid; page-break-inside: avoid; margin: 0 auto 16px auto; max-width: 340px; }
-  .print-container { display: block !important; }
-}
-
-/* Mobile responsive layer (skill: ui-ux-pro-max — collapsible grids, small-screen spacing). */
-.cols-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.cols-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-@media (max-width: 1024px){.cols-3{grid-template-columns:1fr 1fr;}}
-@media (max-width: 768px){
-  .cols-2,.cols-3{grid-template-columns:1fr;}
-  .section{padding:64px 0;}
-  .feature-card-pink,.feature-card-teal,.feature-card-lavender,.feature-card-peach,.feature-card-ochre,.feature-card-cream{padding:24px;}
-  .content-card,.glass-card{padding:20px;}
-}
-@media (max-width: 480px){
-  .container{padding:0 16px;}
-  .display-xl{font-size:32px !important;}
-  .section{padding:48px 0;}
-  .btn-primary,.btn-secondary,.btn-on-color{width:100%;}
-}
-.nav-drop{position:relative;}
-.nav-drop-menu{display:none;}
-.nav-drop.open .nav-drop-menu, .nav-drop:hover .nav-drop-menu{display:block;}
 
 .dark {
-  --sc-background:oklch(0.147 0.004 49.25);
-  --sc-foreground:oklch(0.985 0.001 106.423);
-  --sc-card:oklch(0.216 0.006 56.043);
-  --sc-card-foreground:oklch(0.985 0.001 106.423);
-  --sc-popover:oklch(0.216 0.006 56.043);
-  --sc-popover-foreground:oklch(0.985 0.001 106.423);
-  --sc-primary:oklch(0.443 0.11 240.79);
-  --sc-primary-foreground:oklch(0.977 0.013 236.62);
-  --sc-secondary:oklch(0.274 0.006 286.033);
-  --sc-secondary-foreground:oklch(0.985 0 0);
-  --sc-muted:oklch(0.268 0.007 34.298);
-  --sc-muted-foreground:oklch(0.709 0.01 56.259);
-  --sc-accent:oklch(0.268 0.007 34.298);
-  --sc-accent-foreground:oklch(0.985 0.001 106.423);
-  --sc-destructive:oklch(0.704 0.191 22.216);
-  --sc-border:oklch(1 0 0 / 10%);
-  --sc-input:oklch(1 0 0 / 15%);
-  --sc-ring:oklch(0.553 0.013 58.071);
-  --sc-chart-1:oklch(0.828 0.111 230.318);
-  --sc-chart-2:oklch(0.685 0.169 237.323);
-  --sc-chart-3:oklch(0.588 0.158 241.966);
-  --sc-chart-4:oklch(0.5 0.134 242.749);
-  --sc-chart-5:oklch(0.443 0.11 240.79);
-  --sc-sidebar:oklch(0.216 0.006 56.043);
-  --sc-sidebar-foreground:oklch(0.985 0.001 106.423);
-  --sc-sidebar-primary:oklch(0.685 0.169 237.323);
-  --sc-sidebar-primary-foreground:oklch(0.293 0.066 243.157);
-  --sc-sidebar-accent:oklch(0.268 0.007 34.298);
-  --sc-sidebar-accent-foreground:oklch(0.985 0.001 106.423);
-  --sc-sidebar-border:oklch(1 0 0 / 10%);
-  --sc-sidebar-ring:oklch(0.553 0.013 58.071);
+  --sc-background: oklch(0.147 0.004 49.25);
+  --sc-foreground: oklch(0.985 0.001 106.423);
+  --sc-card: oklch(0.216 0.006 56.043);
+  --sc-card-foreground: oklch(0.985 0.001 106.423);
+  --sc-popover: oklch(0.216 0.006 56.043);
+  --sc-popover-foreground: oklch(0.985 0.001 106.423);
+  --sc-primary: oklch(0.443 0.11 240.79);
+  --sc-primary-foreground: oklch(0.977 0.013 236.62);
+  --sc-secondary: oklch(0.274 0.006 286.033);
+  --sc-secondary-foreground: oklch(0.985 0 0);
+  --sc-muted: oklch(0.268 0.007 34.298);
+  --sc-muted-foreground: oklch(0.709 0.01 56.259);
+  --sc-accent: oklch(0.268 0.007 34.298);
+  --sc-accent-foreground: oklch(0.985 0.001 106.423);
+  --sc-destructive: oklch(0.704 0.191 22.216);
+  --sc-border: oklch(1 0 0 / 10%);
+  --sc-input: oklch(1 0 0 / 15%);
+  --sc-ring: oklch(0.553 0.013 58.071);
+  --sc-chart-1: oklch(0.828 0.111 230.318);
+  --sc-chart-2: oklch(0.685 0.169 237.323);
+  --sc-chart-3: oklch(0.588 0.158 241.966);
+  --sc-chart-4: oklch(0.5 0.134 242.749);
+  --sc-chart-5: oklch(0.443 0.11 240.79);
+  --sc-sidebar: oklch(0.216 0.006 56.043);
+  --sc-sidebar-foreground: oklch(0.985 0.001 106.423);
+  --sc-sidebar-primary: oklch(0.685 0.169 237.323);
+  --sc-sidebar-primary-foreground: oklch(0.293 0.066 243.157);
+  --sc-sidebar-accent: oklch(0.268 0.007 34.298);
+  --sc-sidebar-accent-foreground: oklch(0.985 0.001 106.423);
+  --sc-sidebar-border: oklch(1 0 0 / 10%);
+  --sc-sidebar-ring: oklch(0.553 0.013 58.071);
 }
 
 @theme inline {
-  --font-sans:'IBM Plex Sans Variable', sans-serif;
-  --font-heading:'Montserrat Variable', sans-serif;
-  --color-sidebar-ring:var(--sc-sidebar-ring);
-  --color-sidebar-border:var(--sc-sidebar-border);
-  --color-sidebar-accent-foreground:var(--sc-sidebar-accent-foreground);
-  --color-sidebar-accent:var(--sc-sidebar-accent);
-  --color-sidebar-primary-foreground:var(--sc-sidebar-primary-foreground);
-  --color-sidebar-primary:var(--sc-sidebar-primary);
-  --color-sidebar-foreground:var(--sc-sidebar-foreground);
-  --color-sidebar:var(--sc-sidebar);
-  --color-chart-5:var(--sc-chart-5);
-  --color-chart-4:var(--sc-chart-4);
-  --color-chart-3:var(--sc-chart-3);
-  --color-chart-2:var(--sc-chart-2);
-  --color-chart-1:var(--sc-chart-1);
-  --color-ring:var(--sc-ring);
-  --color-input:var(--sc-input);
-  --color-border:var(--sc-border);
-  --color-destructive:var(--sc-destructive);
-  --color-accent-foreground:var(--sc-accent-foreground);
-  --color-accent:var(--sc-accent);
-  --color-muted-foreground:var(--sc-muted-foreground);
-  --color-muted:var(--sc-muted);
-  --color-secondary-foreground:var(--sc-secondary-foreground);
-  --color-secondary:var(--sc-secondary);
-  --color-primary-foreground:var(--sc-primary-foreground);
-  --color-primary:var(--sc-primary);
-  --color-popover-foreground:var(--sc-popover-foreground);
-  --color-popover:var(--sc-popover);
-  --color-card-foreground:var(--sc-card-foreground);
-  --color-card:var(--sc-card);
-  --color-foreground:var(--sc-foreground);
-  --color-background:var(--sc-background);
-  --radius-sm:calc(var(--sc-radius) * 0.6);
-  --radius-md:calc(var(--sc-radius) * 0.8);
-  --radius-lg:var(--sc-radius);
-  --radius-xl:calc(var(--sc-radius) * 1.4);
-  --radius-2xl:calc(var(--sc-radius) * 1.8);
-  --radius-3xl:calc(var(--sc-radius) * 2.2);
-  --radius-4xl:calc(var(--sc-radius) * 2.6);
+  --font-sans: "IBM Plex Sans Variable", sans-serif;
+  --font-heading: "Montserrat Variable", sans-serif;
+  --color-sidebar-ring: var(--sc-sidebar-ring);
+  --color-sidebar-border: var(--sc-sidebar-border);
+  --color-sidebar-accent-foreground: var(--sc-sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sc-sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sc-sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sc-sidebar-primary);
+  --color-sidebar-foreground: var(--sc-sidebar-foreground);
+  --color-sidebar: var(--sc-sidebar);
+  --color-chart-5: var(--sc-chart-5);
+  --color-chart-4: var(--sc-chart-4);
+  --color-chart-3: var(--sc-chart-3);
+  --color-chart-2: var(--sc-chart-2);
+  --color-chart-1: var(--sc-chart-1);
+  --color-ring: var(--sc-ring);
+  --color-input: var(--sc-input);
+  --color-border: var(--sc-border);
+  --color-destructive: var(--sc-destructive);
+  --color-accent-foreground: var(--sc-accent-foreground);
+  --color-accent: var(--sc-accent);
+  --color-muted-foreground: var(--sc-muted-foreground);
+  --color-muted: var(--sc-muted);
+  --color-secondary-foreground: var(--sc-secondary-foreground);
+  --color-secondary: var(--sc-secondary);
+  --color-primary-foreground: var(--sc-primary-foreground);
+  --color-primary: var(--sc-primary);
+  --color-popover-foreground: var(--sc-popover-foreground);
+  --color-popover: var(--sc-popover);
+  --color-card-foreground: var(--sc-card-foreground);
+  --color-card: var(--sc-card);
+  --color-foreground: var(--sc-foreground);
+  --color-background: var(--sc-background);
+  --radius-sm: calc(var(--sc-radius) * 0.6);
+  --radius-md: calc(var(--sc-radius) * 0.8);
+  --radius-lg: var(--sc-radius);
+  --radius-xl: calc(var(--sc-radius) * 1.4);
+  --radius-2xl: calc(var(--sc-radius) * 1.8);
+  --radius-3xl: calc(var(--sc-radius) * 2.2);
+  --radius-4xl: calc(var(--sc-radius) * 2.6);
+}
+
+/* The app's own teal/slate palette. Still the source of truth: the converted
+   markup references these names through var(), which keeps the existing visual
+   design intact while the class names live in the JSX as Tailwind utilities. */
+:root {
+  --canvas: #ffffff; --surface: #f8fafc; --card: #ffffff;
+  --ink: #0f172a; --body: #334155; --muted: #64748b; --hairline: #e2e8f0;
+  --accent: #0f7665; --accent-strong: #115e59; --on-accent: #ffffff;
+  --success: #15803d; --warning: #b45309; --error: #b91c1c;
+  --success-bg: #dcfce7; --warning-bg: #fef3c7; --error-bg: #fee2e2; --info-bg: #e0f2fe; --neutral-bg: #f1f5f9;
+  --text-muted: #64748b; --border-color: #e2e8f0;
+}
+
+/* Everything below is behavioural, not visual. All visual styling moved to
+   Tailwind utilities in the JSX. What stays cannot be a utility because it is
+   either driven by JavaScript (.reveal / .is-visible come from an
+   IntersectionObserver) or is a print-media rule that Tailwind cannot express. */
+
+body {
+  background: var(--canvas);
+  color: var(--body);
+  font-family: var(--font-sans);
+}
+
+a, a:visited {
+  text-decoration: none;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scroll-reveal. The .reveal / .is-visible names are contractual: Reveal.tsx
+   adds .is-visible and tests/nav.test.tsx asserts on both class names. */
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.reveal {
+  opacity: 0;
+}
+
+.reveal.is-visible {
+  animation: fadeRise 250ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; }
+  .reveal.is-visible { animation: none; opacity: 1; transform: none; }
+}
+
+/* Barcode label printing: hide app chrome, keep each label whole on the page.
+   Tailwind has no utility for page-break-inside, so this stays a raw rule. */
+@media print {
+  header, footer, nav, .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .label {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin: 0 auto 16px auto;
+    max-width: 340px;
+  }
+
+  .print-container {
+    display: block !important;
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
   }

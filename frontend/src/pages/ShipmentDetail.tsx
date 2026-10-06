@@ -49,40 +49,40 @@ export default function ShipmentDetailPage() {
       setSyncing(false);
     }
   }
-  if (error) return <div className="container"><p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
-  if (!ship) return <div className="container"><p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading shipment…</p></div>;
+  if (error) return <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"><p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p></div>;
+  if (!ship) return <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"><p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading shipment…</p></div>;
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>{ship.carrier_code} · {ship.awb_number}</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>{ship.carrier_code} · {ship.awb_number}</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
-          <span className="badge-pill">{ship.tracking_status}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{ship.tracking_status}</span>
           <span style={{ marginLeft: "12px" }}>{ship.current_location ?? "No location yet"}</span>
         </p>
         <div style={{ marginTop: "12px", display: "flex", gap: "12px", alignItems: "center" }}>
-          <button onClick={refresh} disabled={syncing} className="btn-secondary">
+          <button onClick={refresh} disabled={syncing} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">
             {syncing ? "Refreshing…" : "Refresh from carrier"}
           </button>
           {syncMsg && <span role="status" style={{ fontSize: "13px" }}>{syncMsg}</span>}
         </div>
       </div>
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Record checkpoint</h2>
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <input className="input-control" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Carrier status text (e.g. Arrived at hub)" aria-label="Status text" style={{ flex: 1 }} />
-          <input className="input-control" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Message (optional)" aria-label="Message" style={{ flex: 1 }} />
-          <button onClick={checkpoint} disabled={!raw.trim()} className="btn-primary">Add checkpoint</button>
+          <input className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Carrier status text (e.g. Arrived at hub)" aria-label="Status text" style={{ flex: 1 }} />
+          <input className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Message (optional)" aria-label="Message" style={{ flex: 1 }} />
+          <button onClick={checkpoint} disabled={!raw.trim()} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">Add checkpoint</button>
         </div>
       </div>
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Correct AWB (admin, audited)</h2>
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <input className="input-control" value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="New AWB" aria-label="New AWB" style={{ flex: 1 }} />
-          <input className="input-control" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" aria-label="Reason" style={{ flex: 1 }} />
-          <button onClick={correct} disabled={!awb.trim() || !reason.trim()} className="btn-secondary">Correct</button>
+          <input className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="New AWB" aria-label="New AWB" style={{ flex: 1 }} />
+          <input className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" aria-label="Reason" style={{ flex: 1 }} />
+          <button onClick={correct} disabled={!awb.trim() || !reason.trim()} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Correct</button>
         </div>
       </div>
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
         <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Tracking events</h2>
         {events.length === 0 ? (
           <p style={{ color: "var(--muted)", fontSize: "14px" }}>No checkpoints yet — record the first one above.</p>

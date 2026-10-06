@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", background: "var(--canvas)" }}>
+      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", background: "var(--canvas)" }}>
         <p style={{ color: "var(--muted)", fontSize: "16px" }}>Loading Executive Dashboard...</p>
       </div>
     );
@@ -58,10 +58,10 @@ export default function DashboardPage() {
 
   if (!data) {
     return (
-      <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
        
         <div>
-          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time Operational Ledger & Financial Reconciliation Metrics
           </p>
@@ -80,13 +80,13 @@ export default function DashboardPage() {
   const { kpis, financials } = data;
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "32px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "32px", background: "var(--canvas)" }}>
 
      
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Executive Dashboard</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Real-time Operational Ledger & Financial Reconciliation Metrics
           </p>
@@ -94,7 +94,7 @@ export default function DashboardPage() {
         <button
           onClick={handleExcelExport}
           disabled={exporting}
-          className="btn-primary"
+          className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
         >
           <span style={{ display: "inline-flex", marginRight: "8px" }}><IconReceipt size={16} /></span>
           {exporting ? "Generating Export..." : "Download Excel Workbook"}
@@ -103,7 +103,7 @@ export default function DashboardPage() {
 
       {/* Operational KPI Grid */}
       <div>
-        <h2 className="display" style={{ fontSize: "18px", marginBottom: "16px" }}>Operational Health</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "18px", marginBottom: "16px" }}>Operational Health</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
           <MetricCard title="Total Orders" value={kpis.orders_total} icon={<IconBox />} subtitle={`${kpis.paid_orders} Paid`} />
           <MetricCard title="Dispatched Scans" value={kpis.dispatched_orders} icon={<IconTag />} subtitle={`${kpis.packed_orders} Packed`} />
@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
       {/* Financial Breakdown Grid */}
       <div>
-        <h2 className="display" style={{ fontSize: "18px", marginBottom: "16px" }}>Financial Summary</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "18px", marginBottom: "16px" }}>Financial Summary</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
           <MetricCard title="Gross Sales" value={`₹${financials.gross_sales.toLocaleString()}`} icon={<IconCoin />} />
           <MetricCard title="Total Tax" value={`₹${financials.total_tax.toLocaleString()}`} icon={<IconReceipt />} />

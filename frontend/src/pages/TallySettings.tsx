@@ -245,13 +245,13 @@ export default function TallySettingsPage() {
   };
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1000px", background: "var(--canvas)" }}>
 
      
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Tally ERP / Prime Integration</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Tally ERP / Prime Integration</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Configure company accounting vouchers, payment gateways, and tax ledgers for idempotent Tally export
         </p>
@@ -265,9 +265,9 @@ export default function TallySettingsPage() {
       )}
 
       {/* Validation gate + workbook export (FE3, additive: mapping form below untouched) */}
-      <div className="content-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div>
-          <h2 className="display" style={{ fontSize: "20px", margin: 0 }}>Validate &amp; Export</h2>
+          <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", margin: 0 }}>Validate &amp; Export</h2>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Validate a period first &mdash; errors block export, warnings do not
           </p>
@@ -275,19 +275,19 @@ export default function TallySettingsPage() {
         <div style={{ display: "flex", gap: "16px", alignItems: "end", flexWrap: "wrap" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "var(--muted)", minWidth: "180px", flex: "0 1 200px" }}>
             From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="input-control" style={{ width: "100%" }} />
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" style={{ width: "100%" }} />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "var(--muted)", minWidth: "180px", flex: "0 1 200px" }}>
             To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="input-control" style={{ width: "100%" }} />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" style={{ width: "100%" }} />
           </label>
-          <button onClick={handleValidate} disabled={validating} className="btn-secondary" style={{ minHeight: 44 }}>
+          <button onClick={handleValidate} disabled={validating} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ minHeight: 44 }}>
             {validating ? "Validating..." : "Validate"}
           </button>
           <button
             onClick={handleWorkbookExport}
             disabled={exporting || validating || blocked}
-            className="btn-primary"
+            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
             style={{ minHeight: 44 }}
             title={blocked ? "Export blocked - fix validation errors first" : "Download validated workbook (.xlsx)"}
           >
@@ -296,12 +296,12 @@ export default function TallySettingsPage() {
         </div>
 
         {validateError && (
-          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-            {validateError} <button onClick={handleValidate} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+          <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+            {validateError} <button onClick={handleValidate} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
           </div>
         )}
         {exportError && (
-          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
             {exportError}
           </div>
         )}
@@ -315,7 +315,7 @@ export default function TallySettingsPage() {
               <span style={{ fontSize: "13px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
                 Validation
               </span>
-              <span className={validation.can_export ? "badge badge-success" : "badge badge-danger"}>
+              <span className={validation.can_export ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--error-bg)] text-[var(--ink)]"}>
                 {validation.can_export ? "PASSED" : "BLOCKED"}
               </span>
               {!validation.can_export && (
@@ -354,14 +354,14 @@ export default function TallySettingsPage() {
       </div>
 
       {/* Mapping Configuration Card */}
-      <div className="content-card">
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
 
-        <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Voucher Types Configuration</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", marginBottom: "16px" }}>Voucher Types Configuration</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Voucher Name</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.voucher_sales || ""}
               onChange={(e) => setMapping({ ...mapping, voucher_sales: e.target.value })}
             />
@@ -369,7 +369,7 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Return Voucher Name</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.voucher_sales_return || ""}
               onChange={(e) => setMapping({ ...mapping, voucher_sales_return: e.target.value })}
             />
@@ -377,19 +377,19 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Credit Note Voucher Name</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.voucher_credit_note || ""}
               onChange={(e) => setMapping({ ...mapping, voucher_credit_note: e.target.value })}
             />
           </div>
         </div>
 
-        <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Ledger Mappings</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", marginBottom: "16px" }}>Ledger Mappings</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Sales Account Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_sales || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_sales: e.target.value })}
             />
@@ -397,7 +397,7 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Razorpay Settlement Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_razorpay || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_razorpay: e.target.value })}
             />
@@ -405,19 +405,19 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>COD Receivable Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_cod || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_cod: e.target.value })}
             />
           </div>
         </div>
 
-        <h2 className="display" style={{ fontSize: "20px", marginBottom: "16px" }}>Tax Ledgers (GST)</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", marginBottom: "16px" }}>Tax Ledgers (GST)</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output CGST Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_cgst || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_cgst: e.target.value })}
             />
@@ -425,7 +425,7 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output SGST Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_sgst || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_sgst: e.target.value })}
             />
@@ -433,7 +433,7 @@ export default function TallySettingsPage() {
           <div style={{ minWidth: 0 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>Output IGST Ledger</label>
             <input
-              className="input-control"
+              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
               value={mapping.ledger_igst || ""}
               onChange={(e) => setMapping({ ...mapping, ledger_igst: e.target.value })}
             />
@@ -442,11 +442,11 @@ export default function TallySettingsPage() {
 
         {/* Save & Export Action Buttons */}
         <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", paddingTop: "16px", borderTop: "1px solid var(--hairline)" }}>
-          <button onClick={handleSave} className="btn-secondary" style={{ padding: "12px 24px" }}>
+          <button onClick={handleSave} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ padding: "12px 24px" }}>
             <span style={{ display: "inline-flex", marginRight: "8px" }}><IconBox size={16} /></span>
             Save Ledger Mappings
           </button>
-          <button onClick={handleTallyExport} disabled={exporting} className="btn-primary" style={{ padding: "12px 28px" }}>
+          <button onClick={handleTallyExport} disabled={exporting} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" style={{ padding: "12px 28px" }}>
             <span style={{ display: "inline-flex", marginRight: "8px" }}><IconReceipt size={16} /></span>
             {exporting ? "Generating Batch..." : "Generate & Download Tally Export Batch"}
           </button>
@@ -457,15 +457,15 @@ export default function TallySettingsPage() {
       {/* Export Batches History */}
       <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <h2 className="display" style={{ fontSize: "18px", margin: 0 }}>Export Batch History</h2>
-          <button onClick={loadBatches} disabled={batchesLoading} className="btn-secondary" style={{ minHeight: 36 }}>
+          <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "18px", margin: 0 }}>Export Batch History</h2>
+          <button onClick={loadBatches} disabled={batchesLoading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ minHeight: 36 }}>
             {batchesLoading ? "Loading..." : "Refresh"}
           </button>
         </div>
 
         {batchesError && (
-          <div role="alert" className="badge-danger" style={{ padding: "12px 16px", margin: "16px 24px 0", borderRadius: "12px" }}>
-            {batchesError} <button onClick={loadBatches} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+          <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", margin: "16px 24px 0", borderRadius: "12px" }}>
+            {batchesError} <button onClick={loadBatches} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
           </div>
         )}
 
@@ -481,7 +481,7 @@ export default function TallySettingsPage() {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table className="modern-table">
+            <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]">
               <thead>
                 <tr>
                   <th>File</th>
@@ -504,7 +504,7 @@ export default function TallySettingsPage() {
                       <td style={{ color: "var(--muted)", fontSize: "13px", whiteSpace: "nowrap" }}>
                         {b.created_at ? new Date(b.created_at).toLocaleString() : "-"}
                       </td>
-                      <td className="tnum" style={{ textAlign: "right" }}>{count}</td>
+                      <td className="tabular-nums" style={{ textAlign: "right" }}>{count}</td>
                       <td>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                           <SeverityBadge severity={sev} />
@@ -518,7 +518,7 @@ export default function TallySettingsPage() {
                           <button
                             onClick={() => handleMarkImported(b.id)}
                             disabled={markingId === b.id}
-                            className="btn-secondary"
+                            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
                             aria-label={`Mark imported ${b.id}`}
                           >
                             {markingId === b.id ? "Marking..." : "Mark imported"}

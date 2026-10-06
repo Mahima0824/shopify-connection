@@ -19,22 +19,22 @@ export default function CostsPage() {
     load();
   }
   return (
-    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
+    <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Cost configuration</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Cost configuration</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Manual cost inputs feed monthly profitability — past months stay frozen.</p>
       </div>
-      <div className="content-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {items.map((i, ix) => (
           <div key={i.key}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--muted)", marginBottom: "6px" }}>{i.key} ({i.source})
-              <input type="number" value={i.amount} aria-label={i.key} className="input-control"
+              <input type="number" value={i.amount} aria-label={i.key} className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                 onChange={(e) => setItems((s) => s.map((x, jx) => (jx === ix ? { ...x, amount: e.target.value } : x)))} />
             </label>
           </div>
         ))}
         <div>
-          <button onClick={save} className="btn-primary">Save costs</button>
+          <button onClick={save} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">Save costs</button>
         </div>
         {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
       </div>

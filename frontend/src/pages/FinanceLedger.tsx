@@ -95,26 +95,26 @@ export default function LedgerPage() {
   const hasSummary = Boolean(summary?.revenue && summary?.profit);
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Ledger</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Ledger</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Immutable financial events &mdash; read-only. Corrections happen via reversal entries.
         </p>
       </div>
 
-      <div className="content-card" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
           From
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="input-control" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
           To
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="input-control" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
           Type
-          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Transaction type" className="input-control" style={{ minWidth: "200px" }}>
+          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Transaction type" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" style={{ minWidth: "200px" }}>
             <option value="">All types</option>
             {LEDGER_TXN_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -129,16 +129,16 @@ export default function LedgerPage() {
             onChange={(e) => setOrderSearch(e.target.value)}
             placeholder="Order ID"
             aria-label="Order search"
-            className="input-control"
+            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             style={{ minWidth: "200px" }}
           />
         </label>
-        <button onClick={load} className="btn-primary" style={{ minHeight: 44 }}>Apply</button>
+        <button onClick={load} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" style={{ minHeight: 44 }}>Apply</button>
       </div>
 
       {error && (
-        <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={load} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          {error} <button onClick={load} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
 
@@ -171,9 +171,9 @@ export default function LedgerPage() {
           secondary={{ label: "Monthly report", href: "/reports/monthly" }}
         />
       ) : (
-        <div className="content-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
-            <table className="modern-table">
+            <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -191,11 +191,11 @@ export default function LedgerPage() {
                     <td style={{ fontSize: "13px", color: "var(--muted)", whiteSpace: "nowrap" }}>
                       {t.transaction_date_ist ?? t.transaction_date ?? "-"}
                     </td>
-                    <td><span className="badge-pill">{t.transaction_type}</span></td>
+                    <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{t.transaction_type}</span></td>
                     <td style={{ fontSize: "13px" }}>{t.order_id ?? "-"}</td>
-                    <td className="tnum" style={{ textAlign: "right", fontWeight: 600 }}>{inr(t.amount)}</td>
-                    <td className="tnum" style={{ textAlign: "right" }}>{inr(t.tax_amount)}</td>
-                    <td className="tnum" style={{ textAlign: "right" }}>{inr(t.net_amount)}</td>
+                    <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{inr(t.amount)}</td>
+                    <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(t.tax_amount)}</td>
+                    <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(t.net_amount)}</td>
                     <td style={{ fontSize: "13px", color: "var(--muted)" }}>{t.reference_number ?? "-"}</td>
                   </tr>
                 ))}
@@ -207,10 +207,10 @@ export default function LedgerPage() {
               Page {safePage + 1} of {totalPages} &middot; {items.length} entries
             </span>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="btn-secondary" aria-label="Previous page">
+              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" aria-label="Previous page">
                 Prev
               </button>
-              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="btn-secondary" aria-label="Next page">
+              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" aria-label="Next page">
                 Next
               </button>
             </div>

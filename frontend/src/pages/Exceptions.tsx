@@ -62,20 +62,20 @@ export default function ExceptionsPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
 
      
 
       {/* Header */}
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Mismatch Exceptions Queue</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Mismatch Exceptions Queue</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
           Review and audit system-detected operational discrepancies between Shopify, physical scans, and returns
         </p>
       </div>
 
       {/* Filter Tabs Bar */}
-      <div className="content-card" style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
 
         {/* Status Filter Tabs */}
         <div style={{ display: "flex", gap: "8px" }}>
@@ -83,7 +83,7 @@ export default function ExceptionsPage() {
             <button
               key={s}
               onClick={() => setStatus(s)}
-              className={status === s ? "btn-primary" : "btn-secondary"}
+              className={status === s ? "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" : "inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"}
               aria-pressed={status === s}
               style={{ fontSize: "13px", padding: "8px 16px" }}
             >
@@ -96,7 +96,7 @@ export default function ExceptionsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <label style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 600 }}>SEVERITY:</label>
           <select
-            className="input-control"
+            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             value={severity}
             onChange={(e) => setSeverity(e.target.value)}
             aria-label="Severity"
@@ -114,7 +114,7 @@ export default function ExceptionsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <label style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 600 }}>CATEGORY:</label>
           <select
-            className="input-control"
+            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             aria-label="Category"
@@ -132,7 +132,7 @@ export default function ExceptionsPage() {
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
           <IconAlert size={16} /> {error}
         </div>
       )}
@@ -148,7 +148,7 @@ export default function ExceptionsPage() {
             No exception issues found matching selected filters.
           </div>
         ) : (
-          <table className="modern-table">
+          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]">
             <thead>
               <tr>
                 <th>Order</th>
@@ -175,13 +175,13 @@ export default function ExceptionsPage() {
                     {i.detected_at ? new Date(i.detected_at).toLocaleString() : "-"}
                   </td>
                   <td>
-                    <span className={`badge ${i.resolved ? "badge-success" : "badge-warning"}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] ${i.resolved ? "bg-[var(--success-bg)] text-[var(--ink)]" : "bg-[var(--warning-bg)] text-[var(--ink)]"}`}>
                       {i.resolved ? "RESOLVED" : "OPEN"}
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {!i.resolved ? (
-                      <button onClick={() => setResolving(i)} className="btn-primary" style={{ padding: "6px 14px", fontSize: "12px" }}>
+                      <button onClick={() => setResolving(i)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" style={{ padding: "6px 14px", fontSize: "12px" }}>
                         Resolve Discrepancy
                       </button>
                     ) : (
@@ -212,7 +212,7 @@ export default function ExceptionsPage() {
           }}
         >
           <div style={{ width: "100%", maxWidth: "540px", padding: "32px", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
-            <h2 className="display" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
+            <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "22px", marginBottom: "8px" }}>Resolve Discrepancy</h2>
             <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "20px" }}>
               {resolving.order_name || resolving.order_id}: <strong style={{ color: "var(--ink)" }}>{resolving.issue_code}</strong>
             </p>
@@ -226,7 +226,7 @@ export default function ExceptionsPage() {
                 AUDITED RESOLUTION REASON (MANDATORY)
               </label>
               <textarea
-                className="input-control"
+                className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -239,14 +239,14 @@ export default function ExceptionsPage() {
               <button
                 onClick={doResolve}
                 disabled={!reason.trim()}
-                className="btn-primary"
+                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
                 style={{ flex: 1, padding: "12px" }}
               >
                 Confirm Resolution & Audit
               </button>
               <button
                 onClick={() => setResolving(null)}
-                className="btn-secondary"
+                className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
                 style={{ padding: "12px 20px" }}
               >
                 Cancel

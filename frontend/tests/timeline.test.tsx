@@ -16,7 +16,8 @@ test("timeline light cards have no dark rgba background", () => {
 });
 test("timeline uses cream fragment cards", () => {
   const { container } = render(<Timeline items={[{at:"now",kind:"DISPATCHED",label:"Dispatched",detail:"ok"}]} />);
-  expect(container.innerHTML).toMatch(/f5f0e0|ffaf|content-card|#fffaf0/i);
+  // .content-card became a Tailwind card surface on the node itself.
+  expect(container.innerHTML).toMatch(/bg-white/);
 });
 test("empty state renders actions", () => {
   const { container } = render(

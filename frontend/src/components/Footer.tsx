@@ -39,7 +39,7 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
 export default function Footer() {
   return (
     <footer style={{ background: "var(--card)", borderTop: "1px solid var(--hairline)", padding: "64px 0 0" }}>
-      <div className="container footer-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 32 }}>
+      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4 grid gap-8 min-[769px]:grid-cols-[1.5fr_1fr_1fr_1fr]" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 32 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)", fontWeight: 600 }}>
             ReconHub
@@ -59,7 +59,7 @@ export default function Footer() {
           </div>
         ))}
       </div>
-      <div className="container" style={{ marginTop: 48, borderTop: "1px solid var(--hairline)", paddingTop: 20, paddingBottom: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ marginTop: 48, borderTop: "1px solid var(--hairline)", paddingTop: 20, paddingBottom: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <span style={{ color: "var(--muted)", fontSize: 13 }}>© 2026 ReconHub. All rights reserved.</span>
         <span style={{ color: "var(--muted)", fontSize: 13 }}>Enterprise reconciliation for Shopify ops.</span>
       </div>

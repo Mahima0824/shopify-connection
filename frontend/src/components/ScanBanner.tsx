@@ -7,7 +7,7 @@ export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "war
   return (
     <div
       role={kind === "error" ? "alert" : "status"}
-      className="content-card"
+      className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"
       style={{
         borderLeft: `4px solid ${statusColor}`,
         display: "flex",

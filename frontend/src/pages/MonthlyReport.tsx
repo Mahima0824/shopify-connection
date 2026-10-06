@@ -101,31 +101,31 @@ export default function MonthlyPage() {
     }
   }
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Monthly report</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Monthly report</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Operational + financial summary with profitability</p>
         </div>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <input type="month" value={month} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonth(e.target.value)} aria-label="Month" className="input-control" />
-          <button onClick={download} disabled={downloading || !data} className="btn-primary">
+          <input type="month" value={month} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonth(e.target.value)} aria-label="Month" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" />
+          <button onClick={download} disabled={downloading || !data} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">
             {downloading ? "Exporting..." : "Download Excel"}
           </button>
         </div>
       </div>
       {error && (
-        <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={() => load(month)} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
-      <div className="content-card" style={{ padding: "16px 24px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="preset" style={{ fontSize: "13px", fontWeight: 600 }}>Period preset</label>
           <select
             id="preset"
             aria-label="Period preset"
-            className="input-control"
+            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             value={preset}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPreset(e.target.value)}
             style={{ width: "220px" }}
@@ -136,26 +136,26 @@ export default function MonthlyPage() {
           </select>
           {preset === "custom" && (
             <>
-              <input type="date" aria-label="From" className="input-control" value={from} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)} />
-              <input type="date" aria-label="To" className="input-control" value={to} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTo(e.target.value)} />
+              <input type="date" aria-label="From" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={from} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)} />
+              <input type="date" aria-label="To" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={to} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTo(e.target.value)} />
             </>
           )}
-          <button onClick={loadCards} disabled={cardsLoading} className="btn-secondary">Apply period</button>
+          <button onClick={loadCards} disabled={cardsLoading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Apply period</button>
         </div>
         <p style={{ color: "var(--muted)", fontSize: "12px", margin: "8px 0 0" }}>
           Financial year runs Apr to Mar (financial_year / last_fy). Explicit from/to wins over the preset.
         </p>
       </div>
       {cardsError && (
-        <div role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {cardsError} <button onClick={loadCards} className="btn-secondary" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          {cardsError} <button onClick={loadCards} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
       {cardsLoading ? (
         <div style={{ padding: "16px", textAlign: "center", color: "var(--muted)" }}>Loading GST and profit&hellip;</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-          <div className="content-card" style={{ padding: "16px 20px" }}>
+          <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 20px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: 700, margin: "0 0 12px" }}>GST</h2>
             {gst ? (
               <>
@@ -184,7 +184,7 @@ export default function MonthlyPage() {
               <p style={{ fontSize: "13px", color: "var(--muted)" }}>No GST data for this period.</p>
             )}
           </div>
-          <div className="content-card" style={{ padding: "16px 20px" }}>
+          <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 20px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: 700, margin: "0 0 12px" }}>Profit</h2>
             {profit ? (
               <>
@@ -220,10 +220,10 @@ export default function MonthlyPage() {
             />
           ) : (
             <>
-              <div className="content-card"><h2>Orders</h2><pre>{JSON.stringify(data.orders, null, 2)}</pre></div>
-              <div className="content-card"><h2>Money</h2><pre>{JSON.stringify(data.money, null, 2)}</pre></div>
-              <div className="content-card"><h2>Profitability ({data.profitability.label})</h2><pre>{JSON.stringify(data.profitability, null, 2)}</pre></div>
-              <div className="content-card"><h2>Exceptions</h2><pre>{JSON.stringify(data.exceptions, null, 2)}</pre></div>
+              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"><h2>Orders</h2><pre>{JSON.stringify(data.orders, null, 2)}</pre></div>
+              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"><h2>Money</h2><pre>{JSON.stringify(data.money, null, 2)}</pre></div>
+              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"><h2>Profitability ({data.profitability.label})</h2><pre>{JSON.stringify(data.profitability, null, 2)}</pre></div>
+              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"><h2>Exceptions</h2><pre>{JSON.stringify(data.exceptions, null, 2)}</pre></div>
             </>
           )}
         </div>

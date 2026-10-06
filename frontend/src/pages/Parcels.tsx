@@ -60,26 +60,26 @@ export default function ParcelsPage() {
   }
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Parcels</h1>
+          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Parcels</h1>
           <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
             Every order's physical identity — one barcode per parcel, stable for life
           </p>
         </div>
-        <Link to="/parcels/labels" className="btn-primary" style={{ textDecoration: "none" }}>
+        <Link to="/parcels/labels" className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" style={{ textDecoration: "none" }}>
           Labels manager
         </Link>
       </div>
-      <div className="content-card" style={{ padding: "16px 24px", display: "flex", gap: "16px", alignItems: "center" }}>
-        <select className="input-control" value={status} onChange={(e) => { setStatus(e.target.value); load(e.target.value); }} aria-label="Status filter" style={{ width: "220px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "16px", alignItems: "center" }}>
+        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={status} onChange={(e) => { setStatus(e.target.value); load(e.target.value); }} aria-label="Status filter" style={{ width: "220px" }}>
           <option value="">All statuses</option>
           {STATUSES.slice(1).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <span style={{ fontSize: "13px", color: "var(--muted)" }}>{items.length} parcel{items.length === 1 ? "" : "s"}</span>
       </div>
-      {err && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
+      {err && <p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{err}</p>}
       {notice && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{notice}</p>}
       <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
         {items.length === 0 ? (
@@ -92,7 +92,7 @@ export default function ParcelsPage() {
             />
           </div>
         ) : (
-          <table className="modern-table" style={{ border: "none" }}>
+          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]" style={{ border: "none" }}>
             <thead>
               <tr><th>Parcel</th><th>Order</th><th>Barcode</th><th>Status</th><th>Courier</th><th>AWB</th><th>Created</th><th style={{ textAlign: "right" }}>Actions</th></tr>
             </thead>
@@ -102,14 +102,14 @@ export default function ParcelsPage() {
                   <td style={{ fontWeight: 600 }}>{p.parcel_code}</td>
                   <td>{p.order_name ?? p.order_id}</td>
                   <td>{p.barcode_value}</td>
-                  <td><span className="badge-pill">{p.status}</span></td>
+                  <td><span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{p.status}</span></td>
                   <td>{p.courier ?? "—"}</td>
                   <td>{p.awb ?? "—"}</td>
                   <td style={{ fontSize: "13px", color: "var(--muted)" }}>{fmtDate(p.created_at)}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <Link to={`/parcels/${p.barcode_value}`} className="btn-secondary">View</Link>{" "}
-                    <button onClick={() => openLabel(p.id)} className="btn-secondary">Print</button>{" "}
-                    <button onClick={() => reprint(p.id, p.parcel_code)} className="btn-secondary">Reprint</button>
+                    <Link to={`/parcels/${p.barcode_value}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">View</Link>{" "}
+                    <button onClick={() => openLabel(p.id)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Print</button>{" "}
+                    <button onClick={() => reprint(p.id, p.parcel_code)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Reprint</button>
                   </td>
                 </tr>
               ))}

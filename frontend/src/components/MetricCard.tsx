@@ -42,7 +42,7 @@ export default function MetricCard({
       : null;
 
   return (
-    <div className="content-card">
+    <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
         <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           {title}
@@ -63,7 +63,7 @@ export default function MetricCard({
           </div>
         )}
       </div>
-      <div className="display tnum" style={{ fontSize: "28px", fontWeight: 600, lineHeight: 1.1 }}>
+      <div className="font-bold tracking-tight text-[var(--ink)] tabular-nums" style={{ fontSize: "28px", fontWeight: 600, lineHeight: 1.1 }}>
         {value}
       </div>
       {(subtitle || trend) && (

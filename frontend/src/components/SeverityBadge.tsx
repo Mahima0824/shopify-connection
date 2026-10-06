@@ -18,7 +18,7 @@ export default function SeverityBadge({ severity }: { severity: string }) {
   const cls = BADGE_CLASSES[severity] ?? "badge-neutral";
   const dot = DOT_COLORS[severity] ?? "var(--muted)";
   return (
-    <span className={`badge ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] ${cls}`}>
       <span
         aria-hidden="true"
         style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}

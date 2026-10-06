@@ -17,7 +17,7 @@ const OPERATIONAL_DOTS: Record<string, string> = {
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
   const dot = dotMap[status?.toUpperCase()] ?? "var(--muted)";
   return (
-    <span className="badge-pill">
+    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">
       <span
         aria-hidden="true"
         style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}
@@ -38,7 +38,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
 
   return (
     <div style={{ overflowX: "auto", background: "#ffffff", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
-      <table className="modern-table" style={{ border: "none" }}>
+      <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]" style={{ border: "none" }}>
         <thead>
           <tr>
             <th>Order Name</th>
@@ -63,7 +63,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
               <td style={{ borderBottom: "1px solid var(--hairline)" }}>
                 <StatusBadge status={o.operational_status || "NEW"} dotMap={OPERATIONAL_DOTS} />
               </td>
-              <td className="tnum" style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
+              <td className="tabular-nums" style={{ fontWeight: 600, color: "var(--ink)", borderBottom: "1px solid var(--hairline)" }}>
                 ₹{Number(o.total_amount || 0).toLocaleString()}
               </td>
               <td style={{ color: "var(--muted)", fontSize: "13px", borderBottom: "1px solid var(--hairline)" }}>
@@ -72,7 +72,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
                   : "-"}
               </td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap", borderBottom: "1px solid var(--hairline)" }}>
-                <Link to={`/orders/${o.id}`} className="btn-secondary" style={{ whiteSpace: "nowrap" }}>
+                <Link to={`/orders/${o.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ whiteSpace: "nowrap" }}>
                   View Timeline
                 </Link>
               </td>

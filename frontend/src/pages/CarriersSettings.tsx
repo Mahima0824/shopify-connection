@@ -35,29 +35,29 @@ export default function CarriersPage() {
     }
   }
   return (
-    <main className="container" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
+    <main className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", background: "var(--canvas)" }}>
       <div>
-        <h1 className="display" style={{ fontSize: "28px", fontWeight: 700 }}>Carrier connections</h1>
+        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Carrier connections</h1>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.</p>
       </div>
-      <div className="content-card" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-        <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Carrier" className="input-control" style={{ width: "240px" }}>
+      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Carrier" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" style={{ width: "240px" }}>
           {KNOWN.map((c) => <option key={c}>{c}</option>)}
         </select>
-        <button onClick={connect} className="btn-primary">Connect</button>
+        <button onClick={connect} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">Connect</button>
       </div>
-      {msg && <p role="status" className="content-card" style={{ fontSize: "14px" }}>{msg}</p>}
+      {msg && <p role="status" className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ fontSize: "14px" }}>{msg}</p>}
       <div>
-        <h2 className="display" style={{ fontSize: "20px", fontWeight: 700 }}>Carrier health</h2>
+        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", fontWeight: 700 }}>Carrier health</h2>
         <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>Connection state and last sync outcome per provider (credentials never shown).</p>
       </div>
-      {healthError && <p role="alert" className="badge-danger" style={{ padding: "12px 16px", borderRadius: "12px" }}>{healthError}</p>}
+      {healthError && <p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{healthError}</p>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
         {health.map((h) => (
-          <div key={h.code} className="content-card" style={{ borderTop: `4px solid ${h.configured ? "var(--success)" : "var(--hairline)"}` }}>
+          <div key={h.code} className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: `4px solid ${h.configured ? "var(--success)" : "var(--hairline)"}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <strong>{h.code}</strong>
-              <span className={`badge ${h.configured ? "badge-success" : "badge-neutral"}`}>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] ${h.configured ? "bg-[var(--success-bg)] text-[var(--ink)]" : "bg-[var(--neutral-bg)] text-[var(--muted)]"}`}>
                 {h.configured ? "Connected" : "Not connected"}
               </span>
             </div>

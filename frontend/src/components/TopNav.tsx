@@ -50,7 +50,7 @@ export default function TopNav() {
       }}
     >
       <div
-        className="container"
+        className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4"
         style={{
           display: "flex",
           alignItems: "center",
@@ -69,7 +69,7 @@ export default function TopNav() {
           ReconHub
         </Link>
         <nav
-          className="topnav-links"
+          className="flex max-w-full gap-5 overflow-x-auto text-sm font-medium min-[769px]:flex max-[768px]:hidden"
           aria-label="Primary"
           style={{
             gap: 4,
@@ -97,8 +97,7 @@ export default function TopNav() {
             return (
               <div
                 key={g.label}
-                className={dropOpen ? "nav-drop open" : "nav-drop"}
-                style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+                className="group relative inline-flex items-center"
                 onKeyDown={(e) => {
                   if (e.key === "Escape") closeDrop();
                 }}
@@ -138,18 +137,7 @@ export default function TopNav() {
                   ▾
                 </button>
                 <div
-                  className="nav-drop-menu"
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    minWidth: 200,
-                    background: "var(--card)",
-                    border: "1px solid var(--hairline)",
-                    borderRadius: 12,
-                    padding: 4,
-                    zIndex: 60,
-                  }}
+                  className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-[var(--hairline)] bg-[var(--card)] p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
                 >
                   {(g.children ?? []).map((c) => {
                     const childActive = isActive(pathname, c.href);
@@ -185,7 +173,7 @@ export default function TopNav() {
             Sign in
           </Link>
           <button
-            className="topnav-menu-btn"
+            className="hidden min-h-11 min-w-11 cursor-pointer border-0 bg-transparent text-xl text-[var(--ink)] max-[768px]:block"
             onClick={() => setOpen(!open)}
             aria-label="menu"
             aria-expanded={open}
