@@ -29,11 +29,15 @@ import { cn } from "@/lib/utils";
 
 /* The shadcn `mira` preset sizes controls at h-7 (28px). This app is driven by
    warehouse handheld scanners and phone cameras, so every interactive control
-   keeps a 44px minimum touch target. The overrides live here once rather than
-   being repeated as className on hundreds of call sites. */
+   keeps a 44px minimum touch target. DESIGN.md independently requires 44px form
+   fields and 44x44 pill buttons, so the two agree here.
+
+   Button shape follows DESIGN.md Components: "Pill-shape is the only button
+   shape across both tracks; rounded rectangles do not exist for buttons." */
 const TOUCH = "min-h-11";
+const PILL = "rounded-pill";
 const FIELD =
-  "min-h-11 rounded-lg border border-input bg-background px-3.5 py-2.5 text-base " +
+  "min-h-11 rounded-md border border-input bg-background px-3.5 py-2.5 text-base " +
   "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
 type ButtonProps = React.ComponentProps<typeof ShadcnButton>;
@@ -42,7 +46,7 @@ function Button({ className, size = "lg", ...props }: ButtonProps) {
   return (
     <ShadcnButton
       size={size}
-      className={cn(TOUCH, "rounded-lg px-5 text-sm", className)}
+      className={cn(TOUCH, PILL, "px-5 text-sm font-medium", className)}
       {...props}
     />
   );

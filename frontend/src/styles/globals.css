@@ -6,161 +6,214 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn's theme tokens live under the --sc- prefix so they cannot shadow this
-   app's own --accent / --muted / --card, which the converted markup still reads
-   through var(). @theme inline maps Tailwind's color-* utilities onto --sc-*. */
+/* Palette from DESIGN.md (Shopifi analysis, added via npx getdesign add
+   shopify). Hex values converted to oklch; see DESIGN.md Colors.
+
+   Two deliberate deviations from the doc:
+     - primary stays the sky you asked for rather than the doc's black. The
+       doc bans blue outright, so its black-pill rule is not applied here.
+     - the doc has no destructive or success/warning vocabulary, so those
+       borrow red-600 and the doc's own aloe green respectively.
+   The shade ladder, cream canvas, ink, hairline and mint accents are used
+   as written. */
+
 :root {
-  --sc-background: oklch(1 0 0); --sc-foreground: oklch(0.147 0.004 49.25);
-  --sc-card: oklch(1 0 0); --sc-card-foreground: oklch(0.147 0.004 49.25);
-  --sc-popover: oklch(1 0 0); --sc-popover-foreground: oklch(0.147 0.004 49.25);
-  --sc-primary: oklch(0.5 0.134 242.749); --sc-primary-foreground: oklch(0.977 0.013 236.62);
-  --sc-secondary: oklch(0.967 0.001 286.375); --sc-secondary-foreground: oklch(0.21 0.006 285.885);
-  --sc-muted: oklch(0.967 0.001 286.375); --sc-muted-foreground: oklch(0.553 0.013 58.071);
-  --sc-accent: oklch(0.97 0.001 106.424); --sc-accent-foreground: oklch(0.216 0.006 56.043);
-  --sc-destructive: oklch(0.577 0.245 27.325); --sc-border: oklch(0.923 0.003 48.717);
-  --sc-input: oklch(0.923 0.003 48.717); --sc-ring: oklch(0.709 0.01 56.259);
-  --sc-chart-1: oklch(0.828 0.111 230.318); --sc-chart-2: oklch(0.685 0.169 237.323);
-  --sc-chart-3: oklch(0.588 0.158 241.966); --sc-chart-4: oklch(0.5 0.134 242.749);
-  --sc-chart-5: oklch(0.443 0.11 240.79); --sc-radius: 0.45rem;
-  --sc-sidebar: oklch(0.985 0.001 106.423); --sc-sidebar-foreground: oklch(0.147 0.004 49.25);
-  --sc-sidebar-primary: oklch(0.588 0.158 241.966); --sc-sidebar-primary-foreground: oklch(0.977 0.013 236.62);
-  --sc-sidebar-accent: oklch(0.97 0.001 106.424); --sc-sidebar-accent-foreground: oklch(0.216 0.006 56.043);
-  --sc-sidebar-border: oklch(0.923 0.003 48.717); --sc-sidebar-ring: oklch(0.709 0.01 56.259); --background: oklch(1 0 0); --foreground: oklch(0.147 0.004 49.25); --card: oklch(1 0 0); --card-foreground: oklch(0.147 0.004 49.25); --popover: oklch(1 0 0); --popover-foreground: oklch(0.147 0.004 49.25); --primary: oklch(0.5 0.134 242.749); --primary-foreground: oklch(0.977 0.013 236.62); --secondary: oklch(0.967 0.001 286.375); --secondary-foreground: oklch(0.21 0.006 285.885); --muted: oklch(0.97 0.001 106.424); --muted-foreground: oklch(0.553 0.013 58.071); --accent: oklch(0.97 0.001 106.424); --accent-foreground: oklch(0.216 0.006 56.043); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.923 0.003 48.717); --input: oklch(0.923 0.003 48.717); --ring: oklch(0.709 0.01 56.259); --chart-1: oklch(0.828 0.111 230.318); --chart-2: oklch(0.685 0.169 237.323); --chart-3: oklch(0.588 0.158 241.966); --chart-4: oklch(0.5 0.134 242.749); --chart-5: oklch(0.443 0.11 240.79); --radius: 0.45rem; --sidebar: oklch(0.985 0.001 106.423); --sidebar-foreground: oklch(0.147 0.004 49.25); --sidebar-primary: oklch(0.588 0.158 241.966); --sidebar-primary-foreground: oklch(0.977 0.013 236.62); --sidebar-accent: oklch(0.97 0.001 106.424); --sidebar-accent-foreground: oklch(0.216 0.006 56.043); --sidebar-border: oklch(0.923 0.003 48.717); --sidebar-ring: oklch(0.709 0.01 56.259);
+  --dm-background: oklch(0.9864 0.0079 106.54);
+  --dm-foreground: oklch(0 0 0);
+  --dm-card: oklch(1 0 0);
+  --dm-card-foreground: oklch(0 0 0);
+  --dm-popover: oklch(1 0 0);
+  --dm-popover-foreground: oklch(0 0 0);
+  --dm-primary: oklch(0.5 0.134 242.749);
+  --dm-primary-foreground: oklch(1 0 0);
+  --dm-secondary: oklch(0.8711 0.0055 286.29);
+  --dm-secondary-foreground: oklch(0 0 0);
+  --dm-muted: oklch(0.9864 0.0079 106.54);
+  --dm-muted-foreground: oklch(0.5517 0.0138 285.94);
+  --dm-accent: oklch(0.9382 0.0789 155.19);
+  --dm-accent-foreground: oklch(0 0 0);
+  --dm-destructive: oklch(0.5528 0.2196 26.9);
+  --dm-border: oklch(0.9197 0.004 286.32);
+  --dm-input: oklch(0.9197 0.004 286.32);
+  --dm-ring: oklch(0.5 0.134 242.749);
+
+  /* Status tones, leaning on the doc's green family. Success keeps ink
+     text because white on aloe-10 is only 1.17:1 and would be unreadable. */
+  --dm-success: oklch(0.9382 0.0789 155.19);
+  --dm-success-foreground: oklch(0 0 0);
+  --dm-warning: oklch(0.4419 0.0146 285.79);
+  --dm-warning-foreground: oklch(0 0 0);
+  --dm-neutral: oklch(0.8711 0.0055 286.29);
+  --dm-neutral-foreground: oklch(0 0 0);
+
+  /* Raw doc tokens, for the rare one-off (dark marketing bands). */
+  --dm-canvas-night: oklch(0 0 0);
+  --dm-canvas-night-elevated: oklch(0.1448 0 89.88);
+  --dm-surface-elevated-dark: oklch(0.2826 0.021 221.96);
+  --dm-hairline-dark: oklch(0.2826 0.021 221.96);
+  --dm-shade-30: oklch(0.8711 0.0055 286.29);
+  --dm-shade-40: oklch(0.7118 0.0129 286.07);
+  --dm-shade-50: oklch(0.5517 0.0138 285.94);
+  --dm-shade-60: oklch(0.4419 0.0146 285.79);
+  --dm-shade-70: oklch(0.3703 0.0119 285.81);
+  --dm-pistachio: oklch(0.949 0.0508 155.76);
+  --dm-link-cool-1: oklch(0.7308 0.016 207.09);
+  --dm-link-mint: oklch(0.7453 0.0298 179.96);
 }
 
+/* Alias layer.
+   Tailwind utilities read --dm-* through @theme inline, but a large share of
+   this app still passes colours to inline style objects (style={{ color:
+   "var(--primary)" }}), and those need the un-prefixed names the shadcn preset
+   used to declare. Rather than rewrite ~200 inline styles by hand, point the
+   canonical names at the DESIGN.md palette. Single source of truth, and
+   inline styles and utility classes can no longer drift apart. */
+:root {
+  --background: var(--dm-background);
+  --foreground: var(--dm-foreground);
+  --card: var(--dm-card);
+  --card-foreground: var(--dm-card-foreground);
+  --popover: var(--dm-popover);
+  --popover-foreground: var(--dm-popover-foreground);
+  --primary: var(--dm-primary);
+  --primary-foreground: var(--dm-primary-foreground);
+  --secondary: var(--dm-secondary);
+  --secondary-foreground: var(--dm-secondary-foreground);
+  --muted: var(--dm-muted);
+  --muted-foreground: var(--dm-muted-foreground);
+  --accent: var(--dm-accent);
+  --accent-foreground: var(--dm-accent-foreground);
+  --destructive: var(--dm-destructive);
+  --border: var(--dm-border);
+  --input: var(--dm-input);
+  --ring: var(--dm-ring);
+  --success: var(--dm-success);
+  --success-foreground: var(--dm-success-foreground);
+  --warning: var(--dm-warning);
+  --warning-foreground: var(--dm-warning-foreground);
+  --neutral: var(--dm-neutral);
+  --neutral-foreground: var(--dm-neutral-foreground);
+}
+
+/* Dark mode re-points the same aliases at the doc's cinematic night canvas,
+   which is the only place DESIGN.md's black surfaces belong. */
 .dark {
-  --sc-background: oklch(0.147 0.004 49.25);
-  --sc-foreground: oklch(0.985 0.001 106.423);
-  --sc-card: oklch(0.216 0.006 56.043);
-  --sc-card-foreground: oklch(0.985 0.001 106.423);
-  --sc-popover: oklch(0.216 0.006 56.043);
-  --sc-popover-foreground: oklch(0.985 0.001 106.423);
-  --sc-primary: oklch(0.443 0.11 240.79);
-  --sc-primary-foreground: oklch(0.977 0.013 236.62);
-  --sc-secondary: oklch(0.274 0.006 286.033);
-  --sc-secondary-foreground: oklch(0.985 0 0);
-  --sc-muted: oklch(0.268 0.007 34.298);
-  --sc-muted-foreground: oklch(0.709 0.01 56.259);
-  --sc-accent: oklch(0.268 0.007 34.298);
-  --sc-accent-foreground: oklch(0.985 0.001 106.423);
-  --sc-destructive: oklch(0.704 0.191 22.216);
-  --sc-border: oklch(1 0 0 / 10%);
-  --sc-input: oklch(1 0 0 / 15%);
-  --sc-ring: oklch(0.553 0.013 58.071);
-  --sc-chart-1: oklch(0.828 0.111 230.318);
-  --sc-chart-2: oklch(0.685 0.169 237.323);
-  --sc-chart-3: oklch(0.588 0.158 241.966);
-  --sc-chart-4: oklch(0.5 0.134 242.749);
-  --sc-chart-5: oklch(0.443 0.11 240.79);
-  --sc-sidebar: oklch(0.216 0.006 56.043);
-  --sc-sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sc-sidebar-primary: oklch(0.685 0.169 237.323);
-  --sc-sidebar-primary-foreground: oklch(0.293 0.066 243.157);
-  --sc-sidebar-accent: oklch(0.268 0.007 34.298);
-  --sc-sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sc-sidebar-border: oklch(1 0 0 / 10%);
-  --sc-sidebar-ring: oklch(0.553 0.013 58.071);
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
-  --card: oklch(0.216 0.006 56.043);
-  --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.216 0.006 56.043);
-  --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.443 0.11 240.79);
-  --primary-foreground: oklch(0.977 0.013 236.62);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.268 0.007 34.298);
-  --muted-foreground: oklch(0.709 0.01 56.259);
-  --accent: oklch(0.268 0.007 34.298);
-  --accent-foreground: oklch(0.985 0.001 106.423);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.553 0.013 58.071);
-  --chart-1: oklch(0.828 0.111 230.318);
-  --chart-2: oklch(0.685 0.169 237.323);
-  --chart-3: oklch(0.588 0.158 241.966);
-  --chart-4: oklch(0.5 0.134 242.749);
-  --chart-5: oklch(0.443 0.11 240.79);
-  --sidebar: oklch(0.216 0.006 56.043);
-  --sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-primary: oklch(0.685 0.169 237.323);
-  --sidebar-primary-foreground: oklch(0.293 0.066 243.157);
-  --sidebar-accent: oklch(0.268 0.007 34.298);
-  --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.553 0.013 58.071);
+  --background: var(--dm-canvas-night);
+  --foreground: var(--dm-card);
+  --card: var(--dm-canvas-night-elevated);
+  --card-foreground: var(--dm-card);
+  --popover: var(--dm-canvas-night-elevated);
+  --popover-foreground: var(--dm-card);
+  --muted: var(--dm-canvas-night-elevated);
+  --muted-foreground: var(--dm-shade-40);
+  --secondary: var(--dm-surface-elevated-dark);
+  --secondary-foreground: var(--dm-card);
+  --accent: var(--dm-surface-elevated-dark);
+  --accent-foreground: var(--dm-card);
+  --border: var(--dm-hairline-dark);
+  --input: var(--dm-hairline-dark);
+  --success: var(--dm-pistachio);
+  --success-foreground: var(--dm-foreground);
+  --warning: var(--dm-shade-60);
+  --warning-foreground: var(--dm-card);
 }
 
 @theme inline {
   --font-sans: 'IBM Plex Sans Variable', sans-serif;
   --font-heading: 'Montserrat Variable', sans-serif;
-  --color-sidebar-ring: var(--sc-sidebar-ring);
-  --color-sidebar-border: var(--sc-sidebar-border);
-  --color-sidebar-accent-foreground: var(--sc-sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sc-sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sc-sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sc-sidebar-primary);
-  --color-sidebar-foreground: var(--sc-sidebar-foreground);
-  --color-sidebar: var(--sc-sidebar);
-  --color-chart-5: var(--sc-chart-5);
-  --color-chart-4: var(--sc-chart-4);
-  --color-chart-3: var(--sc-chart-3);
-  --color-chart-2: var(--sc-chart-2);
-  --color-chart-1: var(--sc-chart-1);
-  --color-ring: var(--sc-ring);
-  --color-input: var(--sc-input);
-  --color-border: var(--sc-border);
-  --color-destructive: var(--sc-destructive);
-  --color-accent-foreground: var(--sc-accent-foreground);
-  --color-accent: var(--sc-accent);
-  --color-muted-foreground: var(--sc-muted-foreground);
-  --color-muted: var(--sc-muted);
-  --color-secondary-foreground: var(--sc-secondary-foreground);
-  --color-secondary: var(--sc-secondary);
-  --color-primary-foreground: var(--sc-primary-foreground);
-  --color-primary: var(--sc-primary);
-  --color-popover-foreground: var(--sc-popover-foreground);
-  --color-popover: var(--sc-popover);
-  --color-card-foreground: var(--sc-card-foreground);
-  --color-card: var(--sc-card);
-  --color-foreground: var(--sc-foreground);
-  --color-background: var(--sc-background);
-  --radius-sm: calc(var(--sc-radius) * 0.6);
-  --radius-md: calc(var(--sc-radius) * 0.8);
-  --radius-lg: var(--sc-radius);
-  --radius-xl: calc(var(--sc-radius) * 1.4);
-  --radius-2xl: calc(var(--sc-radius) * 1.8);
-  --radius-3xl: calc(var(--sc-radius) * 2.2);
-  --radius-4xl: calc(var(--sc-radius) * 2.6);
-}
-
-/* Semantic status tones that shadcn's token set does not cover.
-   The preset supplies destructive, but not success / warning / neutral, so those
-   live here and are exposed to Tailwind through @theme below. */
-:root {
-  --success: oklch(0.55 0.13 155);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.58 0.13 70);
-  --warning-foreground: oklch(0.985 0 0);
-  --neutral: oklch(0.553 0.013 58.071);
-  --neutral-foreground: oklch(0.985 0 0);
-}
-
-.dark {
-  --success: oklch(0.72 0.15 155);
-  --warning: oklch(0.75 0.14 70);
-  --neutral: oklch(0.71 0.01 56.259);
+  /* DESIGN.md asks for Neue Haas Grotesk Display (commercial, not
+     installable) and Inter Variable. Inter ships here as IBM Plex Sans,
+     with Montserrat standing in for the thin display cut. */
+  --text-display-xxl: 96px;
+  --text-display-xxl--line-height: 1;
+  --text-display-xxl--letter-spacing: 2.4px;
+  --text-display-xl: 70px;
+  --text-display-xl--line-height: 1;
+  --text-display-lg: 55px;
+  --text-display-lg--line-height: 1.16;
+  --text-display-md: 48px;
+  --text-display-md--line-height: 1.14;
+  --text-heading-xl: 28px;
+  --text-heading-xl--line-height: 1.28;
+  --text-heading-lg: 24px;
+  --text-heading-md: 20px;
+  --text-heading-sm: 18px;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.56;
+  --text-body-md: 16px;
+  --text-body-md--line-height: 1.5;
+  --text-caption: 14px;
+  --text-caption--line-height: 1.49;
+  --text-micro: 13px;
+  --text-eyebrow: 12px;
+  --text-eyebrow--letter-spacing: 0.72px;
+  --color-sidebar-ring: var(--dm-sidebar-ring);
+  --color-sidebar-border: var(--dm-sidebar-border);
+  --color-sidebar-accent-foreground: var(--dm-sidebar-accent-foreground);
+  --color-sidebar-accent: var(--dm-sidebar-accent);
+  --color-sidebar-primary-foreground: var(--dm-sidebar-primary-foreground);
+  --color-sidebar-primary: var(--dm-sidebar-primary);
+  --color-sidebar-foreground: var(--dm-sidebar-foreground);
+  --color-sidebar: var(--dm-sidebar);
+  /* Chart ramp: the doc has no data-viz vocabulary, so this keeps the sky
+     primary's family so charts sit on-brand rather than in a foreign hue. */
+  --color-chart-5: oklch(0.443 0.11 240.79);
+  --color-chart-4: oklch(0.5 0.134 242.749);
+  --color-chart-3: oklch(0.588 0.158 241.966);
+  --color-chart-2: oklch(0.685 0.169 237.323);
+  --color-chart-1: oklch(0.828 0.111 230.318);
+  --color-ring: var(--dm-ring);
+  /* aloe is the doc's featured-tier accent; pistachio is its softer band fill. */
+  --color-aloe: var(--dm-aloe);
+  --color-pistachio: var(--dm-pistachio);
+  --color-canvas-night: var(--dm-canvas-night);
+  --color-canvas-night-elevated: var(--dm-canvas-night-elevated);
+  --color-surface-elevated-dark: var(--dm-surface-elevated-dark);
+  --color-hairline-dark: var(--dm-hairline-dark);
+  --color-shade-30: var(--dm-shade-30);
+  --color-shade-40: var(--dm-shade-40);
+  --color-shade-50: var(--dm-shade-50);
+  --color-shade-60: var(--dm-shade-60);
+  --color-shade-70: var(--dm-shade-70);
+  --color-pistachio: var(--dm-pistachio);
+  --color-link-cool-1: var(--dm-link-cool-1);
+  --color-link-mint: var(--dm-link-mint);
+  --color-input: var(--dm-input);
+  --color-border: var(--dm-border);
+  --color-destructive: var(--dm-destructive);
+  --color-accent-foreground: var(--dm-accent-foreground);
+  --color-accent: var(--dm-accent);
+  --color-muted-foreground: var(--dm-muted-foreground);
+  --color-muted: var(--dm-muted);
+  --color-secondary-foreground: var(--dm-secondary-foreground);
+  --color-secondary: var(--dm-secondary);
+  --color-primary-foreground: var(--dm-primary-foreground);
+  --color-primary: var(--dm-primary);
+  --color-popover-foreground: var(--dm-popover-foreground);
+  --color-popover: var(--dm-popover);
+  --color-card-foreground: var(--dm-card-foreground);
+  --color-card: var(--dm-card);
+  --color-foreground: var(--dm-foreground);
+  --color-background: var(--dm-background);
+  /* Radius ladder from DESIGN.md Shapes. */
+  --radius-xs: 4px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+  --radius-pill: 9999px;
 }
 
 @theme inline {
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-neutral: var(--neutral);
-  --color-neutral-foreground: var(--neutral-foreground);
+  --color-success: var(--dm-success);
+  --color-success-foreground: var(--dm-success-foreground);
+  --color-warning: var(--dm-warning);
+  --color-warning-foreground: var(--dm-warning-foreground);
+  --color-neutral: var(--dm-neutral);
+  --color-neutral-foreground: var(--dm-neutral-foreground);
 }
 
 /* Everything below is behavioural, not visual. All visual styling moved to
@@ -170,8 +223,8 @@
    express. */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--dm-background);
+  color: var(--dm-foreground);
   font-family: var(--font-sans);
 }
 
@@ -181,7 +234,7 @@ a, a:visited {
 
 a:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--dm-primary);
   outline-offset: 2px;
 }
 
