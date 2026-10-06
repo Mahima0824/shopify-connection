@@ -3073,7 +3073,7 @@ def test_rejected_pushes_clears_on_a_done_retry_job(monkeypatch):
 
 def test_terminal_status_vocabulary_is_shared_by_the_backend_and_the_page():
     """shipment_service.TERMINAL is the set both sync and poll-sweep stop on,
-    and web/src/lib/shipments.ts TERMINAL_STATUSES is the set the page stops
+    and frontend/src/lib/shipments.ts TERMINAL_STATUSES is the set the page stops
     refreshing on. RTO was terminal to the page but not to the backend, so a
     ShipSagar RTO parcel stopped refreshing and could never reach RETURNED;
     RTO_DELIVERED and CLOSED were the reverse. The frontend test

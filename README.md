@@ -3,7 +3,7 @@
 Monorepo delivering **Shopify -> FastAPI -> Supabase (PostgreSQL) -> React**, with email+password auth (JWT), idempotent Shopify sync, barcode dispatch, returns, reconciliation engine, executive dashboard, and Tally export.
 
 - `backend/` - FastAPI + SQLAlchemy 2.0 + Alembic (thin routes in `app/api/`, business logic in `app/services/`).
-- `web/` - Vite + React 18 + react-router login / dashboard / scan / exceptions / tally.
+- `frontend/` - Vite + React 18 + react-router login / dashboard / scan / exceptions / tally.
 - `docs/superpowers/` - design specs and implementation plans.
 
 ## Project structure
@@ -23,7 +23,7 @@ Monorepo delivering **Shopify -> FastAPI -> Supabase (PostgreSQL) -> React**, wi
 |   |   |-- config.py / database.py / main.py
 |   |-- alembic/              # DB migrations 0001-0018 (head: gst_report_fields)
 |   |-- tests/                # Backend suite: 43 pytest files
-|-- web/                      # Vite + React 18 SPA (dev port 5173)
+|-- frontend/                 # Vite + React 18 SPA (dev port 5173)
 |   |-- src/
 |   |   |-- pages/            # 29 routes: Landing, Login, Dashboard, Orders,
 |   |   |                     # OrderDetail, Parcels (+Labels/TestSheet/Detail),
@@ -45,7 +45,7 @@ Monorepo delivering **Shopify -> FastAPI -> Supabase (PostgreSQL) -> React**, wi
 |   |-- dist/                 # Production build output (`npm run build`)
 |-- docs/superpowers/         # specs/ (design) + plans/ (implementation)
 |-- .env / .env.example       # Backend + shared secrets (never commit .env)
-|-- web/.env                  # Web keys VITE_API_URL, VITE_SUPABASE_* (gitignored)
+|-- frontend/.env             # Web keys VITE_API_URL, VITE_SUPABASE_* (gitignored)
 ```
 
 ## Prerequisites
@@ -105,7 +105,7 @@ Backend tests **must run with working directory `backend/`**:
 Set-Location backend; python -m pytest tests -v; Set-Location ..
 ```
 
-Web tests (from `web/`): `npm test`. Typecheck+build: `npm run build` (outputs static `dist/`).
+Web tests (from `frontend/`): `npm test`. Typecheck+build: `npm run build` (outputs static `dist/`).
 
 ## API contract
 
