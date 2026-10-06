@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     shipsagar_api_key: str = ""  # deprecated alias for shipsagar_token
     shipsagar_webhook_secret: str = ""
 
+    # Constant EmailID / CompanyName sent on every PushShipment, so ShipSagar
+    # always receives one known contact address for this account.
+    shipsagar_email: str = ""
+    shipsagar_company: str = ""
+
 
 settings = Settings()
 

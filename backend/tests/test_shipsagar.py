@@ -3418,3 +3418,12 @@ def test_manual_checkpoint_that_does_apply_is_reported_as_applied(monkeypatch):
         assert data["tracking_status"] == "OUT_FOR_DELIVERY"
     finally:
         app.dependency_overrides.clear()
+
+
+# --- push payload constants ---
+
+def test_push_payload_constant_settings_exist_and_default_empty():
+    from app.config import Settings
+    s = Settings(_env_file=None)
+    assert s.shipsagar_email == ""
+    assert s.shipsagar_company == ""
