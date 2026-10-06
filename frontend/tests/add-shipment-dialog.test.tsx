@@ -100,6 +100,80 @@ test("an unreachable courier catalogue still offers a usable dropdown", async ()
   await waitFor(() => expect(onPushed).toHaveBeenCalled());
 });
 
+test("a backend validation code shows the server message in an alert", async () => {
+  // Ported from the deleted push-shipment-dialog.test.tsx ("a validation code
+  // from the backend lands on the field it belongs to" / "an unrecognised code
+  // still shows the server message in a banner"). This dialog has one error
+  // region rather than per-field ones, so the claim is the server's own words
+  // survive: not a generic string, and no false "saved" notice.
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+    if (String(url).includes("/api/v1/shipments/push")) {
+      return { ok: false, status: 400, json: async () => ({ success: false,
+        error: { code: "DUPLICATE_TRACKING",
+                 message: "Tracking number EG1 is already used for IP." } }) };
+    }
+    if (String(url).includes("/couriers")) {
+      return { ok: true, json: async () => ({ success: true, data: { couriers: COURIERS } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: {} }) };
+  }));
+  const onPushed = vi.fn();
+  render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
+    onClose={() => {}} onPushed={onPushed} />);
+  await screen.findByLabelText("Courier");
+  fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
+  fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
+  await waitFor(() =>
+    expect(screen.getByText("Tracking number EG1 is already used for IP.")).toBeTruthy(),
+  );
+  expect(screen.getByRole("alert").textContent)
+    .toContain("Tracking number EG1 is already used for IP.");
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(onPushed).not.toHaveBeenCalled();
+});
+
+test("reopening the dialog resets every field from the previous attempt", async () => {
+  // Ported from the deleted push-shipment-dialog.test.tsx ("reopening the dialog
+  // resets every field"). A stale tracking number left in the box is how one
+  // order gets pushed with another order's number.
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+    if (String(url).includes("/api/v1/shipments/push")) {
+      return { ok: false, status: 400, json: async () => ({ success: false,
+        error: { code: "DUPLICATE_TRACKING",
+                 message: "Tracking number EG1 is already used for IP." } }) };
+    }
+    if (String(url).includes("/couriers")) {
+      return { ok: true, json: async () => ({ success: true, data: { couriers: COURIERS } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: {} }) };
+  }));
+  const onPushed = vi.fn();
+  const { rerender } = render(
+    <AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
+      onClose={() => {}} onPushed={onPushed} />,
+  );
+  await screen.findByLabelText("Courier");
+  fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
+  fireEvent.change(screen.getByLabelText("Courier"), { target: { value: "FEDEX" } });
+  fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
+  await waitFor(() =>
+    expect(screen.getByText("Tracking number EG1 is already used for IP.")).toBeTruthy(),
+  );
+
+  rerender(<AddShipmentDialog open={false} orderId="o1" orderLabel="MAN-1"
+    onClose={() => {}} onPushed={onPushed} />);
+  expect(screen.queryByLabelText("Tracking No")).toBeNull();
+
+  rerender(<AddShipmentDialog open orderId="o2" orderLabel="MAN-2"
+    onClose={() => {}} onPushed={onPushed} />);
+  await waitFor(() => expect(screen.getByLabelText("Tracking No")).toBeTruthy());
+  expect((screen.getByLabelText("Tracking No") as HTMLInputElement).value).toBe("");
+  expect((screen.getByLabelText("Courier") as HTMLSelectElement).value).toBe("IP");
+  expect(screen.queryAllByRole("alert")).toHaveLength(0);
+  expect(screen.queryAllByRole("status")).toHaveLength(0);
+  expect(onPushed).not.toHaveBeenCalled();
+});
+
 test("the submit button is disabled while the push is in flight", async () => {
   let release: (v: unknown) => void = () => {};
   const gate = new Promise((r) => { release = r; });

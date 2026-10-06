@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getShipmentHistory, ShipmentHistory as History } from "../lib/api";
 import { statusTone, Tone } from "../lib/shipments";
+import ShipsagarRetryDrain from "../components/ShipsagarRetryDrain";
 
 const TONE_CLASS: Record<Tone, string> = {
   success: "bg-emerald-100 text-emerald-800",
@@ -10,6 +11,16 @@ const TONE_CLASS: Record<Tone, string> = {
   danger: "bg-red-100 text-red-800",
   neutral: "bg-slate-100 text-slate-700",
 };
+
+/**
+ * True for the backend's 429 REFRESH_COOLDOWN. `api()` puts the structured
+ * `code` and `status` on the thrown Error; the message alone is not used so a
+ * real outage whose text happens to mention cooldown is not swallowed.
+ */
+function isCooldown(err: unknown): boolean {
+  const e = err as { code?: string; status?: number } | null;
+  return e?.code === "REFRESH_COOLDOWN" || e?.status === 429;
+}
 
 const DOT_CLASS: Record<Tone, string> = {
   success: "bg-emerald-500",
@@ -34,6 +45,12 @@ export default function ShipmentHistoryPage() {
         setError(null);
       })
       .catch((err: unknown) => {
+        // A 429 REFRESH_COOLDOWN is the backend rate-limiting a poll, not a
+        // failure the operator did anything about. Surfacing it every 60s would
+        // train people to ignore the banner, so a silent poll swallows it and
+        // leaves the already-rendered timeline alone. An explicit Refresh still
+        // reports it, because then the user is waiting on an answer.
+        if (silent && isCooldown(err)) return;
         setError(err instanceof Error ? err.message : "Failed to load tracking history");
       })
       .finally(() => setLoading(false));
@@ -88,7 +105,11 @@ export default function ShipmentHistoryPage() {
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-        {loading ? (
+        {!id ? (
+          <p className="text-sm text-slate-500">
+            No shipment was selected. Open tracking history from an order row.
+          </p>
+        ) : loading ? (
           <p className="text-sm text-slate-500">Loading tracking history…</p>
         ) : (data?.events ?? []).length === 0 ? (
           <p className="text-sm text-slate-500">No scans yet for this tracking number.</p>
@@ -114,6 +135,8 @@ export default function ShipmentHistoryPage() {
           </ol>
         )}
       </div>
+
+      <ShipsagarRetryDrain />
     </div>
   );
 }
