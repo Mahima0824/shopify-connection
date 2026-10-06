@@ -42,7 +42,7 @@ export default function TopNav() {
         {/* Desktop Primary Navigation - NO overflow-x-auto to prevent scrollbar */}
         <nav
           aria-label="Primary"
-          className="hidden items-center gap-0.5 text-sm font-medium min-[769px]:flex min-[1100px]:gap-1"
+          className="hidden items-center gap-1 text-sm font-medium min-[769px]:flex min-[1100px]:gap-1.5"
         >
           {APP_NAV_GROUPS.map((g) => {
             const active = isGroupActive(pathname, g.href, g.children);
@@ -56,7 +56,7 @@ export default function TopNav() {
                     PILL,
                     active
                       ? "bg-foreground text-background font-semibold shadow-xs rounded-full"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground rounded-full",
+                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-full",
                   )}
                 >
                   {g.label}
@@ -65,47 +65,49 @@ export default function TopNav() {
             }
 
             const dropOpen = openDrop === g.label;
-            const primaryHref = g.children?.[0]?.href ?? "/";
 
             return (
               <div
                 key={g.label}
                 className="group relative inline-flex items-center"
+                onMouseEnter={() => setOpenDrop(g.label)}
                 onMouseLeave={() => setOpenDrop(null)}
               >
-                <div
+                <button
+                  type="button"
+                  aria-expanded={dropOpen}
+                  aria-haspopup="true"
+                  aria-label={`${g.label} menu`}
+                  onClick={() => setOpenDrop(dropOpen ? null : g.label)}
                   className={cn(
-                    "inline-flex h-9 items-center rounded-full transition-all duration-150",
+                    PILL,
+                    "gap-1 cursor-pointer rounded-full",
                     active
-                      ? "bg-muted text-foreground font-semibold ring-1 ring-border"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ? "bg-foreground text-background font-semibold shadow-xs"
+                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                   )}
                 >
-                  <Link
-                    to={primaryHref}
-                    onClick={closeDrop}
-                    className="inline-flex h-full items-center pl-3 pr-1 text-xs font-medium min-[1100px]:text-sm min-[1100px]:pl-3.5"
+                  <span>{g.label}</span>
+                  <svg
+                    className={cn(
+                      "size-3.5 transition-transform duration-200 opacity-70",
+                      dropOpen && "rotate-180 opacity-100",
+                    )}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    {g.label}
-                  </Link>
-                  <button
-                    type="button"
-                    aria-expanded={dropOpen}
-                    aria-haspopup="true"
-                    aria-label={`${g.label} submenu`}
-                    onClick={() => setOpenDrop(dropOpen ? null : g.label)}
-                    className="inline-flex h-full items-center pr-2 pl-0.5 text-[11px] text-muted-foreground transition-transform hover:text-foreground min-[1100px]:pr-2.5"
-                  >
-                    <span className={cn("transition-transform duration-150 inline-block", dropOpen && "rotate-180")}>
-                      ▾
-                    </span>
-                  </button>
-                </div>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
 
                 {/* Floating Dropdown Panel - Escapes navbar cleanly without clipping */}
                 <div
                   className={cn(
-                    "absolute top-full left-0 mt-1.5 min-w-[210px] rounded-xl border border-border/80 bg-popover/98 p-1.5 shadow-xl backdrop-blur-md z-50 transition-all duration-150",
+                    "absolute top-full left-0 mt-1 min-w-[210px] rounded-xl border border-border/80 bg-popover/98 p-1.5 shadow-xl backdrop-blur-md z-50 transition-all duration-150",
                     "before:absolute before:-top-3 before:left-0 before:right-0 before:h-3 before:content-['']",
                     dropOpen
                       ? "opacity-100 visible translate-y-0 pointer-events-auto"
@@ -113,21 +115,24 @@ export default function TopNav() {
                   )}
                 >
                   {(g.children ?? []).map((c) => {
-                    const childActive = isActive(pathname, c.href);
+                    const childActive = isExact(pathname, c.href);
                     return (
                       <Link
                         key={c.href}
                         to={c.href}
-                        aria-current={isExact(pathname, c.href) ? "page" : undefined}
+                        aria-current={childActive ? "page" : undefined}
                         onClick={closeDrop}
                         className={cn(
-                          "flex h-9 items-center rounded-lg px-3 text-xs font-medium whitespace-nowrap transition-colors min-[1100px]:text-sm",
+                          "flex h-9 items-center justify-between rounded-lg px-3 text-xs font-medium whitespace-nowrap transition-colors min-[1100px]:text-sm",
                           childActive
-                            ? "bg-accent text-accent-foreground font-semibold"
-                            : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                         )}
                       >
-                        {c.label}
+                        <span>{c.label}</span>
+                        {childActive && (
+                          <span className="size-1.5 rounded-full bg-primary" />
+                        )}
                       </Link>
                     );
                   })}
@@ -172,7 +177,7 @@ export default function TopNav() {
                     onClick={() => setOpen(false)}
                     className={cn(
                       "flex min-h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors",
-                      active ? "bg-muted text-foreground font-semibold" : "text-muted-foreground hover:text-foreground",
+                      active ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                     )}
                   >
                     {g.label}
@@ -191,7 +196,7 @@ export default function TopNav() {
                     onClick={() => setExpanded(isExpanded ? null : g.label)}
                     className={cn(
                       "flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition-colors",
-                      groupActive ? "bg-muted text-foreground font-semibold" : "text-muted-foreground hover:text-foreground",
+                      groupActive ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                     )}
                   >
                     <span>{g.label}</span>
@@ -200,20 +205,23 @@ export default function TopNav() {
                   {isExpanded && (
                     <div className="ml-3 mt-1 flex flex-col gap-1 border-l-2 border-border/60 pl-3">
                       {(g.children ?? []).map((c) => {
-                        const childActive = isActive(pathname, c.href);
+                        const childActive = isExact(pathname, c.href);
                         return (
                           <Link
                             key={c.href}
                             to={c.href}
                             onClick={() => setOpen(false)}
                             className={cn(
-                              "flex min-h-9 items-center rounded-md px-2 text-sm transition-colors",
+                              "flex min-h-9 items-center justify-between rounded-md px-2 text-sm transition-colors",
                               childActive
-                                ? "bg-accent text-accent-foreground font-semibold"
-                                : "text-muted-foreground hover:text-foreground",
+                                ? "bg-primary/10 text-primary font-semibold"
+                                : "text-muted-foreground hover:bg-primary/10 hover:text-primary",
                             )}
                           >
-                            {c.label}
+                            <span>{c.label}</span>
+                            {childActive && (
+                              <span className="size-1.5 rounded-full bg-primary" />
+                            )}
                           </Link>
                         );
                       })}

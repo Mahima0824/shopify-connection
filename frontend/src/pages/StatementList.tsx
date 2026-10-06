@@ -159,19 +159,29 @@ export default function StatementsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Settlement statements</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Upload courier / bank / gateway statements to match money against orders and shipments
-        </p>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Settlement Statements
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Banking &amp; Settlements
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload courier / bank / gateway statements to match money against orders and shipments
+          </p>
+        </div>
       </div>
 
-      <Card className="flex flex-wrap items-center gap-3 p-5">
+      <Card className="flex flex-wrap items-center gap-3 p-5 border-border/80 shadow-xs">
         <select
           value={stype}
           onChange={(e) => setStype(e.target.value)}
           aria-label="Type"
-          className="min-h-11 w-full max-w-[260px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="min-h-11 w-full max-w-[260px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           <option value="COURIER_SETTLEMENT">COURIER_SETTLEMENT</option>
           <option value="BANK_STATEMENT">BANK_STATEMENT</option>
@@ -202,7 +212,7 @@ export default function StatementsPage() {
         </div>
       )}
 
-      <Card className="p-5">
+      <Card className="p-5 border-border/80 shadow-xs">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
           Uploads
         </h2>
@@ -230,11 +240,20 @@ export default function StatementsPage() {
         )}
       </Card>
 
-      <div id="reconciliation" className="scroll-mt-20">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Reconciliation</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Expected settlements vs actual bank credits &mdash; clear the mismatch queue
-        </p>
+      <div id="reconciliation" className="scroll-mt-20 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4 pt-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Reconciliation
+            </h2>
+            <Badge variant="secondary" className="text-xs">
+              Mismatch Queue
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Expected settlements vs actual bank credits &mdash; clear the mismatch queue
+          </p>
+        </div>
       </div>
 
       {reconError && (

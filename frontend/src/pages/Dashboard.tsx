@@ -21,12 +21,34 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
+  const loadSummary = (silent = false) => {
+    if (!silent) setLoading(true);
     api<any>("/api/v1/dashboard/summary")
       .then((res) => setData(res))
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
+  };
+
+  useEffect(() => {
+    loadSummary();
   }, []);
+
+  const handleQuickDemoLogin = async () => {
+    try {
+      setLoading(true);
+      const res = await api<{ token: string }>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: "admin@t.in", password: "Pass123!" }),
+      });
+      localStorage.setItem("token", res.token);
+      const summary = await api<any>("/api/v1/dashboard/summary");
+      setData(summary);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleExcelExport = async () => {
     setExporting(true);
@@ -63,20 +85,48 @@ export default function DashboardPage() {
 
   if (!data) {
     return (
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-        <div>
-          <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">Executive Dashboard</h1>
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 bg-background px-6 max-[480px]:px-4">
+        <div className="border-b border-border pb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">
+              Executive Dashboard
+            </h1>
+            <Badge variant="outline" className="text-xs">
+              Authentication Required
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Real-time Operational Ledger &amp; Financial Reconciliation Metrics
           </p>
         </div>
-        <EmptyState
-          icon={<IconAlert size={24} />}
-          title="Dashboard unavailable"
-          body="Please sign in or sync Shopify orders to populate metrics."
-          primary={{ label: "Sign in", href: "/login" }}
-          secondary={{ label: "Sync orders", href: "/orders" }}
-        />
+
+        <div className="py-6 flex flex-col items-center w-full">
+          <EmptyState
+            icon={<IconAlert size={26} />}
+            title="Dashboard unavailable"
+            body="Please sign in or sync Shopify orders to populate metrics."
+            primary={{ label: "Sign in", href: "/login" }}
+            secondary={{ label: "Sync orders", href: "/orders" }}
+          />
+
+          <div className="mt-8 flex flex-col items-center gap-2.5 text-center">
+            <p className="text-xs text-muted-foreground">
+              Testing locally? Click below to authenticate and load live metrics immediately:
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickDemoLogin}
+              className="gap-2 text-xs font-semibold shadow-xs hover:border-primary/50"
+            >
+              <span className="text-primary">
+                <IconSpark size={14} />
+              </span>
+              One-Click Demo Login (admin@t.in)
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

@@ -93,21 +93,34 @@ export default function ParcelPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <Link to="/orders" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-        ← Back to Orders Directory
-      </Link>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <Link to="/orders" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            ← Back to Orders Directory
+          </Link>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Parcel {data.parcel.barcode_value}
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              {data.parcel.status}
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {data.order ? `Order: ${data.order.shopify_order_name} · ₹${data.order.total_amount}` : "Standalone parcel unit"}
+          </p>
+        </div>
+      </div>
 
-      <Card className="p-6">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-2">
-          Parcel {data.parcel.barcode_value}
-        </h1>
+      <Card className="p-6 border-border/80 shadow-xs">
         <div className="flex items-center gap-2 text-sm text-foreground">
-          <span>Status:</span>
+          <span className="text-muted-foreground">Status:</span>
           <Badge variant="secondary">{data.parcel.status}</Badge>
         </div>
         {data.order && (
           <p className="mt-2 text-sm text-foreground">
-            Order: {data.order.shopify_order_name} — ₹{data.order.total_amount}
+            Order: <span className="font-semibold">{data.order.shopify_order_name}</span> — ₹{data.order.total_amount}
           </p>
         )}
         {data.customer && (
@@ -117,7 +130,7 @@ export default function ParcelPage() {
         )}
         <p className="mt-1 text-sm text-muted-foreground">Items: {data.item_count}</p>
 
-        <div className="mt-4 max-w-[380px] rounded-xl border border-border bg-card p-4">
+        <div className="mt-4 max-w-[380px] rounded-xl border border-border/80 bg-muted/30 p-4 shadow-xs">
           <ParcelBarcode value={data.parcel.barcode_value} />
         </div>
 
@@ -140,7 +153,7 @@ export default function ParcelPage() {
       </Card>
 
       {returns.length > 0 && (
-        <Card className="p-6">
+        <Card className="p-6 border-border/80 shadow-xs">
           <h2 className="mb-3 text-lg font-bold tracking-tight text-foreground">Returns on this parcel</h2>
           <div className="flex flex-col divide-y divide-border">
             {returns.map((r: any) => (

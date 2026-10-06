@@ -5,6 +5,7 @@ import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
 import {
+  Badge,
   Button,
   Card,
   Input,
@@ -112,11 +113,19 @@ export default function MonthlyPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Monthly report</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Monthly Financial Report
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              P&amp;L · GST Analytics
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Operational + financial summary with profitability
+            Operational and financial metrics with profitability breakdowns and tax ledger validation
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -142,7 +151,7 @@ export default function MonthlyPage() {
         </div>
       )}
 
-      <Card className="flex flex-col gap-3 p-5">
+      <Card className="flex flex-col gap-3 p-5 border-border/80 shadow-xs">
         <div className="flex flex-wrap items-center gap-3">
           <Label htmlFor="preset" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Period preset
@@ -150,7 +159,7 @@ export default function MonthlyPage() {
           <select
             id="preset"
             aria-label="Period preset"
-            className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
             value={preset}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPreset(e.target.value)}
           >

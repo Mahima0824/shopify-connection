@@ -83,19 +83,24 @@ export default function OrderDetailPage() {
   const opStatus = order.operational_status || "NEW";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 bg-background px-6 py-6 max-[480px]:px-4">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 py-6 max-[480px]:px-4">
       {/* Back Link & Header */}
-      <div>
-        <Link to="/orders" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+      <div className="border-b border-border pb-6">
+        <Link to="/orders" className="mb-3 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
           ← Back to Orders Directory
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Order {order.shopify_order_name || order.internal_order_number || order.id}
-            </h1>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+                Order {order.shopify_order_name || order.internal_order_number || order.id}
+              </h1>
+              <Badge variant="secondary" className="text-xs">
+                {order.source_name || "Shopify"}
+              </Badge>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Internal ID: <span className="font-mono">{order.id}</span> · Created: {order.created_at ? new Date(order.created_at).toLocaleDateString() : "N/A"}
+              Internal ID: <span className="font-mono text-foreground">{order.id}</span> · Created: {order.created_at ? new Date(order.created_at).toLocaleDateString() : "N/A"}
             </p>
           </div>
           <div className="text-right">
@@ -109,7 +114,7 @@ export default function OrderDetailPage() {
 
       {/* Order Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-5">
+        <Card className="p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financial Status</div>
           <div className="mt-3 flex items-center gap-2">
             <Badge variant={getFinancialBadgeVariant(finStatus)} className="text-xs font-bold uppercase tracking-wider">
@@ -117,7 +122,7 @@ export default function OrderDetailPage() {
             </Badge>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fulfillment / Op Status</div>
           <div className="mt-3 flex items-center gap-2">
             <Badge variant={getOpBadgeVariant(opStatus)} className="text-xs font-bold uppercase tracking-wider">
@@ -125,7 +130,7 @@ export default function OrderDetailPage() {
             </Badge>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment Details</div>
           <div className="mt-2 text-base font-bold text-foreground">
             {order.payment_gateway || "Standard Gateway"}
@@ -164,15 +169,15 @@ export default function OrderDetailPage() {
       )}
 
       {/* Order Timeline Section */}
-      <Card className="p-6">
-        <h2 className="mb-5 text-xl font-bold tracking-tight text-foreground">Order Lifecycle Timeline</h2>
+      <Card className="p-6 border-border/80 shadow-xs">
+        <h2 className="mb-5 text-xl font-bold tracking-tight text-foreground font-heading">Order Lifecycle Timeline</h2>
         <Timeline items={timeline} />
       </Card>
 
       {/* Courier & Money Section */}
       {shipments.length > 0 && (
-        <Card className="p-6">
-          <h2 className="mb-4 text-xl font-bold tracking-tight text-foreground">Courier &amp; Money</h2>
+        <Card className="p-6 border-border/80 shadow-xs">
+          <h2 className="mb-4 text-xl font-bold tracking-tight text-foreground font-heading">Courier &amp; Money</h2>
           <div className="flex flex-col gap-3">
             {shipments.map((s) => (
               <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 p-3.5 hover:bg-muted/30 transition-colors">

@@ -67,17 +67,26 @@ export default function ReturnPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Returns &amp; RTO Station</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Scan returned packages to log customer returns, inspect item condition, and auto-flag refunds
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Returns &amp; RTO Station
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Reverse Logistics
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Scan returned packages to log customer returns, inspect item condition, and auto-flag refunds
+          </p>
+        </div>
       </div>
 
       {/* Lookup card */}
-      <Card className="p-6">
+      <Card className="p-6 border-border/80 shadow-xs">
         <form onSubmit={lookup} className="flex flex-col gap-4">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             SCAN RETURNED BARCODE
@@ -106,7 +115,7 @@ export default function ReturnPage() {
       </Card>
 
       {/* Camera + manual entry */}
-      <Card className="p-6">
+      <Card className="p-6 border-border/80 shadow-xs">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Button type="button" variant="outline" onClick={() => setCamOn((v) => !v)}>
             {camOn ? "Stop camera" : "Use camera"}
@@ -125,7 +134,7 @@ export default function ReturnPage() {
 
       {/* Inspection & Confirmation Workspace */}
       {info && (
-        <Card className="p-6">
+        <Card className="p-6 border-border/80 shadow-xs">
           <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">
             Order Inspection: <span>{info.order?.shopify_order_name || "Order"}</span>
           </h2>

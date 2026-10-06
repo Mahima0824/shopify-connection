@@ -39,20 +39,30 @@ export default function CarriersPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[900px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Carrier connections</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.
-        </p>
+    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Carrier Connections
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Logistics APIs
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.
+          </p>
+        </div>
       </div>
 
-      <Card className="flex flex-wrap items-center gap-3 p-6">
+      <Card className="flex flex-wrap items-center gap-3 p-6 border-border/80 shadow-xs">
         <select
           value={code}
           onChange={(e) => setCode(e.target.value)}
           aria-label="Carrier"
-          className="min-h-11 w-full max-w-[240px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="min-h-11 w-full max-w-[240px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           {KNOWN.map((c) => (
             <option key={c}>{c}</option>
@@ -68,7 +78,7 @@ export default function CarriersPage() {
       )}
 
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">Carrier health</h2>
+        <h2 className="font-heading font-semibold text-xl tracking-tight text-foreground">Carrier Health &amp; Integrations</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Connection state and last sync outcome per provider (credentials never shown).
         </p>
@@ -84,7 +94,7 @@ export default function CarriersPage() {
         {health.map((h) => (
           <Card
             key={h.code}
-            className={`p-5 ${h.configured ? "border-t-4 border-t-success" : "border-t-4 border-t-muted"}`}
+            className={`p-5 border-border/80 shadow-xs ${h.configured ? "border-t-4 border-t-success" : "border-t-4 border-t-muted"}`}
           >
             <div className="flex items-center justify-between">
               <span className="font-bold text-foreground">{h.code}</span>

@@ -70,9 +70,20 @@ export default function StatementDetailPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Statement results</h1>
+          <a href="/statements" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            ← Back to Statements
+          </a>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Statement Processing Results
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Settlement Batch
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Dry-run first, then process and clear the unmatched queue
           </p>
@@ -92,7 +103,7 @@ export default function StatementDetailPage() {
       )}
 
       {counts && (
-        <Card className="flex flex-wrap gap-6 p-6">
+        <Card className="flex flex-wrap gap-6 p-6 border-border/80 shadow-xs">
           {Object.entries(counts.dry_run ?? counts)
             .filter(([, v]) => typeof v === "number")
             .map(([k, v]) => (
@@ -106,7 +117,7 @@ export default function StatementDetailPage() {
         </Card>
       )}
 
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
         {rows.length === 0 ? (
           <p className="p-10 text-center text-sm text-muted-foreground">
             No rows in this statement.

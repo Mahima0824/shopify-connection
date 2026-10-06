@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import ScanBanner from "../components/ScanBanner";
 import BarcodeScanner from "../components/scanner/BarcodeScanner";
 import ManualBarcodeInput from "../components/scanner/ManualBarcodeInput";
-import { Button, Card, Input } from "../components/primitives";
+import { Badge, Button, Card, Input } from "../components/primitives";
 import { CONDITIONS } from "../lib/return-options";
 
 type Info = { parcel: any; order: any; customer: any } | null;
@@ -63,17 +63,26 @@ export default function RtoPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">RTO Station</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Scan courier-returned parcels to record RTO events and update order state
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              RTO Return Station
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Undelivered Scans
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Scan courier-returned parcels to record RTO events and update order state
+          </p>
+        </div>
       </div>
 
       {/* Lookup card */}
-      <Card className="p-6">
+      <Card className="p-6 border-border/80 shadow-xs">
         <form onSubmit={lookup} className="flex flex-col gap-4">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             SCAN RTO BARCODE
@@ -102,7 +111,7 @@ export default function RtoPage() {
       </Card>
 
       {/* Camera + manual entry */}
-      <Card className="p-6">
+      <Card className="p-6 border-border/80 shadow-xs">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Button type="button" variant="outline" onClick={() => setCamOn((v) => !v)}>
             {camOn ? "Stop camera" : "Use camera"}
@@ -121,7 +130,7 @@ export default function RtoPage() {
 
       {/* Inspection & Confirmation Workspace */}
       {info && (
-        <Card className="p-6">
+        <Card className="p-6 border-border/80 shadow-xs">
           <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">
             RTO Inspection: <span>{info.order?.shopify_order_name || "Order"}</span>
           </h2>

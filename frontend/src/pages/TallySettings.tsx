@@ -275,13 +275,22 @@ export default function TallySettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Tally ERP / Prime Integration</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Configure company accounting vouchers, payment gateways, and tax ledgers for idempotent Tally export
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Tally ERP / Prime Integration
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              XML &amp; Excel Bridge
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure company accounting vouchers, payment gateways, and tax ledgers for idempotent Tally export
+          </p>
+        </div>
       </div>
 
       {status && (
@@ -291,7 +300,7 @@ export default function TallySettingsPage() {
       )}
 
       {/* Validation gate + workbook export */}
-      <Card className="flex flex-col gap-4 p-6">
+      <Card className="flex flex-col gap-4 p-6 border-border/80 shadow-xs">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">Validate &amp; Export</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -405,7 +414,7 @@ export default function TallySettingsPage() {
       </Card>
 
       {/* Mapping Configuration Card */}
-      <Card className="flex flex-col gap-6 p-6">
+      <Card className="flex flex-col gap-6 p-6 border-border/80 shadow-xs">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">Voucher Types Configuration</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -500,7 +509,7 @@ export default function TallySettingsPage() {
       </Card>
 
       {/* Export Batches History */}
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
           <h2 className="text-lg font-bold tracking-tight text-foreground">Export Batch History</h2>
           <Button variant="outline" size="sm" onClick={loadBatches} disabled={batchesLoading}>

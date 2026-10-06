@@ -47,16 +47,26 @@ export default function OutstandingPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Outstanding shipments</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Parcels that need courier follow-up — oldest and breached first
-        </p>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Outstanding Shipments
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              SLA Tracking
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Parcels that need courier follow-up — oldest and breached first
+          </p>
+        </div>
       </div>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-4 sm:p-5 border-border/80 shadow-xs">
         <select
-          className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           value={sla}
           onChange={(e) => setSla(e.target.value)}
           aria-label="SLA band"
@@ -74,7 +84,7 @@ export default function OutstandingPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
         {items.length === 0 ? (
           <p className="p-10 text-center text-sm text-muted-foreground">
             Nothing outstanding. Every parcel is delivered, returned, or resolved.

@@ -106,14 +106,24 @@ export default function LedgerPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Ledger</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Immutable financial events &mdash; read-only. Corrections happen via reversal entries.
-        </p>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Financial Ledger
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Audit Trail
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Immutable financial events &mdash; read-only. Corrections happen via reversal entries.
+          </p>
+        </div>
       </div>
 
-      <Card className="flex flex-wrap items-end gap-3 p-5">
+      <Card className="flex flex-wrap items-end gap-3 p-5 border-border/80 shadow-xs">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ledger-from" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             From
@@ -211,7 +221,7 @@ export default function LedgerPage() {
           secondary={{ label: "Monthly report", href: "/reports/monthly" }}
         />
       ) : (
-        <Card className="overflow-hidden p-0">
+        <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>

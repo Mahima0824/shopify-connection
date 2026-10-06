@@ -18,23 +18,23 @@ export default function EmptyState({
   secondary?: EmptyStateAction;
 }) {
   return (
-    <Card className="items-center gap-2 py-12 text-center">
+    <Card className="flex flex-col items-center justify-center p-8 sm:p-14 text-center max-w-2xl mx-auto border-border/80 shadow-xs">
       {icon && (
         <div
           aria-hidden="true"
-          className="mb-2 flex size-12 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground"
+          className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-xs"
         >
           {icon}
         </div>
       )}
-      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-      <p className="mb-4 max-w-[420px] text-sm text-muted-foreground">{body}</p>
-      <div className="flex flex-wrap justify-center gap-3 max-[480px]:w-full">
-        <Button asChild className="max-[480px]:w-full">
+      <h3 className="text-xl font-heading font-bold text-foreground tracking-tight">{title}</h3>
+      <p className="mt-2 mb-6 max-w-[440px] text-sm text-muted-foreground leading-relaxed mx-auto">{body}</p>
+      <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
+        <Button asChild className="max-[480px]:w-full font-semibold px-6 shadow-xs">
           <Link to={primary.href}>{primary.label}</Link>
         </Button>
         {secondary && (
-          <Button asChild variant="outline" className="max-[480px]:w-full">
+          <Button asChild variant="outline" className="max-[480px]:w-full font-medium px-6">
             <Link to={secondary.href}>{secondary.label}</Link>
           </Button>
         )}

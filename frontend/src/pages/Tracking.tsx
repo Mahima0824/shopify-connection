@@ -178,9 +178,17 @@ export default function GeneralTrackingPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Order Tracking Center</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              Order Tracking Center
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              Live Telemetry
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Real-time multi-carrier shipment status, India Post &amp; DTDC tracking events, and exception monitoring
           </p>
@@ -198,26 +206,26 @@ export default function GeneralTrackingPage() {
 
       {/* KPI Band */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-t-4 border-t-primary p-5">
+        <Card className="border-t-4 border-t-primary p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Tracked</div>
           <div className="mt-1 text-3xl font-extrabold text-foreground">{counts.total}</div>
         </Card>
-        <Card className="border-t-4 border-t-destructive p-5">
+        <Card className="border-t-4 border-t-destructive p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Critical / NDR</div>
           <div className="mt-1 text-3xl font-extrabold text-destructive">{counts.critical}</div>
         </Card>
-        <Card className="border-t-4 border-t-warning p-5">
+        <Card className="border-t-4 border-t-warning p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delayed / Warning</div>
           <div className="mt-1 text-3xl font-extrabold text-warning">{counts.warn}</div>
         </Card>
-        <Card className="border-t-4 border-t-success p-5">
+        <Card className="border-t-4 border-t-success p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">On Track</div>
           <div className="mt-1 text-3xl font-extrabold text-foreground">{counts.ok}</div>
         </Card>
       </div>
 
       {/* Search & Filter Bar */}
-      <Card className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+      <Card className="flex flex-wrap items-center gap-3 p-4 sm:p-5 border-border/80 shadow-xs">
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
