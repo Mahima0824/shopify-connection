@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getShipmentHistory, ShipmentHistory as History } from "../lib/api";
 import { statusTone, Tone } from "../lib/shipments";
-import ShipsagarRetryDrain from "../components/ShipsagarRetryDrain";
 
 const TONE_CLASS: Record<Tone, string> = {
   success: "bg-emerald-100 text-emerald-800",
@@ -148,8 +147,6 @@ export default function ShipmentHistoryPage() {
           </ol>
         )}
       </div>
-
-      <ShipsagarRetryDrain />
     </div>
   );
 }
