@@ -3455,8 +3455,8 @@ def test_get_couriers_parses_and_sorts_by_name(monkeypatch):
 
     monkeypatch.setattr(ss, "_post", _fake_post)
     out = ss.get_couriers()
-    assert [c["courier_code"] for c in out] == ["ARAMEX", "ATS", "DTDC"]
-    assert out[1]["courier_name"] == "Amazon Tracking Services"
+    assert [c["courier_code"] for c in out] == ["ATS", "ARAMEX", "DTDC"]
+    assert out[0]["courier_name"] == "Amazon Tracking Services"
     assert seen["path"] == "/GetCourier"
     assert seen["body"]["ClientCode"] == "C1001"
 

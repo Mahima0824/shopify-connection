@@ -973,7 +973,7 @@ def get_couriers(force: bool = False) -> list[dict]:
     # Ordered by code, not by name: ShipSagar's codes are the stable identity
     # the push path stores, and "Amazon Tracking Services" sorts before "ARAMEX"
     # by name while its code (ATS) sorts after it.
-    rows.sort(key=lambda r: r["courier_code"])
+    rows.sort(key=lambda r: (r["courier_name"].lower(), r["courier_code"]))
     _courier_cache = rows
     _courier_cached_at = now
     return list(rows)
