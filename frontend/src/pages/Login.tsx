@@ -40,10 +40,10 @@ export default function LoginPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "var(--canvas)",
+      background: "var(--background)",
       padding: "20px"
     }}>
-      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ width: "100%", maxWidth: "440px", padding: "40px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
 
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
@@ -52,8 +52,8 @@ export default function LoginPage() {
             height: "48px",
             borderRadius: "12px",
             background: "var(--neutral-bg)",
-            border: "1px solid var(--hairline)",
-            color: "var(--muted)",
+            border: "1px solid var(--border)",
+            color: "var(--muted-foreground)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -63,15 +63,15 @@ export default function LoginPage() {
           }}>
             R
           </div>
-          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
-          <p style={{ color: "var(--muted)", fontSize: "14px" }}>
+          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", marginBottom: "8px" }}>Welcome Back</h1>
+          <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>
             Sign in to access your Shopify Order Reconciliation platform
           </p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{
+          <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{
             padding: "12px 16px",
             borderRadius: "12px",
             fontSize: "14px",
@@ -88,11 +88,11 @@ export default function LoginPage() {
         {/* Login Form */}
         <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted)" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted-foreground)" }}>
               Email Address
             </label>
             <input
-              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
               type="email"
               placeholder="name@company.com"
               value={email}
@@ -102,11 +102,11 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted)" }}>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--muted-foreground)" }}>
               Password
             </label>
             <input
-              className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+              className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
               type="password"
               placeholder="••••••••"
               value={password}
@@ -117,7 +117,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
+            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
             disabled={loading}
             style={{ marginTop: "8px", padding: "14px", minHeight: "44px" }}
           >
@@ -126,14 +126,14 @@ export default function LoginPage() {
         </form>
 
         {/* Demo Credentials Quick Fill */}
-        <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--hairline)", textAlign: "center" }}>
-          <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px" }}>
+        <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--border)", textAlign: "center" }}>
+          <p style={{ fontSize: "12px", color: "var(--muted-foreground)", marginBottom: "12px" }}>
             Testing locally? Click to fill test accounts:
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
             <button
               type="button"
-              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
+              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"
               style={{ fontSize: "12px", padding: "6px 12px" }}
               onClick={() => fillDemoCreds("admin@t.in")}
             >
@@ -141,7 +141,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full"
+              className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full"
               style={{ fontSize: "12px", padding: "6px 12px" }}
               onClick={() => fillDemoCreds("dash@t.in")}
             >

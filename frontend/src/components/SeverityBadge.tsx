@@ -10,15 +10,15 @@ const BADGE_CLASSES: Record<string, string> = {
 const DOT_COLORS: Record<string, string> = {
   CRITICAL: "var(--error)",
   HIGH: "var(--warning)",
-  MEDIUM: "var(--accent)",
-  LOW: "var(--muted)",
+  MEDIUM: "var(--primary)",
+  LOW: "var(--muted-foreground)",
 };
 
 export default function SeverityBadge({ severity }: { severity: string }) {
   const cls = BADGE_CLASSES[severity] ?? "badge-neutral";
-  const dot = DOT_COLORS[severity] ?? "var(--muted)";
+  const dot = DOT_COLORS[severity] ?? "var(--muted-foreground)";
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground ${cls}`}>
       <span
         aria-hidden="true"
         style={{ width: "8px", height: "8px", borderRadius: "50%", background: dot, flexShrink: 0 }}

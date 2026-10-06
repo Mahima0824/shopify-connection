@@ -138,34 +138,34 @@ export default function StatementsPage() {
   const selEligible = selected ? isPotential(selected) : false;
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
       <div>
-        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Settlement statements</h1>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Settlement statements</h1>
+        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
           Upload courier / bank / gateway statements to match money against orders and shipments
         </p>
       </div>
-      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-        <select value={stype} onChange={(e) => setStype(e.target.value)} aria-label="Type" className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" style={{ width: "240px" }}>
+      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <select value={stype} onChange={(e) => setStype(e.target.value)} aria-label="Type" className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" style={{ width: "240px" }}>
           <option>COURIER_SETTLEMENT</option><option>BANK_STATEMENT</option>
           <option>PAYMENT_GATEWAY_STATEMENT</option><option>COURIER_SHIPMENT_REPORT</option>
         </select>
         <input type="file" accept=".csv,.xlsx" aria-label="Statement file"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button onClick={upload} disabled={!file || busy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">
+        <button onClick={upload} disabled={!file || busy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
           {busy ? "Uploading..." : "Upload"}
         </button>
       </div>
       {msg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{msg}</p>}
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
-      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
-        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted)", textTransform: "uppercase" }}>Uploads</h2>
+      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
+        <h2 style={{ fontSize: "16px", marginBottom: "16px", color: "var(--muted-foreground)", textTransform: "uppercase" }}>Uploads</h2>
         {items.length === 0 ? (
-          <p style={{ color: "var(--muted)", fontSize: "14px" }}>No statements yet. Upload a courier settlement CSV to match your first money.</p>
+          <p style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>No statements yet. Upload a courier settlement CSV to match your first money.</p>
         ) : (
           <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
             {items.map((u) => (
-              <li key={u.id} style={{ padding: "12px 16px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+              <li key={u.id} style={{ padding: "12px 16px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "12px" }}>
                 <Link to={`/statements/${u.id}`} style={{ fontWeight: 600 }}>
                   {u.provider || u.statement_type} &middot; {u.row_count} rows &middot; {u.status}
                 </Link>
@@ -176,21 +176,21 @@ export default function StatementsPage() {
       </div>
 
       <div id="reconciliation" style={{ scrollMarginTop: "80px" }}>
-        <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "20px", fontWeight: 700 }}>Reconciliation</h2>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "20px", fontWeight: 700 }}>Reconciliation</h2>
+        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
           Expected settlements vs actual bank credits &mdash; clear the mismatch queue
         </p>
       </div>
 
       {reconError && (
-        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {reconError} <button onClick={loadRecon} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          {reconError} <button onClick={loadRecon} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
       {matchMsg && <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>{matchMsg}</p>}
 
       {reconLoading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading reconciliation&hellip;</div>
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading reconciliation&hellip;</div>
       ) : (
         <>
           {summary && (
@@ -202,15 +202,15 @@ export default function StatementsPage() {
               </div>
             </div>
           )}
-          <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--hairline)", fontSize: "13px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
               Mismatch queue &middot; {mismatches.length} rows
             </div>
             {mismatches.length === 0 ? (
-              <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>No mismatches. Every bank credit matches its expected settlement.</p>
+              <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>No mismatches. Every bank credit matches its expected settlement.</p>
             ) : (
               <div style={{ overflowX: "auto" }}>
-                <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]">
+                <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
                   <thead>
                     <tr>
                       <th>Order</th>
@@ -228,7 +228,7 @@ export default function StatementsPage() {
                       return (
                         <tr key={r.bank_row_id}>
                           <td style={{ fontWeight: 600 }}>{r.order_name || r.order_id || "-"}</td>
-                          <td style={{ fontSize: "13px", color: "var(--muted)" }}>{r.bank_reference || "-"}</td>
+                          <td style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>{r.bank_reference || "-"}</td>
                           <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(r.expected_amount)}</td>
                           <td className="tabular-nums" style={{ textAlign: "right" }}>{inr(r.actual_amount)}</td>
                           <td className="tabular-nums" style={{ textAlign: "right", fontWeight: 600 }}>{inr(r.difference)}</td>
@@ -240,11 +240,11 @@ export default function StatementsPage() {
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <span style={{ display: "inline-flex", gap: "8px", justifyContent: "flex-end" }}>
-                              <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" aria-label={`Details for ${r.bank_reference || r.bank_row_id}`}>
+                              <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" aria-label={`Details for ${r.bank_reference || r.bank_row_id}`}>
                                 Details
                               </button>
                               {privileged && isPotential(r) && (
-                                <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full" aria-label={`Manual match ${r.bank_reference || r.bank_row_id}`}>
+                                <button onClick={() => { setSelected(r); setShipId(""); setMatchMsg(null); }} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full" aria-label={`Manual match ${r.bank_reference || r.bank_row_id}`}>
                                   Manual match
                                 </button>
                               )}
@@ -276,56 +276,56 @@ export default function StatementsPage() {
             padding: "20px",
           }}
         >
-          <div style={{ width: "100%", maxWidth: "560px", padding: "32px", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
-            <h2 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "22px", marginBottom: "8px" }}>Drill-down</h2>
-            <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "20px" }}>
+          <div style={{ width: "100%", maxWidth: "560px", padding: "32px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+            <h2 className="font-bold tracking-tight text-foreground" style={{ fontSize: "22px", marginBottom: "8px" }}>Drill-down</h2>
+            <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginBottom: "20px" }}>
               Order &rarr; payment &rarr; settlement &rarr; bank reference &middot; {selStatus}
             </p>
             <dl style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "14px", marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Order</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Order</dt>
                 <dd style={{ fontWeight: 600 }}>{selected.order_name || selected.order_id || "-"}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Payment</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Payment</dt>
                 <dd style={{ fontWeight: 600 }}>{selected.payment_reference || selected.payment_id || "-"}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Settlement</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Settlement</dt>
                 <dd style={{ fontWeight: 600 }}>{selected.gateway_settlement_reference || selected.shipment_id || "-"}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Bank reference</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Bank reference</dt>
                 <dd style={{ fontWeight: 600 }}>{selected.bank_reference || "-"}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Expected / Actual / Difference</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Expected / Actual / Difference</dt>
                 <dd className="tabular-nums" style={{ fontWeight: 600 }}>
                   {inr(selected.expected_amount)} / {inr(selected.actual_amount)} / {inr(selected.difference)}
                 </dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <dt style={{ color: "var(--muted)" }}>Match level</dt>
+                <dt style={{ color: "var(--muted-foreground)" }}>Match level</dt>
                 <dd style={{ fontWeight: 600 }}>{selected.match_level || "-"}</dd>
               </div>
             </dl>
             {privileged && selEligible && (
               <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
                 <input
-                  className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+                  className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
                   value={shipId}
                   onChange={(e) => setShipId(e.target.value)}
                   placeholder="Shipment ID"
                   aria-label="Shipment ID"
                   style={{ flex: 1 }}
                 />
-                <button onClick={doManualMatch} disabled={!shipId.trim() || matchBusy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">
+                <button onClick={doManualMatch} disabled={!shipId.trim() || matchBusy} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
                   {matchBusy ? "Matching\u2026" : "Manual match"}
                 </button>
               </div>
             )}
             <div style={{ display: "flex", gap: "12px" }}>
-              <button onClick={() => setSelected(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ padding: "12px 20px" }}>
+              <button onClick={() => setSelected(null)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ padding: "12px 20px" }}>
                 Close
               </button>
             </div>

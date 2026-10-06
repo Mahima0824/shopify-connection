@@ -3,15 +3,15 @@ import React from "react";
 export type TNode = { at: string | null; kind: string; label: string; detail: string | null };
 
 const KIND_DOTS: Record<string, string> = {
-  CREATED: "var(--accent)",
+  CREATED: "var(--primary)",
   PAYMENT: "var(--success)",
-  PACKED: "var(--accent)",
+  PACKED: "var(--primary)",
   DISPATCHED: "var(--success)",
   RETURN: "var(--warning)",
   REFUND: "var(--error)",
   CANCELLED: "var(--error)",
-  PAYMENT_PENDING: "var(--muted)",
-  AUDIT: "var(--muted)",
+  PAYMENT_PENDING: "var(--muted-foreground)",
+  AUDIT: "var(--muted-foreground)",
 };
 
 function fmtTime(iso: string | null): string | null {
@@ -30,7 +30,7 @@ function fmtTime(iso: string | null): string | null {
 
 export default function Timeline({ items }: { items: TNode[] }) {
   if (!items || items.length === 0) {
-    return <div style={{ color: "var(--muted)", fontSize: "14px" }}>No timeline events recorded yet.</div>;
+    return <div style={{ color: "var(--muted-foreground)", fontSize: "14px" }}>No timeline events recorded yet.</div>;
   }
 
   return (
@@ -43,12 +43,12 @@ export default function Timeline({ items }: { items: TNode[] }) {
           top: "8px",
           bottom: "8px",
           width: "2px",
-          background: "var(--hairline)",
+          background: "var(--border)",
         }}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {items.map((n, ix) => {
-          const dot = KIND_DOTS[n.kind] || "var(--accent)";
+          const dot = KIND_DOTS[n.kind] || "var(--primary)";
           return (
             <div key={ix} style={{ display: "flex", gap: "16px", alignItems: "flex-start", position: "relative" }}>
               <div
@@ -63,12 +63,12 @@ export default function Timeline({ items }: { items: TNode[] }) {
                   flexShrink: 0,
                 }}
               />
-              <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ flex: 1, padding: "12px 16px" }}>
+              <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ flex: 1, padding: "12px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14px" }}>{n.label}</span>
-                  {fmtTime(n.at) && <span style={{ fontSize: "12px", color: "var(--muted)" }}>{fmtTime(n.at)}</span>}
+                  <span style={{ fontWeight: 600, color: "var(--foreground)", fontSize: "14px" }}>{n.label}</span>
+                  {fmtTime(n.at) && <span style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>{fmtTime(n.at)}</span>}
                 </div>
-                {n.detail && <p style={{ fontSize: "13px", color: "var(--body)", marginTop: "4px" }}>{n.detail}</p>}
+                {n.detail && <p style={{ fontSize: "13px", color: "var(--foreground)", marginTop: "4px" }}>{n.detail}</p>}
               </div>
             </div>
           );

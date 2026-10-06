@@ -75,14 +75,14 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
 
      
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Orders Directory</h1>
-          <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+          <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Orders Directory</h1>
+          <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
             View and search all synchronized commerce orders
           </p>
         </div>
@@ -90,30 +90,30 @@ export default function OrdersPage() {
         <button
           onClick={handleSyncShopify}
           disabled={syncing}
-          className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
+          className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
         >
           <span style={{ display: "inline-flex", marginRight: "8px" }}><IconRefund size={16} /></span>
           {syncing ? "Syncing Shopify..." : "Sync Shopify Orders"}
         </button>
         <input ref={fileRef} type="file" accept=".csv" aria-label="Upload orders CSV" style={{ display: "none" }}
           onChange={(e) => handleCsvUpload(e.target.files?.[0])} />
-        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">
+        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
           {uploading ? "Importing…" : "Import CSV"}
         </button>
         </div>
       </div>
 
       {importSummary && (
-        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5">
+        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5">
           <ImportResult summary={importSummary} />
         </div>
       )}
 
       {/* Filter & Search Controls */}
-      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
+      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px" }}>
         <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
           <input
-            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
             placeholder="Search orders by name, customer, or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -128,27 +128,27 @@ export default function OrdersPage() {
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
           <IconAlert size={16} /> {error}
         </div>
       )}
 
       {/* Main Table */}
-      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ padding: 0, overflow: "hidden", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
             Loading orders directory...
           </div>
         ) : orders.length === 0 ? (
           <div style={{ padding: "24px", textAlign: "center" }}>
-            <p style={{ color: "var(--muted)", marginBottom: "16px" }}>
+            <p style={{ color: "var(--muted-foreground)", marginBottom: "16px" }}>
               No orders yet. Sync Shopify or import a CSV to populate the directory.
             </p>
             <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button onClick={handleSyncShopify} disabled={syncing} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full">
+              <button onClick={handleSyncShopify} disabled={syncing} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full">
                 Sync Shopify Orders
               </button>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">
                 Import CSV
               </button>
             </div>

@@ -7,7 +7,7 @@ export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "war
   return (
     <div
       role={kind === "error" ? "alert" : "status"}
-      className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5"
+      className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5"
       style={{
         borderLeft: `4px solid ${statusColor}`,
         display: "flex",
@@ -17,7 +17,7 @@ export default function ScanBanner({ kind, text }: { kind: "ok" | "error" | "war
         fontWeight: 600,
       }}
     >
-      <span style={{ display: "inline-flex", color: "var(--ink)" }}>
+      <span style={{ display: "inline-flex", color: "var(--foreground)" }}>
         {kind === "ok" ? <IconSpark /> : <IconAlert />}
       </span>
       <span>{text}</span>

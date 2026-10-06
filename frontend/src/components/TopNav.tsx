@@ -24,7 +24,7 @@ const pill = (active: boolean, extra?: React.CSSProperties): React.CSSProperties
   minHeight: 44,
   padding: "8px 16px",
   borderRadius: 9999,
-  color: active ? "var(--ink)" : "var(--muted)",
+  color: active ? "var(--foreground)" : "var(--muted-foreground)",
   background: active ? "var(--card)" : "transparent",
   whiteSpace: "nowrap",
   ...extra,
@@ -42,8 +42,8 @@ export default function TopNav() {
     <header
       style={{
         height: 64,
-        background: "var(--canvas)",
-        borderBottom: "1px solid var(--hairline)",
+        background: "var(--background)",
+        borderBottom: "1px solid var(--border)",
         position: "sticky",
         top: 0,
         zIndex: 50,
@@ -61,7 +61,7 @@ export default function TopNav() {
         <Link
           to="/"
           style={{
-            color: "var(--ink)",
+            color: "var(--foreground)",
             fontWeight: 600,
             fontSize: 18,
           }}
@@ -137,7 +137,7 @@ export default function TopNav() {
                   ▾
                 </button>
                 <div
-                  className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-[var(--hairline)] bg-[var(--card)] p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+                  className="invisible absolute top-full left-0 z-60 min-w-[200px] rounded-xl border border-border bg-card p-1 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
                 >
                   {(g.children ?? []).map((c) => {
                     const childActive = isActive(pathname, c.href);
@@ -154,8 +154,8 @@ export default function TopNav() {
                           padding: "10px 16px",
                           borderRadius: 8,
                           fontSize: 14,
-                          color: childActive ? "var(--ink)" : "var(--body)",
-                          background: childActive ? "var(--surface)" : "transparent",
+                          color: childActive ? "var(--foreground)" : "var(--foreground)",
+                          background: childActive ? "var(--muted)" : "transparent",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -169,11 +169,11 @@ export default function TopNav() {
           })}
         </nav>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <Link to="/login" style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
+          <Link to="/login" style={{ fontSize: 14, fontWeight: 500, color: "var(--foreground)" }}>
             Sign in
           </Link>
           <button
-            className="hidden min-h-11 min-w-11 cursor-pointer border-0 bg-transparent text-xl text-[var(--ink)] max-[768px]:block"
+            className="hidden min-h-11 min-w-11 cursor-pointer border-0 bg-transparent text-xl text-foreground max-[768px]:block"
             onClick={() => setOpen(!open)}
             aria-label="menu"
             aria-expanded={open}
@@ -189,8 +189,8 @@ export default function TopNav() {
           aria-label="Mobile"
           style={{
             padding: 16,
-            background: "var(--canvas)",
-            borderBottom: "1px solid var(--hairline)",
+            background: "var(--background)",
+            borderBottom: "1px solid var(--border)",
           }}
         >
           {APP_NAV_GROUPS.map((g) => {
@@ -207,7 +207,7 @@ export default function TopNav() {
                     minHeight: 44,
                     padding: "8px 16px",
                     borderRadius: 9999,
-                    color: active ? "var(--ink)" : "var(--body)",
+                    color: active ? "var(--foreground)" : "var(--foreground)",
                     background: active ? "var(--card)" : "transparent",
                   }}
                 >
@@ -231,7 +231,7 @@ export default function TopNav() {
                     borderRadius: 9999,
                     border: "none",
                     background: groupActive ? "var(--card)" : "transparent",
-                    color: groupActive ? "var(--ink)" : "var(--body)",
+                    color: groupActive ? "var(--foreground)" : "var(--foreground)",
                     fontSize: 14,
                     fontWeight: 500,
                     cursor: "pointer",
@@ -255,7 +255,7 @@ export default function TopNav() {
                           minHeight: 44,
                           padding: "8px 16px 8px 32px",
                           borderRadius: 9999,
-                          color: childActive ? "var(--ink)" : "var(--body)",
+                          color: childActive ? "var(--foreground)" : "var(--foreground)",
                           background: childActive ? "var(--card)" : "transparent",
                         }}
                       >
@@ -269,7 +269,7 @@ export default function TopNav() {
           <Link
             to="/login"
             onClick={() => setOpen(false)}
-            style={{ display: "block", padding: "8px 16px", color: "var(--ink)" }}
+            style={{ display: "block", padding: "8px 16px", color: "var(--foreground)" }}
           >
             Sign in
           </Link>

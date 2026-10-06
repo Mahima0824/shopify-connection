@@ -185,38 +185,38 @@ export default function MonthClosePage() {
     : [];
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
       <div>
-        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Month close</h1>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Month close</h1>
+        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
           Five close gates must read zero before a month can be closed &mdash; closed months accept adjustments only.
         </p>
       </div>
 
-      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted)" }}>
+      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "end", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--muted-foreground)" }}>
           Month
           <input
             type="month"
             value={month}
             onChange={(e) => handleMonthChange(e.target.value)}
             aria-label="Close month"
-            className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+            className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
           />
         </label>
         {status && (
-          <span className={isClosed ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--neutral-bg)] text-[var(--muted)]" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]"} aria-label={`Period status ${status}`}>
+          <span className={isClosed ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--neutral-bg)] text-muted-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground"} aria-label={`Period status ${status}`}>
             {status}
           </span>
         )}
-        <button onClick={() => load(month)} disabled={checking} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ minHeight: 44 }}>
+        <button onClick={() => load(month)} disabled={checking} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ minHeight: 44 }}>
           {checking ? "Running checks..." : "Run checks"}
         </button>
         {privileged && !isClosed && (
           <button
             onClick={handleClose}
             disabled={closing || blocked || !issues}
-            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-[var(--accent)] text-[var(--on-accent)] active:translate-y-px max-[480px]:w-full"
+            className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-3 border-0 text-sm font-semibold bg-primary text-[text-primary-foreground] active:translate-y-px max-[480px]:w-full"
             style={{ minHeight: 44 }}
             title={blocked ? "Close blocked - fix the open gates first" : "Close this month"}
           >
@@ -226,8 +226,8 @@ export default function MonthClosePage() {
       </div>
 
       {error && (
-        <div role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>
-          {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
+        <div role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>
+          {error} <button onClick={() => load(month)} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginLeft: "12px" }}>Retry</button>
         </div>
       )}
       {notice && (
@@ -235,17 +235,17 @@ export default function MonthClosePage() {
       )}
 
       {isClosed && (
-        <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <SeverityBadge severity="MEDIUM" />
-          <p style={{ margin: 0, fontSize: "14px", color: "var(--ink)" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "var(--foreground)" }}>
             Period {month} is CLOSED - only ADJUSTMENT corrections may post here.
           </p>
           {adminOnly ? (
-            <button onClick={handleReopen} disabled={reopening} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ minHeight: 44 }}>
+            <button onClick={handleReopen} disabled={reopening} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ minHeight: 44 }}>
               {reopening ? "Reopening..." : "Reopen month"}
             </button>
           ) : (
-            <span style={{ fontSize: "13px", color: "var(--muted)" }}>
+            <span style={{ fontSize: "13px", color: "var(--muted-foreground)" }}>
               Reopening requires an ADMIN role.
             </span>
           )}
@@ -253,14 +253,14 @@ export default function MonthClosePage() {
       )}
 
       {loading ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Loading period&hellip;</div>
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>Loading period&hellip;</div>
       ) : issues ? (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-            <span style={{ fontSize: "13px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+            <span style={{ fontSize: "13px", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
               Close gates
             </span>
-            <span className={blocked ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--error-bg)] text-[var(--ink)]" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-[var(--ink)] bg-[var(--success-bg)] text-[var(--ink)]"}>
+            <span className={blocked ? "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--error-bg)] text-foreground" : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[var(--neutral-bg)] text-foreground bg-[var(--success-bg)] text-foreground"}>
               {blocked ? `BLOCKED (${total})` : "CLEAR"}
             </span>
           </div>
@@ -269,9 +269,9 @@ export default function MonthClosePage() {
               <MetricCard key={g.key} title={g.label} value={`${g.count}`} subtitle={g.count > 0 ? "must be zero" : "clear"} />
             ))}
           </div>
-          <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]">
+              <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted">
                 <thead>
                   <tr>
                     <th>Gate</th>
@@ -313,7 +313,7 @@ export default function MonthClosePage() {
           {blockerEntries.length > 0 && (
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0 0", padding: 0 }}>
               {blockerEntries.map((b) => (
-                <li key={b.gate} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: "10px", fontSize: "13px" }}>
+                <li key={b.gate} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px", background: "var(--muted)", border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px" }}>
                   <SeverityBadge severity="HIGH" />
                   <span><strong>{b.gate}</strong>: {b.refs.join(", ")}{blockers && (blockers.checks[b.gate] ?? []).length > 5 ? " ..." : ""}</span>
                 </li>

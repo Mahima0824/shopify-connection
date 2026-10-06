@@ -42,7 +42,9 @@ test("exactly one current-page marker exists", () => {
 test("topnav uses enterprise canvas background", () => {
   const { container } = renderNav();
   const header = container.querySelector("header") as HTMLElement;
-  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/var\(--canvas\)/i);
+  // --canvas was the legacy name; it now resolves through shadcn's
+  // --background token, which the preset sets to the same near-white.
+  expect(header.outerHTML + (header.getAttribute("style") ?? "")).toMatch(/var\(--background\)/i);
 });
 
 test("topnav groups routes with active trail", () => {

@@ -114,10 +114,10 @@ export default function TrackingPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--canvas)" }}>
+    <div className="mx-auto w-full max-w-[1280px] px-6 max-[480px]:px-4" style={{ display: "flex", flexDirection: "column", gap: "24px", background: "var(--background)" }}>
       <div>
-        <h1 className="font-bold tracking-tight text-[var(--ink)]" style={{ fontSize: "28px", fontWeight: 700 }}>Tracking command center</h1>
-        <p style={{ color: "var(--muted)", fontSize: "14px", marginTop: "4px" }}>
+        <h1 className="font-bold tracking-tight text-foreground" style={{ fontSize: "28px", fontWeight: 700 }}>Tracking command center</h1>
+        <p style={{ color: "var(--muted-foreground)", fontSize: "14px", marginTop: "4px" }}>
           Live courier state, exception bands, and manual refresh with cooldown
         </p>
       </div>
@@ -128,33 +128,33 @@ export default function TrackingPage() {
           ["Warning", counts.warn, "var(--warning)"],
           ["On track", counts.ok, "var(--success)"],
         ] as const).map(([label, n, color]) => (
-          <div key={label} className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ borderTop: `4px solid ${color}` }}>
-            <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted)" }}>{label}</div>
+          <div key={label} className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ borderTop: `4px solid ${color}` }}>
+            <div style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>{label}</div>
             <div style={{ fontSize: "32px", fontWeight: 800 }}>{n}</div>
           </div>
         ))}
       </div>
 
-      <div className="rounded-xl border border-[var(--hairline)] bg-white text-[var(--ink)] p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="rounded-xl border border-border bg-white text-foreground p-6 max-[768px]:p-5" style={{ padding: "16px 24px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
         <input
-          className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search AWB, order, or barcode…"
           aria-label="Search shipments"
           style={{ flex: 2, minWidth: "220px" }}
         />
-        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={carrier} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={carrier} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All carriers</option>
           {carriers.map((c) => <option key={c}>{c}</option>)}
         </select>
-        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All statuses</option>
           {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "NDR_REATTEMPT", "DELIVERY_EXCEPTION", "RTO_INITIATED", "RTO_DELIVERED", "RETURNED", "LOST"].map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
-        <select className="w-full min-h-11 rounded-lg border border-[var(--hairline)] bg-white px-3.5 py-2.5 text-base text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2" value={band} onChange={(e) => setBand(e.target.value)} aria-label="Exception band" style={{ flex: 1, minWidth: "140px" }}>
+        <select className="w-full min-h-11 rounded-lg border border-border bg-white px-3.5 py-2.5 text-base text-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-[var(--primary)] focus-visible:outline-offset-2" value={band} onChange={(e) => setBand(e.target.value)} aria-label="Exception band" style={{ flex: 1, minWidth: "140px" }}>
           <option value="">All bands</option>
           <option value="critical">Critical</option>
           <option value="warn">Warning</option>
@@ -162,15 +162,15 @@ export default function TrackingPage() {
         </select>
       </div>
 
-      {error && <p role="alert" className="bg-[var(--error-bg)] text-[var(--ink)]" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
+      {error && <p role="alert" className="bg-[var(--error-bg)] text-foreground" style={{ padding: "12px 16px", borderRadius: "12px" }}>{error}</p>}
 
-      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--hairline)", borderRadius: "12px" }}>
+      <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
         {shown.length === 0 ? (
-          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+          <p style={{ padding: "40px", textAlign: "center", color: "var(--muted-foreground)" }}>
             No shipments match — book one from dispatch or clear the filters.
           </p>
         ) : (
-          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-[var(--hairline)] [&_thead_th]:bg-[var(--surface)] [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-[var(--muted)] [&_td]:border-b [&_td]:border-[var(--hairline)] [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-[var(--ink)] [&_tbody_tr:hover]:bg-[var(--surface)]" style={{ border: "none" }}>
+          <table className="w-full border-separate border-spacing-0 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:py-3.5 [&_thead_th]:text-left [&_thead_th]:align-middle [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-[0.05em] [&_thead_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:p-4 [&_td]:align-middle [&_td]:text-sm [&_td]:text-foreground [&_tbody_tr:hover]:bg-muted" style={{ border: "none" }}>
             <thead><tr><th>AWB</th><th>Order</th><th>Carrier</th><th>Status</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
             <tbody>
               {shown.map((s) => (
@@ -179,14 +179,14 @@ export default function TrackingPage() {
                   <td>{names[s.id] ?? "-"}</td>
                   <td>{s.carrier_code}</td>
                   <td>
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-[var(--ink)]">{s.tracking_status}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium bg-[var(--neutral-bg)] text-foreground">{s.tracking_status}</span>
                     {cool[s.id] && <div role="status" style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px" }}>{cool[s.id]}</div>}
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button onClick={() => refresh(s.id)} disabled={!!syncing[s.id]} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full" style={{ marginRight: "8px" }}>
+                    <button onClick={() => refresh(s.id)} disabled={!!syncing[s.id]} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full" style={{ marginRight: "8px" }}>
                       {syncing[s.id] ? "Refreshing…" : "Refresh"}
                     </button>
-                    <Link to={`/shipments/${s.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-[var(--hairline)] bg-white text-[var(--ink)] max-[480px]:w-full">Open</Link>
+                    <Link to={`/shipments/${s.id}`} className="inline-flex items-center justify-center cursor-pointer rounded-lg min-h-11 px-5 py-2.5 text-sm font-medium border border-border bg-white text-foreground max-[480px]:w-full">Open</Link>
                   </td>
                 </tr>
               ))}
