@@ -4577,35 +4577,24 @@ def test_orders_list_includes_shipment_state(monkeypatch):
 
 
 def test_orders_list_shipment_query_count_is_flat(monkeypatch):
-    """The shipment map costs the same at 5 rows as at 25.
+    """The shipment map costs the same at 5 rows as at 25, refusals or not.
 
     _to_dict has no db session, so the shipment data is built in get_orders.
     A per-row probe inside it would be an N+1 that is invisible in the response
-    body, so this compares two page sizes instead of pinning a magic number:
-    any per-order query would make the larger page cost more.
+    body, so this compares two page sizes instead of trusting a magic ceiling:
+    any per-order query makes the larger page cost more.
+
+    Both scenarios are exercised because the refusal trace costs extra queries
+    (accepted-audit and retry-job resolution), and that cost must be per page
+    rather than per order. The absolute numbers are pinned as well, so adding a
+    query shows up here as a named failure instead of a silent regression.
     """
+    from app.models.audit_log import AuditLog
     from app.models.order import Order
     from app.models.shipment import Shipment
     now = datetime.now(timezone.utc)
     mk = _mk()
     c, h, bid = _authed_for_list(monkeypatch, mk, email="nplus1@t.in")
-    db = mk()
-    try:
-        for i in range(25):
-            db.add(Order(business_id=bid, internal_order_number=f"N-{i}",
-                         shopify_order_id=f"N-{i}", order_date=now))
-        db.commit()
-        ids = {o.internal_order_number: o.id for o in db.query(Order).all()}
-        for i in range(25):
-            db.add(Shipment(business_id=bid, order_id=ids[f"N-{i}"],
-                            parcel_id=f"np{i}", carrier_code="IP",
-                            awb_number=f"EG-{i}", tracking_status="IN_TRANSIT",
-                            shipsagar_tracking_id=f"SS-EG-{i}"))
-        db.commit()
-        db.close()
-    except Exception:
-        db.close()
-        raise
 
     from sqlalchemy import event as sa_event
     from sqlalchemy.engine import Engine
@@ -4622,12 +4611,152 @@ def test_orders_list_shipment_query_count_is_flat(monkeypatch):
         return counter["n"], r.json()["data"]["items"]
 
     try:
-        small, small_items = _statements_for(5)
-        large, large_items = _statements_for(100)
-        assert len(small_items) == 5
-        assert len(large_items) == 25
+        # --- scenario 1: no refusals on the page ---
+        db = mk()
+        try:
+            for i in range(25):
+                db.add(Order(business_id=bid, internal_order_number=f"N-{i}",
+                             shopify_order_id=f"N-{i}", order_date=now))
+            db.commit()
+            ids = {o.internal_order_number: o.id for o in db.query(Order).all()}
+            for i in range(25):
+                db.add(Shipment(business_id=bid, order_id=ids[f"N-{i}"],
+                                parcel_id=f"np{i}", carrier_code="IP",
+                                awb_number=f"EG-{i}", tracking_status="IN_TRANSIT",
+                                shipsagar_tracking_id=f"SS-EG-{i}"))
+            db.commit()
+            db.close()
+        except Exception:
+            db.close()
+            raise
+        small_clean, small_items = _statements_for(5)
+        large_clean, large_items = _statements_for(100)
+        assert len(small_items) == 5 and len(large_items) == 25
         assert all(i["shipment"]["push_state"] == "pushed" for i in large_items)
-        assert small == large, f"{small} statements at 5 rows, {large} at 25"
+        assert small_clean == large_clean, \
+            f"{small_clean} statements at 5 rows, {large_clean} at 25"
+        # 2 from list_orders (count + page), 1 shipments, 1 refusal probe.
+        assert large_clean == 4, f"expected 4 statements, got {large_clean}"
+
+        # --- scenario 2: every shipment refused, so the resolution arms run ---
+        db = mk()
+        try:
+            shipments = {s.awb_number: s for s in db.query(Shipment).all()}
+            for awb, s in shipments.items():
+                db.add(AuditLog(business_id=bid, entity_type="shipment",
+                                entity_id=s.id, action="SHIPSAGAR_PUSH_REJECTED",
+                                new_values={}))
+            db.commit()
+            db.close()
+        except Exception:
+            db.close()
+            raise
+        small_ref, small_items = _statements_for(5)
+        large_ref, large_items = _statements_for(100)
+        assert len(small_items) == 5 and len(large_items) == 25
+        assert all(i["shipment"]["push_state"] == "rejected" for i in large_items)
+        assert small_ref == large_ref, \
+            f"{small_ref} statements at 5 rows, {large_ref} at 25"
+        # The two resolution arms add exactly two queries, still per page.
+        assert large_ref == 6, f"expected 6 statements, got {large_ref}"
     finally:
         sa_event.remove(Engine, "before_cursor_execute", _count)
+        app.dependency_overrides.clear()
+
+
+def test_push_refusal_is_audited_and_reads_as_rejected(monkeypatch):
+    """A real provider refusal on the Orders-driven push path reads rejected.
+
+    This is the end-to-end pin for the read path's only refusal signal. The push
+    route calls ss.push_shipment directly rather than going through
+    register_tracking, so before the shared audit helper it wrote no
+    SHIPSAGAR_PUSH_REJECTED row at all — and since both paths persist
+    SS-{awb} before reading the verdict, the Orders page then reported a
+    refused shipment as "pushed", which is the exact lie this state machine
+    exists to prevent. The hand-built test above isolates the read logic; this
+    one proves the real code path actually writes what the read logic looks for.
+    """
+    from app.models.audit_log import AuditLog
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk, email="refuse@t.in")
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+        "ok": False, "message": "Invalid AWB for courier"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-REFUSE-1", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        # The refusal is reported, not raised: the shipment exists by now.
+        assert r.json()["data"]["pushed"] is False
+        assert r.json()["data"]["awb_number"] == "EG-REFUSE-1"
+
+        db = mk()
+        try:
+            rows = db.query(AuditLog).filter(
+                AuditLog.business_id == bid,
+                AuditLog.action == "SHIPSAGAR_PUSH_REJECTED").all()
+            assert len(rows) == 1, "push path wrote no rejection audit row"
+            row = rows[0]
+            assert row.entity_type == "shipment"
+            assert row.entity_id == r.json()["data"]["id"]
+            # Same metadata keys register_tracking writes, so the health
+            # endpoint's rejected_pushes counter sees this row too.
+            assert row.new_values["tracking_number"] == "EG-REFUSE-1"
+            assert row.new_values["courier"] == "IP"
+            assert row.new_values["message"] == "Invalid AWB for courier"
+            assert row.new_values["shipsagar_tracking_id"] == "SS-EG-REFUSE-1"
+            assert not db.query(AuditLog).filter(
+                AuditLog.action == "SHIPSAGAR_PUSH_ACCEPTED").all()
+        finally:
+            db.close()
+
+        r2 = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r2.status_code == 200, r2.text
+        row = next(i for i in r2.json()["data"]["items"] if i["id"] == oid)
+        assert row["shipment"]["push_state"] == "rejected"
+        assert row["shipment"]["awb_number"] == "EG-REFUSE-1"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_acceptance_is_audited_the_same_way(monkeypatch):
+    """The accepted push writes the mirror row, through the same helper.
+
+    Both audit writes live in one function so the two push paths cannot drift
+    apart again. This pins the accepted half, which matters for the resolution
+    arm: a shipment refused once and accepted later must stop reading rejected,
+    and the only record of that is this row.
+    """
+    from app.models.audit_log import AuditLog
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk, email="accept@t.in")
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+        "ok": True, "message": "Data has been recorded successfully"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-ACCEPT-1", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["pushed"] is True
+        db = mk()
+        try:
+            rows = db.query(AuditLog).filter(
+                AuditLog.business_id == bid,
+                AuditLog.action == "SHIPSAGAR_PUSH_ACCEPTED").all()
+            assert len(rows) == 1, "push path wrote no acceptance audit row"
+            assert rows[0].entity_type == "shipment"
+            assert rows[0].entity_id == r.json()["data"]["id"]
+            assert rows[0].new_values["tracking_number"] == "EG-ACCEPT-1"
+            assert not db.query(AuditLog).filter(
+                AuditLog.action == "SHIPSAGAR_PUSH_REJECTED").all()
+        finally:
+            db.close()
+
+        r2 = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r2.status_code == 200, r2.text
+        row = next(i for i in r2.json()["data"]["items"] if i["id"] == oid)
+        assert row["shipment"]["push_state"] == "pushed"
+    finally:
         app.dependency_overrides.clear()

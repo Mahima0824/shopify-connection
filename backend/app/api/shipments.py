@@ -313,12 +313,25 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         db.commit()
         return _err(502, exc.code, exc.message)
     shipment.shipsagar_tracking_id = f"SS-{tracking_no}"
+    pushed = bool(result.get("ok"))
+    message = result.get("message", "")
+    # A provider-level ERROR is a returned result, not an exception, and the
+    # tracking id above is persisted either way — so without this row a refusal
+    # here is indistinguishable from an acceptance, and the orders list reports
+    # it as pushed. record_push_verdict is the same helper register_tracking
+    # uses, so the two paths cannot drift apart again. It runs before the commit
+    # deliberately: log_audit flushes, so a failure aborts the push instead of
+    # storing a shipment whose verdict was never recorded.
+    ss.record_push_verdict(db, shipment, pushed=pushed, courier=courier_code,
+                           tracking_number=tracking_no,
+                           tracking_id=shipment.shipsagar_tracking_id,
+                           message=message)
     db.commit()
     db.refresh(shipment)
     return {"success": True, "data": {**_sdict(shipment),
                                       "order_no": order_no,
-                                      "pushed": bool(result.get("ok")),
-                                      "message": result.get("message", "")}}
+                                      "pushed": pushed,
+                                      "message": message}}
 
 
 @router.get("")

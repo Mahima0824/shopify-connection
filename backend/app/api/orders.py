@@ -59,10 +59,19 @@ def _push_state(s, refused) -> str:
     manually created shipment (create_shipment / book, which never contacts
     ShipSagar and leaves the column NULL) as refused.
 
-    So: no tracking number, or no provider id, means ShipSagar has not got it
+    So: no tracking number, or no provider id, means ShipSagar does not have it
     yet and the shipment is awaiting. SS-STUB-* is a local placeholder written
     when credentials are absent - it is not a provider reference, even though it
     does start with "SS-".
+
+    "awaiting" means "no tracking number yet" and nothing more. It does NOT mean
+    the shipment can be pushed: carrier_code="MANUAL" also lands here, because
+    that shipment has a tracking number but was never sent anywhere, and
+    register_tracking refuses MANUAL as a courier (NON_COURIER_CODES), so pushing
+    it would always 400. The frontend must gate the Add Shipment action on
+    carrier_code, not on push_state. A fifth value such as "manual" was
+    considered and rejected: it would push a carrier-code detail into the state
+    machine, and carrier_code is already on the payload for exactly this decision.
     """
     awb = (getattr(s, "awb_number", "") or "").strip()
     if not awb:
@@ -100,10 +109,13 @@ def _shipment_dict(s, refused) -> dict:
 def _shipment_map(db, business_id, order_ids) -> dict:
     """order_id -> serialized shipment, for one page of orders.
 
-    Three queries regardless of page size, all scoped to business_id, because
-    _to_dict has no session and a per-row probe inside it would be an N+1 that
-    is invisible in the response body. The refusal trace is only fetched for
-    shipments that actually reached ShipSagar.
+    At most four queries regardless of page size, all scoped to business_id,
+    because _to_dict has no session and a per-row probe inside it would be an
+    N+1 that is invisible in the response body: one for the page's shipments,
+    and up to three for the refusal trace (the rejected audit rows, plus the two
+    resolution arms). The trace queries are skipped entirely when no shipment on
+    the page reached ShipSagar, so the common page costs two. The counts are
+    pinned by test_orders_list_shipment_query_count_is_flat.
     """
     from app.models.shipment import Shipment
     ids = [oid for oid in order_ids if oid]
@@ -112,12 +124,18 @@ def _shipment_map(db, business_id, order_ids) -> dict:
     rows = (db.query(Shipment)
             .filter(Shipment.business_id == business_id,
                     Shipment.order_id.in_(ids))
+            # POST /shipments/push refuses a second shipment for an order, but
+            # create_shipment and book do not, so an order can genuinely carry
+            # several. Newest wins: it is the one in play. id breaks ties,
+            # because created_at is a second-resolution server default and rows
+            # created in the same request would otherwise be ordered by whatever
+            # the database happened to return.
+            .order_by(Shipment.created_at.desc(), Shipment.id.desc())
             .all())
     by_order: dict = {}
     for s in rows:
-        # POST /shipments/push refuses a second shipment for an order, but
-        # create_shipment and book do not, so keep the first deterministically
-        # rather than letting row order pick the winner.
+        # First writer wins, which is the newest shipment now that the query is
+        # ordered; a plain setdefault here is only deterministic because of it.
         by_order.setdefault(s.order_id, s)
     reached = [s for s in by_order.values()
                if _push_state(s, ()) in ("pushed", "rejected")]
@@ -178,6 +196,16 @@ def get_orders(
     # Built here, in one pass, rather than inside _to_dict: the serializer has
     # no session and a per-order lookup inside it would be an N+1 across a page
     # of up to 100 rows.
+    #
+    # The token's business_id, never the `business_id` query parameter this
+    # route also declares — so this lookup fails closed regardless of what the
+    # caller sends. Worth knowing: that query parameter is not a pre-existing bug
+    # I left in place. At HEAD, list_orders below is handed the query parameter
+    # directly, so a caller can pass another tenant's id and read that tenant's
+    # orders; this shipment lookup is scoped correctly and would simply attach no
+    # shipment to the foreign rows. Fixing the list_orders call is out of scope
+    # here (it belongs to the India Post new-order work that also edits this
+    # route), so it is flagged rather than changed.
     shipments = _shipment_map(db, bid, [o.id for o in items])
     return {
         "success": True,
