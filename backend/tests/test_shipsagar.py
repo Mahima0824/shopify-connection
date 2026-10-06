@@ -30,7 +30,13 @@ def _mk():
 
 
 def _shipment_day() -> str:
-    return datetime.now().strftime("%Y%m%d")
+    """The IST business day _shipment_no_today uses.
+
+    Spelled with a fixed +05:30 offset rather than naive datetime.now() so the
+    expectation does not move with the machine's timezone.
+    """
+    from datetime import timedelta as _td
+    return datetime.now(timezone(_td(hours=5, minutes=30))).strftime("%Y%m%d")
 
 
 @pytest.fixture(autouse=True)
@@ -3735,6 +3741,7 @@ def _stub_couriers(monkeypatch, codes=("IP", "DTDC", "FEDEX")):
 
 
 def test_push_assigns_an_order_no_to_the_order(monkeypatch):
+    import re
     from app.models.order import Order
     from app.services import shipsagar_service as ss
     mk = _mk()
@@ -3755,8 +3762,8 @@ def test_push_assigns_an_order_no_to_the_order(monkeypatch):
             "order_id": oid, "tracking_no": "EG-NO-1", "courier_code": "IP"})
         assert r.status_code == 200, r.text
         data = r.json()["data"]
-        assert data["order_no"].startswith(_shipment_day())
-        assert data["order_no"].endswith("-001")
+        assert data["order_no"] == f"{_shipment_day()}-001"
+        assert re.fullmatch(r"\d{8}-\d{3}", data["order_no"])
         assert seen["payload"]["OrderNo"] == data["order_no"]
         db = mk()
         try:
@@ -3794,8 +3801,9 @@ def test_push_numbers_are_sequential_across_pushes(monkeypatch):
             "order_id": oid2, "tracking_no": "EG-NO-B", "courier_code": "DTDC"})
         assert first.status_code == 200, first.text
         assert second.status_code == 200, second.text
-        assert first.json()["data"]["order_no"].endswith("-001")
-        assert second.json()["data"]["order_no"].endswith("-002")
+        today = _shipment_day()
+        assert first.json()["data"]["order_no"] == f"{today}-001"
+        assert second.json()["data"]["order_no"] == f"{today}-002"
     finally:
         app.dependency_overrides.clear()
 
@@ -3864,21 +3872,21 @@ def test_next_shipment_order_no_starts_at_001_then_increments(monkeypatch):
     from app.models.business import Business
     from app.models.order import Order
     from app.services.order_service import next_shipment_order_no
-    monkeypatch.setattr(
-        "app.services.order_service._shipment_no_today",
-        lambda: _dt.now().strftime("%Y%m%d"))
+    today = _shipment_day()
+    monkeypatch.setattr("app.services.order_service._shipment_no_today",
+                        lambda: today)
     mk = _mk()
     db = mk()
     b = Business(name="B", email="b@t.in")
     db.add(b)
     db.commit()
     db.refresh(b)
-    assert next_shipment_order_no(db, b.id) == f"{_dt.now():%Y%m%d}-001"
-    o = Order(business_id=b.id, internal_order_number=f"{_dt.now():%Y%m%d}-001",
-              shopify_order_id="S1", order_date=_dt.now(_dt.now().astimezone().tzinfo))
+    assert next_shipment_order_no(db) == f"{today}-001"
+    o = Order(business_id=b.id, internal_order_number=f"{today}-001",
+              shopify_order_id="S1", order_date=_dt.now())
     db.add(o)
     db.commit()
-    assert next_shipment_order_no(db, b.id) == f"{_dt.now():%Y%m%d}-002"
+    assert next_shipment_order_no(db) == f"{today}-002"
     db.close()
 
 
@@ -3887,7 +3895,7 @@ def test_next_shipment_order_no_ignores_other_days_and_shapes(monkeypatch):
     from app.models.business import Business
     from app.models.order import Order
     from app.services.order_service import next_shipment_order_no
-    today = _dt.now().strftime("%Y%m%d")
+    today = _shipment_day()
     monkeypatch.setattr("app.services.order_service._shipment_no_today",
                         lambda: today)
     mk = _mk()
@@ -3900,16 +3908,23 @@ def test_next_shipment_order_no_ignores_other_days_and_shapes(monkeypatch):
         db.add(Order(business_id=b.id, internal_order_number=num,
                      shopify_order_id=f"S{num}", order_date=_dt.now()))
     db.commit()
-    assert next_shipment_order_no(db, b.id) == f"{today}-008"
+    assert next_shipment_order_no(db) == f"{today}-008"
     db.close()
 
 
-def test_next_shipment_order_no_is_per_business(monkeypatch):
+def test_next_shipment_order_no_is_one_global_sequence(monkeypatch):
+    """Orders.internal_order_number is unique globally, so the sequence is too.
+
+    Scoping it per business handed two different tenants the same
+    YYYYMMDD-001, and the second write died on the unique index with a raw
+    IntegrityError instead of a shipment. One sequence for every tenant is the
+    only thing that fits the column.
+    """
     from datetime import datetime as _dt
     from app.models.business import Business
     from app.models.order import Order
     from app.services.order_service import next_shipment_order_no
-    today = _dt.now().strftime("%Y%m%d")
+    today = _shipment_day()
     monkeypatch.setattr("app.services.order_service._shipment_no_today",
                         lambda: today)
     mk = _mk()
@@ -3920,9 +3935,280 @@ def test_next_shipment_order_no_is_per_business(monkeypatch):
     db.commit()
     db.refresh(b1)
     db.refresh(b2)
-    db.add(Order(business_id=b1.id, internal_order_number=f"{today}-004",
-                 shopify_order_id="S1", order_date=_dt.now()))
+    # Numbers already taken, spread across BOTH tenants.
+    db.add_all([
+        Order(business_id=b1.id, internal_order_number=f"{today}-003",
+              shopify_order_id="S1", order_date=_dt.now()),
+        Order(business_id=b2.id, internal_order_number=f"{today}-007",
+              shopify_order_id="S2", order_date=_dt.now()),
+    ])
     db.commit()
-    assert next_shipment_order_no(db, b1.id) == f"{today}-005"
-    assert next_shipment_order_no(db, b2.id) == f"{today}-001"
+    # The generator is not told which tenant it is serving, and it still steps
+    # past the highest number either of them holds.
+    assert next_shipment_order_no(db) == f"{today}-008"
+    # A second business pushing next does not restart at 001.
+    assert next_shipment_order_no(db) == f"{today}-008"
     db.close()
+
+
+def test_shipment_no_day_is_the_ist_business_day():
+    """IST explicitly, not naive local time and not UTC.
+
+    A warehouse keying off this number expects the Indian business day. The
+    expectation is computed from a fixed +05:30 offset, so it holds whatever
+    timezone the test host is set to.
+    """
+    from datetime import timedelta
+    from app.services.order_service import _shipment_no_today
+    ist = timezone(timedelta(hours=5, minutes=30))
+    expected = datetime.now(ist).strftime("%Y%m%d")
+    got = _shipment_no_today()
+    assert got == expected
+    assert len(got) == 8 and got.isdigit()
+
+
+def test_assign_shipment_order_no_retries_after_a_lost_race(monkeypatch):
+    """read-max-then-write has no lock; the unique index is the real serialiser.
+
+    Two concurrent pushes can both read highest=0. The loser gets an
+    IntegrityError, and re-reading the max lands it on the number the winner
+    just took.
+    """
+    from datetime import datetime as _dt
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.services import order_service as osvc
+    from app.services.order_service import (assign_shipment_order_no,
+                                            next_shipment_order_no)
+    today = _shipment_day()
+    monkeypatch.setattr(osvc, "_shipment_no_today", lambda: today)
+    mk = _mk()
+    db = mk()
+    b1 = Business(name="B1", email="b1@t.in")
+    b2 = Business(name="B2", email="b2@t.in")
+    db.add_all([b1, b2])
+    db.commit()
+    db.refresh(b1)
+    db.refresh(b2)
+    # Another tenant already holds today's-001.
+    db.add(Order(business_id=b1.id, internal_order_number=f"{today}-001",
+                 shopify_order_id="S1", order_date=_dt.now()))
+    o = Order(business_id=b2.id, internal_order_number="MAN-B2",
+              shopify_order_id="S2", order_date=_dt.now())
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+
+    real = next_shipment_order_no
+    calls = {"n": 0}
+
+    def _collide(_db):
+        # First attempt hands back the number B1 holds, exactly as a lost race
+        # would; later attempts see the truth.
+        calls["n"] += 1
+        return f"{today}-001" if calls["n"] == 1 else real(_db)
+
+    monkeypatch.setattr(osvc, "next_shipment_order_no", _collide)
+    got = assign_shipment_order_no(db, o)
+    assert calls["n"] == 2
+    assert got == f"{today}-002"
+    assert o.internal_order_number == f"{today}-002"
+    db.close()
+
+
+# --- fix round 1/5: one global sequence, a bounded race retry, one assignment
+# --- point for every push branch, and an order_no filter that survives a push
+
+def test_push_in_a_second_business_continues_the_shared_sequence(monkeypatch):
+    """Two tenants pushing on the same day must not collide on the unique column.
+
+    A per-business sequence handed each tenant today's-001, so the second
+    push of the day committed a duplicate and surfaced as a raw 500.
+    """
+    from app.models.order import Order
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c1, h1, bid1, oid1 = _authed_with_order(monkeypatch, mk, email="a@t.in")
+    c2, h2, bid2 = _authed(monkeypatch, mk, role="ADMIN", email="b@t.in")
+    db = mk()
+    try:
+        assert bid1 != bid2
+        o2 = Order(business_id=bid2, internal_order_number="MAN-B2",
+                   shopify_order_id="MANUAL-B2",
+                   order_date=datetime.now(timezone.utc))
+        db.add(o2)
+        db.commit()
+        db.refresh(o2)
+        oid2 = o2.id
+    finally:
+        db.close()
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    today = _shipment_day()
+    try:
+        first = c1.post("/api/v1/shipments/push", headers=h1, json={
+            "order_id": oid1, "tracking_no": "EG-GB-1", "courier_code": "IP"})
+        second = c2.post("/api/v1/shipments/push", headers=h2, json={
+            "order_id": oid2, "tracking_no": "EG-GB-2", "courier_code": "IP"})
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert first.json()["data"]["order_no"] == f"{today}-001"
+        assert second.json()["data"]["order_no"] == f"{today}-002"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_reports_a_clear_error_when_the_order_no_race_never_lets_go(monkeypatch):
+    """A bounded retry that keeps losing must not surface as a raw 500."""
+    from app.models.order import Order
+    from app.services import order_service as osvc
+    from app.services.order_service import SHIPMENT_ORDER_NO_ATTEMPTS
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    # Another order already holds this number, so every attempt collides for
+    # real rather than only appearing to.
+    taken = f"{_shipment_day()}-900"
+    db = mk()
+    try:
+        db.add(Order(business_id=bid, internal_order_number=taken,
+                     shopify_order_id="S-TAKEN",
+                     order_date=datetime.now(timezone.utc)))
+        db.commit()
+    finally:
+        db.close()
+    seen = {"n": 0}
+
+    def _always_collide(_db):
+        seen["n"] += 1
+        return taken
+
+    monkeypatch.setattr(osvc, "next_shipment_order_no", _always_collide)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-RACE", "courier_code": "IP"})
+        assert r.status_code == 503, r.text
+        assert r.json()["error"]["code"] == "SHIPMENT_ORDER_NO_UNAVAILABLE"
+        assert seen["n"] == SHIPMENT_ORDER_NO_ATTEMPTS
+        db = mk()
+        try:
+            # The failed claim left the order on its own number.
+            assert db.query(Order).filter_by(id=oid).first().internal_order_number \
+                == "MAN-P1"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_assigns_an_order_no_even_when_shipsagar_is_not_configured(monkeypatch):
+    """The number belongs to the shipment, not to the provider's answer.
+
+    Assignment used to sit after the not-configured early return, so that
+    branch shipped a parcel and a shipment with no OrderNo at all.
+    """
+    from app import config
+    from app.models.order import Order
+    from app.models.shipment import Shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    monkeypatch.setattr(config.settings, "shipsagar_token", "")
+    monkeypatch.setattr(config.settings, "shipsagar_client_code", "")
+    monkeypatch.setattr(config.settings, "shipsagar_api_key", "")
+    today = _shipment_day()
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-NOCFG", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["order_no"] == f"{today}-001"
+        assert data["pushed"] is False
+        db = mk()
+        try:
+            assert db.query(Order).filter_by(id=oid).first().internal_order_number \
+                == f"{today}-001"
+            assert db.query(Shipment).filter_by(business_id=bid).count() == 1
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_keeps_the_assigned_order_no_when_the_provider_transport_fails(monkeypatch):
+    """A 502 that queues a retry must keep the number the retry will re-send."""
+    from app.models.order import Order
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+
+    def _boom(**kw):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "push_shipment", _boom)
+    today = _shipment_day()
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-KEEP", "courier_code": "IP"})
+        assert r.status_code == 502, r.text
+        db = mk()
+        try:
+            assert db.query(Order).filter_by(id=oid).first().internal_order_number \
+                == f"{today}-001"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_order_no_filter_still_finds_the_shipment_after_a_push(monkeypatch):
+    """order_no= must keep resolving after the push overwrites that column.
+
+    The filter reads Order.internal_order_number, which the push now sets to
+    the shipment number, so the shipped order is still reachable by the number
+    the order carries afterwards.
+    """
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    today = _shipment_day()
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-FILT", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        order_no = r.json()["data"]["order_no"]
+        assert order_no == f"{today}-001"
+        found = c.get(f"/api/v1/shipments?order_no={order_no}", headers=h)
+        assert found.status_code == 200, found.text
+        body = found.json()["data"]
+        assert body["total"] == 1
+        assert body["items"][0]["awb_number"] == "EG-FILT"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_assigned_order_no_is_strictly_YYYYMMDD_NNN(monkeypatch):
+    """startswith(day) + endswith(-001) would pass on 20261006X001."""
+    import re
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-FMT", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        order_no = r.json()["data"]["order_no"]
+        assert re.fullmatch(r"\d{8}-\d{3}", order_no), order_no
+        assert order_no == f"{_shipment_day()}-001"
+        assert order_no[len(_shipment_day())] == "-"
+    finally:
+        app.dependency_overrides.clear()

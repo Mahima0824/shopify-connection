@@ -199,7 +199,8 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
     from app.services import shipsagar_service as ss
-    from app.services.order_service import next_shipment_order_no
+    from app.services.order_service import (ShipmentOrderNoError,
+                                            assign_shipment_order_no)
     if u.get("role") not in ("ADMIN", "WAREHOUSE"):
         return _err(403, "FORBIDDEN", "Warehouse role required")
     bid = u.get("business_id")
@@ -240,6 +241,16 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         return _err(400, "DUPLICATE_TRACKING",
                     f"Tracking number {tracking_no} already has a parcel.")
 
+    # The OrderNo is a property of the shipment, not of the provider's answer, so
+    # it is claimed before the parcel and shipment are built and is therefore the
+    # same number on the success, not-configured and queued-retry paths alike.
+    # Claiming it first also means the rollback a lost number race forces cannot
+    # discard a half-built parcel or shipment.
+    try:
+        order_no = assign_shipment_order_no(db, order)
+    except ShipmentOrderNoError as exc:
+        return _err(503, "SHIPMENT_ORDER_NO_UNAVAILABLE", str(exc))
+
     parcel = Parcel(business_id=bid, order_id=order.id,
                     parcel_code=tracking_no, barcode_value=tracking_no,
                     status="CREATED")
@@ -256,14 +267,10 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
         db.commit()
         db.refresh(shipment)
-        return {"success": True, "data": {**_sdict(shipment), "pushed": False,
+        return {"success": True, "data": {**_sdict(shipment),
+                                          "order_no": order_no,
+                                          "pushed": False,
                                           "message": ss.SHIPSAGAR_NOT_CONFIGURED_MESSAGE}}
-    # The shipment's PushShipment OrderNo is assigned here, at creation, and
-    # written onto the Order so build_push_payload's own fallback carries it to
-    # the wire: push_shipment takes no order_no argument of its own.
-    order_no = next_shipment_order_no(db, bid)
-    order.internal_order_number = order_no
-    db.flush()
     try:
         result = ss.push_shipment(tracking_no=tracking_no,
                                   courier_code=courier_code, order=order)
@@ -272,7 +279,9 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
             shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
             db.commit()
             db.refresh(shipment)
-            return {"success": True, "data": {**_sdict(shipment), "pushed": False,
+            return {"success": True, "data": {**_sdict(shipment),
+                                              "order_no": order_no,
+                                              "pushed": False,
                                               "message": exc.message}}
         ss.schedule_retry(db, business_id=bid, operation="register_tracking",
                           shipment_id=shipment.id,
@@ -346,6 +355,11 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
                             Order.shopify_order_name.ilike(text),
                             Parcel.barcode_value.ilike(text))))
     if order_text:
+        # order_no resolves against Order.internal_order_number, which a push
+        # overwrites with the shipment's YYYYMMDD-NNN. So after a push this
+        # filter finds the shipment by the number the order then carries; the
+        # number the order held before the push is not retained anywhere, and
+        # keeping it would need a column this task cannot add.
         qy = qy.filter(or_(Order.internal_order_number.ilike(order_text),
                             Order.shopify_order_name.ilike(order_text)))
     total = qy.count()

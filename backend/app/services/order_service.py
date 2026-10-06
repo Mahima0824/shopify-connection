@@ -43,26 +43,33 @@ def list_orders(
 
 
 def _shipment_no_today() -> str:
+    # The Indian business day, deliberately: India Post works IST, so a push at
+    # 08:00 IST must not be numbered with the previous UTC day. The offset is
+    # spelled out rather than taken from the host, because a server running in
+    # UTC would otherwise renumber the same push differently.
     # Imported locally, not from the module header: this module's committed
     # datetime import belongs to unrelated in-flight work, so relying on it
     # would make this function raise NameError without it.
-    # The local business day, not UTC: an IST evening push is still "today" for
-    # the warehouse that has to key off the number it is handed.
-    from datetime import datetime
-    return datetime.now().strftime("%Y%m%d")
+    from datetime import datetime, timedelta, timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%Y%m%d")
 
 
-def next_shipment_order_no(db: Session, business_id: str) -> str:
-    """Next shipment OrderNo for this business: YYYYMMDD-NNN, restarting daily.
+def next_shipment_order_no(db: Session) -> str:
+    """Next shipment OrderNo for the whole deployment: YYYYMMDD-NNN, restarting daily.
 
-    Numbers are only unique per business, which is all PushShipment requires.
+    Deliberately NOT scoped to a business. orders.internal_order_number carries
+    a global unique constraint, so a per-business sequence handed every tenant
+    the same YYYYMMDD-001 and the second push of the day died on the index with
+    a raw IntegrityError. One sequence for all tenants is what the column allows.
+
     Non-matching and other-day values are ignored so a manual MAN- order or a
     legacy ORD- number cannot push the sequence forward.
     """
+    from app.models.order import Order
     prefix = _shipment_no_today()
     rows = (db.query(Order.internal_order_number)
-            .filter(Order.business_id == business_id,
-                    Order.internal_order_number.like(f"{prefix}-%"))
+            .filter(Order.internal_order_number.like(f"{prefix}-%"))
             .all())
     highest = 0
     for (number,) in rows:
@@ -71,7 +78,43 @@ def next_shipment_order_no(db: Session, business_id: str) -> str:
             highest = max(highest, int(tail))
     candidate = highest + 1
     while db.query(Order).filter_by(
-            business_id=business_id,
             internal_order_number=f"{prefix}-{candidate:03d}").first() is not None:
         candidate += 1
     return f"{prefix}-{candidate:03d}"
+
+
+# Losing this race is rare and self-healing, so the bound is a backstop against a
+# pathological hot loop rather than a tuning knob.
+SHIPMENT_ORDER_NO_ATTEMPTS = 5
+
+
+class ShipmentOrderNoError(RuntimeError):
+    """The next shipment OrderNo could not be claimed within the retry bound."""
+
+
+def assign_shipment_order_no(db: Session, order, *,
+                             attempts: int = SHIPMENT_ORDER_NO_ATTEMPTS) -> str:
+    """Claim the next OrderNo for `order` and flush it, retrying a lost race.
+
+    Reading the max and then writing has no lock, so two concurrent pushes can
+    pick the same number. The unique index is the only real serialiser, so an
+    IntegrityError here means another push won; the transaction is rolled back
+    to a clean state and the max is re-read, which lands on the number the
+    winner just took. After `attempts` losses the caller gets a typed error
+    instead of a raw 500.
+
+    Call this before anything else is flushed, so the rollback a lost race
+    forces cannot discard a half-built parcel or shipment.
+    """
+    from sqlalchemy.exc import IntegrityError
+    for _ in range(max(int(attempts or 1), 1)):
+        candidate = next_shipment_order_no(db)
+        order.internal_order_number = candidate
+        try:
+            db.flush()
+            return candidate
+        except IntegrityError:
+            db.rollback()
+    raise ShipmentOrderNoError(
+        f"could not claim a shipment OrderNo after {attempts} attempts; "
+        "another push is winning the number sequence")
