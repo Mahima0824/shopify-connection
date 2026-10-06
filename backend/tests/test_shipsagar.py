@@ -4212,3 +4212,226 @@ def test_assigned_order_no_is_strictly_YYYYMMDD_NNN(monkeypatch):
         assert order_no[len(_shipment_day())] == "-"
     finally:
         app.dependency_overrides.clear()
+
+
+# --- courier catalogue + live shipment history (read-only) ---
+
+def _seed_shipment_without_awb(mk, business_id=None):
+    """A shipment that exists but carries no tracking number yet.
+
+    business_id is taken from the tenant _authed logged into, for the same reason
+    _seed_pushed_shipment takes it: seeding a fresh business here would leave the
+    row invisible to the request and the endpoint would answer 404 SHIPMENT_NOT
+    FOUND instead of the 400 NO_TRACKING_NUMBER this seeds for.
+    """
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    db = mk()
+    if business_id is None:
+        b = Business(name="B", email="b@t.in")
+        db.add(b)
+        db.commit()
+        db.refresh(b)
+        business_id = b.id
+    s = Shipment(business_id=business_id, order_id="o1", parcel_id="p1",
+                 carrier_code="IP", awb_number="",
+                 tracking_status="AWAITING_TRACKING")
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    sid = s.id
+    db.close()
+    return sid, business_id
+
+
+def test_couriers_route_is_declared_before_the_parameterised_shipment_route():
+    """Structural pin for the route ordering, not just the observable behaviour.
+
+    Starlette matches in declaration order, so /couriers declared after /{sid} is
+    matched as sid="couriers". The behavioural test below would go red for that,
+    but only if nothing else changed first; this fails the moment the declaration
+    moves, and says why.
+    """
+    from app.api.shipments import router
+    paths = [r.path for r in router.routes]
+    assert "/api/v1/shipments/couriers" in paths
+    assert "/api/v1/shipments/{sid}" in paths
+    assert paths.index("/api/v1/shipments/couriers") < \
+        paths.index("/api/v1/shipments/{sid}")
+
+
+def test_couriers_endpoint_returns_the_catalogue(monkeypatch):
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch, codes=("IP", "DTDC"))
+    mk = _mk()
+    c, h, _ = _authed(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments/couriers", headers=h)
+        assert r.status_code == 200, r.text
+        rows = r.json()["data"]["couriers"]
+        assert [x["courier_code"] for x in rows] == ["IP", "DTDC"]
+        assert all(x["courier_name"] for x in rows)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_couriers_endpoint_is_forbidden_for_a_viewer(monkeypatch):
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    mk = _mk()
+    c, h, _ = _authed(monkeypatch, mk, role="VIEWER", email="v2@t.in")
+    try:
+        r = c.get("/api/v1/shipments/couriers", headers=h)
+        assert r.status_code == 403, r.text
+        assert r.json()["error"]["code"] == "FORBIDDEN"
+        assert r.headers.get("X-Error-Code") == "FORBIDDEN"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_couriers_endpoint_reports_an_unreachable_catalogue(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+
+    def _boom(force=False):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "courier list down")
+
+    monkeypatch.setattr(ss, "get_couriers", _boom)
+    mk = _mk()
+    c, h, _ = _authed(monkeypatch, mk)
+    try:
+        r = c.get("/api/v1/shipments/couriers", headers=h)
+        assert r.status_code == 502, r.text
+        assert r.json()["error"]["code"] == "SHIPSAGAR_API_ERROR"
+        # The dialog still has something to render.
+        assert r.json()["data"]["couriers"] == []
+        assert r.headers.get("X-Error-Code") == "SHIPSAGAR_API_ERROR"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_returns_scans_newest_first_without_ingesting(monkeypatch):
+    """Newest scan first, final status from the newest scan, nothing written.
+
+    The provider returns the list oldest-first, so both the order of `events` and
+    which entry `status` comes from are decided by this endpoint. Reading it must
+    not write a ShipmentEvent or move tracking_status: POST /{sid}/sync is the
+    only path that ingests.
+    """
+    from app.models.shipment import Shipment, ShipmentEvent
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    _configured(monkeypatch)
+    sid, _ = _seed_pushed_shipment(mk, awb="EG-HIST-1", status="IN_TRANSIT",
+                                   business_id=bid)
+    try:
+        seen = {}
+
+        def _fake_track(awb, courier_code=""):
+            seen["awb"], seen["courier"] = awb, courier_code
+            return {"awb": awb, "events": [
+                {"event_id": "e-old", "status_raw": "Item Booked",
+                 "normalized_status": "READY_TO_SHIP", "message": "Item Booked",
+                 "location": "Mumbai",
+                 "event_time": datetime(2023, 5, 16, 12, 27, tzinfo=timezone.utc)},
+                {"event_id": "e-new", "status_raw": "Out for delivery",
+                 "normalized_status": "OUT_FOR_DELIVERY",
+                 "message": "Out for delivery", "location": "Delhi",
+                 "event_time": datetime(2023, 5, 17, 9, 0, tzinfo=timezone.utc)},
+            ]}
+
+        monkeypatch.setattr(ss, "track_shipment", _fake_track)
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["awb"] == "EG-HIST-1"
+        assert data["courier_code"] == "IP"
+        assert seen == {"awb": "EG-HIST-1", "courier": "IP"}
+        # The provider's oldest-first list reversed, newest scan leading.
+        assert [e["action_description"] for e in data["events"]] == [
+            "Out for delivery", "Item Booked"]
+        assert [e["action_location"] for e in data["events"]] == ["Delhi", "Mumbai"]
+        # Status from the LAST provider entry, not the first.
+        assert data["status"] == "OUT_FOR_DELIVERY"
+        assert data["events"][0]["normalized_status"] == "OUT_FOR_DELIVERY"
+        assert data["events"][0]["action_date"] == "17-May-2023"
+        assert data["events"][0]["action_time"] == "09:00"
+        # ShipSagar serves no public tracking page, so null rather than a guess.
+        assert data["tracking_url"] is None
+        db = mk()
+        try:
+            assert db.query(ShipmentEvent).filter_by(shipment_id=sid).count() == 0
+            assert db.query(Shipment).filter_by(id=sid).first().tracking_status \
+                == "IN_TRANSIT"
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_requires_a_tracking_number(monkeypatch):
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    sid, _ = _seed_shipment_without_awb(mk, business_id=bid)
+    try:
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "NO_TRACKING_NUMBER"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_is_tenant_scoped(monkeypatch):
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c2, h2, _ = _authed(monkeypatch, mk, role="ADMIN", email="other2@t.in")
+    _configured(monkeypatch)
+    sid, _ = _seed_pushed_shipment(mk, awb="EG-HIST-2")
+    monkeypatch.setattr(ss, "track_shipment", lambda awb, courier_code="": {
+        "awb": awb, "events": []})
+    try:
+        r = c2.get(f"/api/v1/shipments/{sid}/history", headers=h2)
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "SHIPMENT_NOT_FOUND"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_reports_a_provider_failure(monkeypatch):
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk)
+    _configured(monkeypatch)
+    sid, _ = _seed_pushed_shipment(mk, awb="EG-HIST-3", business_id=bid)
+
+    def _boom(awb, courier_code=""):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "connection reset")
+
+    monkeypatch.setattr(ss, "track_shipment", _boom)
+    try:
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+        assert r.status_code == 502, r.text
+        assert r.json()["error"]["code"] == "SHIPSAGAR_API_ERROR"
+        assert "connection reset" in r.json()["error"]["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_history_endpoint_is_open_to_a_viewer(monkeypatch):
+    """Read-only, so the role gate is any authenticated user, not warehouse."""
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid = _authed(monkeypatch, mk, role="VIEWER", email="v3@t.in")
+    _configured(monkeypatch)
+    sid, _ = _seed_pushed_shipment(mk, awb="EG-HIST-4", business_id=bid)
+    monkeypatch.setattr(ss, "track_shipment", lambda awb, courier_code="": {
+        "awb": awb, "events": []})
+    try:
+        r = c.get(f"/api/v1/shipments/{sid}/history", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "NOT_CREATED"
+        assert r.json()["data"]["events"] == []
+    finally:
+        app.dependency_overrides.clear()

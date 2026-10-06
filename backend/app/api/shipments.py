@@ -12,10 +12,17 @@ router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
 PARCEL_BARCODE_MAX_LEN = 32
 
 
-def _err(status: int, code: str, message: str) -> JSONResponse:
-    """Envelope error (ledger pattern): {success:false, error:{code,message}}."""
-    return JSONResponse(status_code=status,
-                        content={"success": False, "error": {"code": code, "message": message}},
+def _err(status: int, code: str, message: str, data: dict | None = None) -> JSONResponse:
+    """Envelope error (ledger pattern): {success:false, error:{code,message}}.
+
+    ``data`` is for the failures a caller can still render something with — a
+    502 on the courier catalogue carries an empty ``couriers`` list so the push
+    dialog's dropdown falls back instead of having nothing to draw.
+    """
+    content = {"success": False, "error": {"code": code, "message": message}}
+    if data is not None:
+        content["data"] = data
+    return JSONResponse(status_code=status, content=content,
                         headers={"X-Error-Code": code})
 
 
@@ -85,6 +92,22 @@ def _day_bounds(value: str, is_end: bool):
         else:
             dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
     return dt
+
+
+def _fmt_action_date(value) -> str:
+    """Timeline date, 'DD-Mon-YYYY'. Anything unformattable reads as blank."""
+    try:
+        return value.strftime("%d-%b-%Y")
+    except Exception:
+        return ""
+
+
+def _fmt_action_time(value) -> str:
+    """Timeline time, 'HH:MM'. Same blank-on-anything-else contract."""
+    try:
+        return value.strftime("%H:%M")
+    except Exception:
+        return ""
 
 
 def _sdict(s, order=None) -> dict:
@@ -389,6 +412,28 @@ def list_shipments(status: str | None = None, carrier: str | None = None, order_
         }}}
 
 
+@router.get("/couriers")
+def list_couriers(u: dict = Depends(get_current_user)):
+    """The courier catalogue ShipSagar serves, for the push dialog's dropdown.
+
+    Declared BEFORE the /{sid} route on purpose. Starlette matches in
+    declaration order, so a /couriers route placed after the parameterised one is
+    swallowed by it with sid="couriers" and the caller gets a shipment-not-found
+    instead of a catalogue.
+    """
+    from app.services import shipsagar_service as ss
+    if u.get("role") not in ("ADMIN", "WAREHOUSE"):
+        return _err(403, "FORBIDDEN", "Warehouse role required")
+    try:
+        rows = ss.get_couriers()
+    except ss.ShipsagarError as exc:
+        # get_couriers only raises when nothing is cached, so there is no
+        # previous list to fall back to. The empty list is still returned so the
+        # dialog renders rather than blowing up on a 502 body.
+        return _err(502, exc.code, exc.message, data={"couriers": []})
+    return {"success": True, "data": {"couriers": rows}}
+
+
 @router.get("/{sid}")
 def get_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     from app.models.order import Order
@@ -401,6 +446,58 @@ def get_shipment(sid: str, db: Session = Depends(get_db), u: dict = Depends(get_
         raise HTTPException(404, "Shipment not found")
     s, o = row
     return {"success": True, "data": _sdict(s, o)}
+
+
+@router.get("/{sid}/history")
+def shipment_history(sid: str, db: Session = Depends(get_db),
+                     u: dict = Depends(get_current_user)):
+    """Live tracking history for one shipment, straight from its provider.
+
+    Read-only by contract: no ShipmentEvent row is written and
+    shipment.tracking_status is left exactly as it was, so opening the timeline
+    can never move a shipment's state. POST /{sid}/sync is the ingesting path.
+
+    ShipSagar documents TrackingHistory oldest-first (its sample runs 12:27 ->
+    15:51 -> 19:43 on one day), so the list is reversed for the response — the
+    newest scan leads — and the reported status comes from the LAST entry of the
+    provider's list, which is that newest, most advanced scan. Taking index 0
+    instead would report a shipment as still booked hours after it was delivered.
+    """
+    from app.carriers.base import CarrierError
+    from app.carriers.registry import provider_for_shipment
+    from app.models.shipment import Shipment
+    s = db.query(Shipment).filter_by(id=sid, business_id=u.get("business_id")).first()
+    if s is None:
+        return _err(404, "SHIPMENT_NOT_FOUND", "Shipment not found")
+    awb = (s.awb_number or "").strip()
+    if not awb:
+        return _err(400, "NO_TRACKING_NUMBER",
+                    "This shipment has no tracking number yet.")
+    try:
+        # provider_for_shipment, not the carrier code: a pushed shipment keeps
+        # its ShipSagar courier (IP, FEDEX) in carrier_code and is discriminated
+        # by shipsagar_tracking_id.
+        provider = provider_for_shipment(s)
+        data = provider.get_tracking(awb)
+    except CarrierError as exc:
+        return _err(502, exc.code, exc.message)
+    raw_events = data.get("events") or []
+    # normalize_status on the provider instance, not the ShipSagar matrix
+    # directly: the instance carries the shipment's own courier, so an India Post
+    # shipment reads the India Post rows while a direct DTDC one reads DTDC's.
+    events = [{
+        "action_date": _fmt_action_date(e.get("event_time")),
+        "action_time": _fmt_action_time(e.get("event_time")),
+        "action_location": e.get("location") or "",
+        "action_description": e.get("status_raw") or "",
+        "normalized_status": provider.normalize_status(e.get("status_raw") or ""),
+    } for e in reversed(raw_events)]
+    final_raw = (raw_events[-1].get("status_raw") or "") if raw_events else ""
+    return {"success": True, "data": {
+        "awb": awb, "courier_code": s.carrier_code,
+        "status": provider.normalize_status(final_raw),
+        "tracking_url": provider.build_tracking_url(awb),
+        "events": events}}
 
 
 @router.post("/{sid}/correct-awb")
