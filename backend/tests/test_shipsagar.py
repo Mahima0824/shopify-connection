@@ -1,4 +1,4 @@
-﻿# backend/tests/test_shipsagar.py â€” SDD Task 4: ShipSagar integration.
+# backend/tests/test_shipsagar.py â€” SDD Task 4: ShipSagar integration.
 import hashlib
 import hmac
 import json
@@ -5723,6 +5723,60 @@ def test_unknown_awb_is_empty_history_not_an_exception(monkeypatch):
     assert out["awb"] == "EG080972974IN"
     assert out["events"] == []
     assert out["registered"] is False
+
+
+def test_tracking_not_found_is_empty_history_not_an_exception(monkeypatch):
+    """track_shipment reports 'Tracking Not Found .!' as registered=False, not a raise."""
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "ERROR",
+        "message": "Tracking Not Found .!",
+        "trackingDetails": "",
+    })
+
+    out = ss.track_shipment("EG080973100IN")
+
+    assert out["awb"] == "EG080973100IN"
+    assert out["events"] == []
+    assert out["registered"] is False
+
+
+def test_track_shipment_parses_stringified_tracking_details(monkeypatch):
+    """track_shipment handles stringified/escaped JSON trackingDetails from ShipSagar."""
+    import json
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    
+    payload_dict = {
+        "ClientCode": "C1462",
+        "TrackingNo": "EG080973100IN",
+        "CourierCode": "IP",
+        "CurrentStatus": "PICKED_UP",
+        "TrackingHistory": [
+            {
+                "ActionDescription": "Item Booked",
+                "ActionLocation": "Udhna SO",
+                "ActionDate": "30-Sep-2026",
+                "ActionTime": "21:21",
+            }
+        ]
+    }
+    # Double-stringified JSON payload matching real ShipSagar API output
+    escaped_json = json.dumps(json.dumps(payload_dict))
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "SUCCESS",
+        "message": "",
+        "trackingDetails": escaped_json
+    })
+
+    out = ss.track_shipment("EG080973100IN")
+
+    assert out["awb"] == "EG080973100IN"
+    assert len(out["events"]) == 1
+    assert out["events"][0]["location"] == "Udhna SO"
+    assert out["events"][0]["status_raw"] == "Item Booked"
+    assert out["registered"] is True
 
 
 def test_known_awb_is_reported_as_registered(monkeypatch):
