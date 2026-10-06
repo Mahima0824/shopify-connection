@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { isAwaiting, pushStateLabel, statusTone, type OrderShipment } from "../lib/shipments";
 
 const FINANCIAL_DOTS: Record<string, string> = {
   PAID: "var(--success)",
@@ -27,7 +28,86 @@ function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string
   );
 }
 
-export default function OrderTable({ orders }: { orders: any[] }) {
+const PILL_CLASSES: Record<string, string> = {
+  success: "bg-emerald-100 text-emerald-800",
+  info: "bg-sky-100 text-sky-800",
+  warning: "bg-amber-100 text-amber-800",
+  danger: "bg-red-100 text-red-800",
+  neutral: "bg-slate-100 text-slate-700",
+};
+
+function ShipmentPill({ status }: { status: string }) {
+  const cls = PILL_CLASSES[statusTone(status)] ?? PILL_CLASSES.neutral;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
+// AWAITING_TRACKING is deliberately NOT in shipments.TERMINAL_STATUSES: it is
+// the one state that asks the user for the missing tracking number, so it has to
+// stay visible here as a green Add Shipment button rather than be filtered out
+// as a finished shipment.
+function ShipmentCell({ shipment, onAdd }: {
+  shipment: OrderShipment | null | undefined;
+  onAdd: () => void;
+}) {
+  if (!shipment) {
+    return <span className="text-xs text-slate-400">{pushStateLabel("none")}</span>;
+  }
+
+  if (isAwaiting(shipment)) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <button
+          type="button"
+          onClick={onAdd}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 transition cursor-pointer"
+        >
+          Add Shipment
+        </button>
+        <span className="text-[11px] text-amber-700">{pushStateLabel("awaiting")}</span>
+      </div>
+    );
+  }
+
+  if (shipment.push_state === "rejected") {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="font-mono text-xs text-slate-900">{shipment.awb_number}</span>
+        <span className="text-[11px] text-red-700">{pushStateLabel("rejected")}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {shipment.id ? (
+        <Link
+          to={`/shipments/${shipment.id}`}
+          className="font-mono text-xs font-semibold text-emerald-800 hover:underline"
+        >
+          {shipment.awb_number}
+        </Link>
+      ) : (
+        <span className="font-mono text-xs text-slate-900">{shipment.awb_number}</span>
+      )}
+      <ShipmentPill status={shipment.tracking_status ?? ""} />
+      {shipment.current_location && (
+        <span className="text-[11px] text-slate-500">{shipment.current_location}</span>
+      )}
+    </div>
+  );
+}
+
+export default function OrderTable({
+  orders,
+  onAddShipment,
+}: {
+  orders: any[];
+  onAddShipment: (order: any) => void;
+}) {
   if (!orders || orders.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
@@ -42,6 +122,7 @@ export default function OrderTable({ orders }: { orders: any[] }) {
         <thead>
           <tr>
             <th>Order Name</th>
+            <th>Shipment</th>
             <th>Financial Status</th>
             <th>Fulfillment / Op Status</th>
             <th>Total Amount</th>
@@ -56,6 +137,9 @@ export default function OrderTable({ orders }: { orders: any[] }) {
                 <Link to={`/orders/${o.id}`}>
                   {o.shopify_order_name || o.internal_order_number || o.id}
                 </Link>
+              </td>
+              <td style={{ borderBottom: "1px solid var(--hairline)" }}>
+                <ShipmentCell shipment={o.shipment} onAdd={() => onAddShipment(o)} />
               </td>
               <td style={{ borderBottom: "1px solid var(--hairline)" }}>
                 <StatusBadge status={o.financial_status || "PENDING"} dotMap={FINANCIAL_DOTS} />
