@@ -1,8 +1,24 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = BACKEND_DIR.parent
+
+# The ShipSagar credentials are split across two files: backend/.env carries
+# SHIPSAGAR_TOKEN and SHIPSAGAR_CLIENT_CODE, the repo-root .env carries the
+# SHIPSAGAR_EMAIL and SHIPSAGAR_COMPANY constants. pydantic-settings resolves
+# env_file entries against the current working directory, so the previous
+# cwd-relative list read backend/.env only when launched from backend/ and
+# missed it entirely when launched from the repo root - every ShipSagar call
+# then failed with SHIPSAGAR_NOT_CONFIGURED. Absolute paths make the start
+# directory irrelevant. In a list the later file wins, so backend/.env takes
+# precedence over the shared root file.
+_ENV_FILES = [REPO_ROOT / ".env", BACKEND_DIR / ".env"]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=[".env", "../.env"], extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     database_url: str = "sqlite:///./recon_dev.db"
     jwt_secret: str = "dev-jwt-secret-change-me"

@@ -181,8 +181,20 @@ order's own `receiver_email` / `receiver_company`, so a half-configured deploy
 still sends a usable value. Set them if you want a single address and company on
 every shipment.
 
-Set these in `backend/.env` only. Never in `frontend/.env` — anything prefixed `VITE_`
-is compiled into the browser bundle and visible to every visitor.
+The backend reads **two** env files, and the split is intentional:
+
+| File | Holds |
+| --- | --- |
+| `backend/.env` | `SHIPSAGAR_TOKEN`, `SHIPSAGAR_CLIENT_CODE` — deployment secrets |
+| `.env` (repo root) | `SHIPSAGAR_EMAIL`, `SHIPSAGAR_COMPANY` — shared account constants |
+
+Both are resolved to absolute paths at import, so the start directory does not
+matter: launching with `uvicorn` from the repo root and from `backend/` both
+work. Where a variable appears in both files, `backend/.env` wins.
+
+Set all of them in a **backend** env file — never in `frontend/.env`. Anything
+prefixed `VITE_` is compiled into the browser bundle and visible to every
+visitor.
 
 Orders are the only entry point for shipments. A synced Shopify order starts in
 `AWAITING_TRACKING`; open the Orders page and use **Add Shipment** to enter the
