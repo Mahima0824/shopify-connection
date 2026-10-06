@@ -148,6 +148,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
   return (
     <div
       className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+      style={{ position: "fixed" }}
       role="dialog"
       aria-modal="true"
       aria-label="Create New Order"

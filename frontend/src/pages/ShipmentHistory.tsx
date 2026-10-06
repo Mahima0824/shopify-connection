@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getShipmentHistory, ShipmentHistory as History } from "../lib/api";
 import { statusTone, Tone } from "../lib/shipments";
-import ShipsagarRetryDrain from "../components/ShipsagarRetryDrain";
 import { Button, buttonVariants, Card, Badge } from "../components/primitives";
 import { cn } from "@/lib/utils";
 
@@ -142,8 +141,6 @@ export default function ShipmentHistoryPage() {
           </ol>
         )}
       </Card>
-
-      <ShipsagarRetryDrain />
     </div>
   );
 }

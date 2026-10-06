@@ -12,17 +12,7 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
     ],
   },
   {
-    title: "Operations",
-    links: [
-      { label: "Scan Hub Station", href: "/scan" },
-      { label: "Warehouse Dispatch", href: "/scan/dispatch" },
-      { label: "Customer Returns", href: "/scan/return" },
-      { label: "RTO Management", href: "/scan/rto" },
-      { label: "Outstanding SLA", href: "/shipments/outstanding" },
-    ],
-  },
-  {
-    title: "Accounting",
+    title: "Finance",
     links: [
       { label: "Settlement Statements", href: "/statements" },
       { label: "Bank Reconciliation", href: "/statements#reconciliation" },

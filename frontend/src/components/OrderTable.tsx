@@ -10,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "./primitives";
+import { API } from "../lib/api";
+import { downloadXlsx } from "../lib/india-post";
 import { isAwaiting, pushStateLabel, statusTone, type OrderShipment } from "../lib/shipments";
 
 const FINANCIAL_DOTS: Record<string, string> = {
@@ -25,8 +27,6 @@ const OPERATIONAL_DOTS: Record<string, string> = {
   RTO: "var(--muted-foreground)",
 };
 
-/* Payment states must not read as "bad", so they use Badge's secondary/outline
-   variants rather than destructive; only a genuine failure earns destructive. */
 function StatusBadge({ status, dotMap }: { status: string; dotMap: Record<string, string> }) {
   const dot = dotMap[status?.toUpperCase()] ?? "var(--muted-foreground)";
   return (
@@ -58,10 +58,6 @@ function ShipmentPill({ status }: { status: string }) {
   );
 }
 
-// AWAITING_TRACKING is deliberately NOT in shipments.TERMINAL_STATUSES: it is
-// the one state that asks the user for the missing tracking number, so it has to
-// stay visible here as a green Add Shipment button rather than be filtered out
-// as a finished shipment.
 function ShipmentCell({
   shipment,
   onAdd,
@@ -142,6 +138,8 @@ export default function OrderTable({
           <TableHead>Financial Status</TableHead>
           <TableHead>Fulfillment / Op Status</TableHead>
           <TableHead className="text-right">Total Amount</TableHead>
+          <TableHead>COD</TableHead>
+          <TableHead>City / Pincode</TableHead>
           <TableHead>Date</TableHead>
           <TableHead className="text-right">Action</TableHead>
         </TableRow>
@@ -169,15 +167,34 @@ export default function OrderTable({
             <TableCell className="text-right font-semibold tabular-nums text-foreground">
               ₹{Number(o.total_amount || 0).toLocaleString()}
             </TableCell>
+            <TableCell className="text-xs text-muted-foreground tabular-nums">
+              {(!o.cod_mode && (o.cod_value === undefined || o.cod_value === null || o.cod_value === ""))
+                ? "-"
+                : `${o.cod_mode ?? ""}${o.cod_mode && o.cod_value !== undefined && o.cod_value !== null && o.cod_value !== "" ? " " : ""}${o.cod_value !== undefined && o.cod_value !== null && o.cod_value !== "" ? `₹${o.cod_value}` : ""}`}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {`${o.receiver_city ?? ""} ${o.receiver_pincode ?? ""}`.trim() || "-"}
+            </TableCell>
             <TableCell className="text-xs text-muted-foreground font-mono">
               {(o.order_date ?? o.shopify_created_at ?? o.created_at)
                 ? new Date(o.order_date ?? o.shopify_created_at ?? o.created_at).toLocaleString()
                 : "-"}
             </TableCell>
             <TableCell className="text-right">
-              <Button asChild variant="outline" size="sm" className="shadow-xs hover:border-primary/50 text-xs">
-                <Link to={`/orders/${o.id}`}>View Timeline</Link>
-              </Button>
+              <div className="flex items-center justify-end gap-2">
+                <Button asChild variant="outline" size="sm" className="shadow-xs hover:border-primary/50 text-xs">
+                  <Link to={`/orders/${o.id}`}>Timeline</Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shadow-xs hover:border-primary/50 text-xs"
+                  onClick={() => downloadXlsx(`${API}/api/v1/orders/${o.id}/export/india-post.xlsx`, "india-post.xlsx")}
+                >
+                  XLSX
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}

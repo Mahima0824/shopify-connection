@@ -111,3 +111,60 @@ export function IconSpark({ size = 18 }: IconProps) {
     </Base>
   );
 }
+
+export function IconCalendar({ size = 16 }: IconProps) {
+  return (
+    <Base size={size}>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </Base>
+  );
+}
+
+export function IconCalendarCompare({ size = 16 }: IconProps) {
+  return (
+    <Base size={size}>
+      <rect x="3" y="4" width="14" height="14" rx="2" />
+      <path d="M16 10h5v9a2 2 0 01-2 2h-9v-5" />
+      <line x1="12" y1="2" x2="12" y2="6" />
+      <line x1="6" y1="2" x2="6" y2="6" />
+    </Base>
+  );
+}
+
+export function IconChevronDown({ size = 14 }: IconProps) {
+  return (
+    <Base size={size}>
+      <polyline points="6 9 12 15 18 9" />
+    </Base>
+  );
+}
+
+export function IconChevronUp({ size = 14 }: IconProps) {
+  return (
+    <Base size={size}>
+      <polyline points="18 15 12 9 6 15" />
+    </Base>
+  );
+}
+
+export function IconArrowUpRight({ size = 12 }: IconProps) {
+  return (
+    <Base size={size}>
+      <line x1="7" y1="17" x2="17" y2="7" />
+      <polyline points="7 7 17 7 17 17" />
+    </Base>
+  );
+}
+
+export function IconCurrencyExchange({ size = 16 }: IconProps) {
+  return (
+    <Base size={size}>
+      <path d="M17 4v6M17 4l3 3M17 4l-3 3" />
+      <path d="M7 20v-6M7 20l-3-3M7 20l3-3" />
+    </Base>
+  );
+}
+

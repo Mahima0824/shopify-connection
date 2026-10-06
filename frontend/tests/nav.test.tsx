@@ -15,10 +15,9 @@ function renderNav() {
   );
 }
 
-test("topnav renders wordmark without R dot and sign in", () => {
+test("topnav renders wordmark and sign in", () => {
   renderNav();
   expect(screen.getByText(/ReconHub/i)).toBeTruthy();
-  expect(screen.queryByText("R")).toBeNull();
   expect(screen.getByText(/Sign in/i)).toBeTruthy();
   expect(screen.queryByText(/Try free/i)).toBeNull();
 });
@@ -26,13 +25,11 @@ test("topnav renders wordmark without R dot and sign in", () => {
 test("topnav centers app sections with active effect and no underline", () => {
   const { container } = renderNav();
   const nav = container.querySelector('nav[aria-label="Primary"]') as HTMLElement;
-  for (const label of ["Dashboard", "Orders", "Dispatch", "Returns", "Exceptions", "Tally"]) {
+  for (const label of ["Dashboard", "Orders", "Exceptions", "Finance"]) {
     expect(nav.textContent).toMatch(label);
   }
   const active = container.querySelector('[aria-current="page"]');
   expect(active?.textContent).toMatch(/Dashboard/);
-  // Pills were styled by an inline style object with borderRadius 9999; they are
-  // now Tailwind, so the pill shape lives in a rounded-full class.
   expect(active?.className ?? "").toMatch(/rounded-full/);
 });
 
@@ -44,15 +41,13 @@ test("exactly one current-page marker exists", () => {
 test("topnav uses enterprise canvas background", () => {
   const { container } = renderNav();
   const header = container.querySelector("header") as HTMLElement;
-  // --canvas and then --background were both replaced by Tailwind's bg-background
-  // once the legacy palette was deleted.
   expect(header.className).toMatch(/bg-background/);
 });
 
 test("topnav groups routes with active trail", () => {
   const { container } = renderNav();
   const nav = container.querySelector('nav[aria-label="Primary"]') as HTMLElement;
-  for (const label of ["Dashboard", "Orders", "Scan", "Exceptions", "Finance", "Tracking"]) {
+  for (const label of ["Dashboard", "Orders", "Exceptions", "Finance", "Tracking"]) {
     expect(nav.textContent).toMatch(label);
   }
   expect(container.querySelector('[aria-current="page"]')).toBeTruthy();

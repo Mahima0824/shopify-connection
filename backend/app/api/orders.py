@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.database import get_db
 from app.schemas.india_post import OrderCreateManual
+from app.services.india_post_export import build_workbook
 from app.services.order_service import create_manual_order, list_orders
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
@@ -195,7 +198,7 @@ def _to_dict(o, shipment=None) -> dict:
         "receiver_mobile": o.receiver_mobile,
         "cod_mode": o.cod_mode,
         "cod_value": num(o.cod_value),
-        "weight_grams": o.weight_grams,
+        "weight_grams": num(o.weight_grams),
         "barcode_no": o.barcode_no,
         "shipment": shipment,
     }
@@ -207,14 +210,6 @@ def post_order(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    """Create a manual India Post order.
-
-    The committed frontend calls this route (NewOrderDialog posts to
-    /api/v1/orders), so it has to exist in the committed tree - not only in the
-    uncommitted India Post working set. Validation lives in
-    schemas.india_post.OrderCreateManual, so a malformed payload is a 422 with
-    the field that failed rather than a 500 from the model layer.
-    """
     try:
         data = OrderCreateManual(**payload)
     except ValidationError as e:
@@ -230,10 +225,27 @@ def get_orders(
     page: int = 1,
     page_size: int = 20,
     business_id: str | None = None,
+    cod_mode: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    city: str | None = None,
+    pincode: str | None = None,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    items, total = list_orders(db, business_id, search, status, page, page_size)
+    items, total = list_orders(
+        db,
+        _user.get("business_id"),
+        search,
+        status,
+        page,
+        page_size,
+        cod_mode=cod_mode,
+        date_from=date_from,
+        date_to=date_to,
+        city=city,
+        pincode=pincode,
+    )
     bid = _user.get("business_id")
     # Built here, in one pass, rather than inside _to_dict: the serializer has
     # no session and a per-order lookup inside it would be an N+1 across a page
@@ -257,6 +269,87 @@ def get_orders(
             "page": max(int(page or 1), 1),
         },
     }
+
+
+@router.get("/export/india-post.xlsx")
+def export_india_post_bulk(
+    search: str | None = None,
+    status: str | None = None,
+    cod_mode: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    city: str | None = None,
+    pincode: str | None = None,
+    business_id: str | None = None,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    import io
+
+    all_items: list = []
+    page = 1
+    page_size = 100
+    while True:
+        items, total = list_orders(
+            db,
+            _user.get("business_id"),
+            search,
+            status,
+            page,
+            page_size,
+            cod_mode=cod_mode,
+            date_from=date_from,
+            date_to=date_to,
+            city=city,
+            pincode=pincode,
+        )
+        all_items.extend(items)
+        if len(items) < page_size or len(all_items) >= total:
+            break
+        page += 1
+    wb = build_workbook(all_items)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"india-post_{now_str}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@router.get("/{order_id}/export/india-post.xlsx")
+def export_india_post_single(
+    order_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    import io
+    from app.models.order import Order
+
+    o = db.query(Order).filter_by(id=order_id, business_id=_user.get("business_id")).first()
+    if o is None:
+        raise HTTPException(404, "Order not found")
+    wb = build_workbook([o])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    order_name = (o.shopify_order_name or o.internal_order_number or order_id).replace(" ", "_").replace("#", "")
+    filename = f"india-post_{order_name}_{now_str}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 @router.get("/{order_id}/timeline")

@@ -1,0 +1,270 @@
+/* Shopify Analytics Dashboard Styles */
+.shopify-dashboard-bg {
+  background-color: #f1f2f4;
+  min-height: 100vh;
+  padding: 16px 24px 48px;
+  font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: #303030;
+}
+
+.shopify-dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Toolbar Controls */
+.shopify-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.shopify-pill-btn {
+  background: #ffffff;
+  border: 1px solid #d3d4d5;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #303030;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.15s ease;
+}
+
+.shopify-pill-btn:hover {
+  background: #f7f7f8;
+  border-color: #c9cccf;
+}
+
+.shopify-pill-btn:active {
+  background: #ebebeb;
+}
+
+/* Section Header Card */
+.shopify-section-header {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 12px 16px;
+  border: 1px solid #e1e3e5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.shopify-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.shopify-icon-btn {
+  background: transparent;
+  border: none;
+  color: #616161;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shopify-icon-btn:hover {
+  background: #f1f2f4;
+  color: #1a1a1a;
+}
+
+/* 4 Metrics Grid */
+.shopify-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .shopify-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .shopify-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shopify-kpi-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e1e3e5;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 84px;
+  position: relative;
+  overflow: hidden;
+}
+
+.shopify-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.shopify-kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303030;
+  text-decoration: underline dotted #a6a6a6;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.shopify-kpi-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.shopify-kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
+}
+
+.shopify-trend-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: #008060; /* Shopify Green */
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.shopify-trend-neutral {
+  font-size: 12px;
+  color: #616161;
+}
+
+.shopify-sparkline-box {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 90px;
+  height: 28px;
+}
+
+/* Main Dashboard 2-Column Section */
+.shopify-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .shopify-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shopify-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e1e3e5;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.shopify-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303030;
+  margin-bottom: 8px;
+}
+
+.shopify-big-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.shopify-big-number {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+}
+
+/* Chart Canvas Area */
+.shopify-chart-container {
+  width: 100%;
+  position: relative;
+}
+
+/* Breakdown List */
+.shopify-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.shopify-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background 0.1s ease;
+}
+
+.shopify-breakdown-row:hover {
+  background: #f7f7f8;
+}
+
+.shopify-breakdown-row.highlighted {
+  background: #f6f6f7;
+}
+
+.shopify-breakdown-row.total-row {
+  border-top: 1px solid #e1e3e5;
+  margin-top: 6px;
+  padding-top: 12px;
+  font-weight: 700;
+}
+
+.shopify-breakdown-label {
+  color: #2c6ecb; /* Shopify Link Blue */
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.shopify-breakdown-label:hover {
+  text-decoration: underline;
+}
+
+.shopify-breakdown-val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #1a1a1a;
+}

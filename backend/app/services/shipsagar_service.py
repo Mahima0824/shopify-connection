@@ -590,8 +590,47 @@ def _event_id(awb: str, at_date: str, at_time: str, description: str,
     return f"ss-{awb}-{at_date}-{at_time}-{digest}"
 
 
+def _is_unknown_awb(data: dict) -> bool:
+    """Does this ShipSagar answer mean "I do not know that AWB"?
+
+    ShipSagar words it "Invalid TrackingNo ." or "Tracking Not Found ." with a
+    stray space before the full stop, and returns no trackingDetails at all.
+    Matched on the collapsed alphanumeric form so punctuation and spacing cannot
+    defeat it, and scoped to those phrases so a different refusal ("Invalid Client Code")
+    never matches.
+    """
+    message = _message_of(data) or ""
+    collapsed = "".join(ch for ch in message.lower() if ch.isalnum())
+    return "invalidtrackingno" in collapsed or "trackingnotfound" in collapsed
+
+
+def _extract_tracking_details(data: dict) -> list | dict:
+    """Extract and parse tracking details from ShipSagar's response.
+
+    ShipSagar returns `trackingDetails` (or `TrackingDetails`) either as a list of
+    dicts, a single dict, or a JSON-encoded string (sometimes double-encoded).
+    """
+    raw_val = data.get("trackingDetails")
+    if raw_val is None:
+        raw_val = data.get("TrackingDetails")
+    if raw_val is None:
+        return []
+
+    import json
+    while isinstance(raw_val, str):
+        cleaned = raw_val.strip()
+        if not cleaned:
+            return []
+        try:
+            raw_val = json.loads(cleaned)
+        except Exception:
+            break
+
+    return raw_val
+
+
 def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
-    """Fetch tracking history for one AWB. Returns {"awb", "events"}.
+    """Fetch tracking history for one AWB. Returns {"awb", "events", "registered"}.
 
     ShipSagar returns a TrackingDetails array for a single TrackingNo and no
     event identifier, so event_id is synthesized from the AWB, the event's own
@@ -602,12 +641,24 @@ def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
     awb = (tracking_no or "").strip()
     data = _post(TRACK_SHIPMENT_PATH, {"TrackingNo": awb})
     if not _is_ok(data):
+        # "Invalid TrackingNo" is a processed answer, not an outage: ShipSagar
+        # does not know this AWB yet. For a freshly pushed India Post AWB that
+        # is simply the state before its first scan, and it must read as an
+        # empty timeline rather than as a failure. Every other message - a bad
+        # client code, a quota refusal - keeps raising.
+        if _is_unknown_awb(data):
+            return {"awb": awb, "events": [], "registered": False}
         raise ShipsagarError("SHIPSAGAR_API_ERROR",
                              _message_of(data) or "ShipSagar TrackShipment failed.")
-    details = data.get("TrackingDetails") or []
+    details = _extract_tracking_details(data)
     if not details:
-        return {"awb": awb, "events": []}
-    detail = details[0] or {}
+        return {"awb": awb, "events": [], "registered": True}
+    if isinstance(details, list):
+        detail = details[0] if details else {}
+    elif isinstance(details, dict):
+        detail = details
+    else:
+        detail = {}
     resolved_courier = str(detail.get("CourierCode") or courier_code or "").strip()
     events = []
     for raw_ev in detail.get("TrackingHistory") or []:
@@ -624,7 +675,7 @@ def track_shipment(tracking_no: str, courier_code: str = "") -> dict:
             "location": location,
             "event_time": _parse_event_time(at_date, at_time),
         })
-    return {"awb": awb, "events": events}
+    return {"awb": awb, "events": events, "registered": True}
 
 
 def register_tracking(db, shipment, *, courier: str | None = None,

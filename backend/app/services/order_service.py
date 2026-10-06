@@ -2,24 +2,16 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from app.models.order import Order
 
 
 def create_manual_order(db: Session, business_id: str, payload) -> Order:
-    """Create a manual (India Post) order. payload is OrderCreateManual.
-
-    Landed with the POST /orders route: the committed NewOrderDialog posts here,
-    so without this the committed frontend called a route that did not exist.
-    Numbered MAN-<8 hex> so a manual order is distinguishable from a synced
-    Shopify one (gid://...) and from a shipment number (YYYYMMDD-NNN), which
-    next_shipment_order_no keys on - see its docstring for why that sequence
-    ignores anything not matching its own prefix.
-    """
-    import uuid
-    from datetime import datetime, timezone
-
+    """Create a manual (India Post) order. payload is OrderCreateManual."""
     data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     hex8 = uuid.uuid4().hex[:8].upper()
     cod_mode = str(data.get("cod_mode") or "COD").upper()
@@ -64,6 +56,18 @@ def create_manual_order(db: Session, business_id: str, payload) -> Order:
     return o
 
 
+def _day_bounds(v: str, is_end: bool) -> datetime:
+    dt = datetime.fromisoformat(v)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    if len(v) == 10:
+        if is_end:
+            dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return dt
+
+
 def list_orders(
     db: Session,
     business_id: str | None = None,
@@ -71,6 +75,11 @@ def list_orders(
     status: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    cod_mode: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    city: str | None = None,
+    pincode: str | None = None,
 ) -> tuple[list[Order], int]:
     """Return (items, total) with optional search/status filters and pagination."""
     page = max(int(page or 1), 1)
@@ -89,6 +98,16 @@ def list_orders(
             | (Order.shopify_order_id.ilike(like))
             | (Order.internal_order_number.ilike(like))
         )
+    if cod_mode and cod_mode.upper() in ("COD", "PREPAID"):
+        q = q.filter(Order.cod_mode == cod_mode.upper())
+    if city:
+        q = q.filter(Order.receiver_city.ilike(f"%{city}%"))
+    if pincode:
+        q = q.filter(Order.receiver_pincode == pincode)
+    if date_from:
+        q = q.filter(Order.order_date >= _day_bounds(date_from, False))
+    if date_to:
+        q = q.filter(Order.order_date <= _day_bounds(date_to, True))
     total = q.count()
     items = (
         q.order_by(Order.order_date.desc())
