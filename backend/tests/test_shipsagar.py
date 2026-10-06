@@ -9,6 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import pytest
+
 from app.database import Base
 import app.models  # noqa: F401 — register all models
 from app.main import app
@@ -25,6 +27,29 @@ def _mk():
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(eng)
     return sessionmaker(bind=eng)
+
+
+def _shipment_day() -> str:
+    return datetime.now().strftime("%Y%m%d")
+
+
+@pytest.fixture(autouse=True)
+def _warm_courier_cache():
+    """Keep the push route's catalogue lookup off the network.
+
+    Validating the courier calls get_couriers, which on a cold cache makes a
+    live ShipSagar request against a third-party production API. Priming the
+    in-process cache keeps the suite hermetic and offline; a test that needs a
+    specific catalogue calls _stub_couriers, the outage tests replace
+    get_couriers outright, and the GetCourier unit tests reset the cache and
+    stub _post themselves.
+    """
+    from app.services import shipsagar_service as ss
+    ss._courier_cache = [{"courier_code": c, "courier_name": c}
+                         for c in ("IP", "INDIA_POST", "DTDC", "FEDEX")]
+    ss._courier_cached_at = datetime.now(timezone.utc)
+    yield
+    ss.reset_courier_cache()
 
 
 def _seed_shipment(mk, carrier="INDIA_POST", awb="EM123456789IN"):
@@ -1667,7 +1692,8 @@ def test_push_creates_parcel_and_shipment_and_calls_shipsagar(monkeypatch):
         assert data["carrier_code"] == "IP"
         assert data["tracking_status"] == "READY_TO_SHIP"
         assert data["shipsagar_tracking_id"] == "SS-EG080960145IN"
-        assert seen == {"awb": "EG080960145IN", "courier": "IP", "order_no": "MAN-P1"}
+        assert seen == {"awb": "EG080960145IN", "courier": "IP",
+                        "order_no": f"{_shipment_day()}-001"}
         db = mk()
         try:
             p = db.query(Parcel).filter_by(business_id=bid).first()
@@ -2006,7 +2032,7 @@ def test_push_queued_retry_is_actually_drained(monkeypatch):
             out = ss.drain_retry_queue(db)
             db.commit()
             assert reached == {"awb": "EG-DRAIN", "courier": "INDIA_POST",
-                               "order_no": "MAN-P1"}
+                               "order_no": f"{_shipment_day()}-001"}
             assert out == {"checked": 1, "succeeded": 1, "requeued": 0,
                            "dead_lettered": 0}
             done = db.query(ShipsagarRetryJob).filter_by(
@@ -3696,6 +3722,139 @@ def test_push_payload_treats_a_blank_order_no_as_absent(monkeypatch):
     p = build_push_payload(tracking_no="EG1", courier_code="IP",
                            order=_OrderStub(), order_no="   ")
     assert p["OrderNo"] == "MAN-AB12CD34"
+
+
+# --- push assigns an OrderNo and validates the courier ---
+
+def _stub_couriers(monkeypatch, codes=("IP", "DTDC", "FEDEX")):
+    from app.services import shipsagar_service as ss
+    ss.reset_courier_cache()
+    monkeypatch.setattr(ss, "get_couriers",
+                        lambda force=False: [{"courier_code": c,
+                                             "courier_name": c} for c in codes])
+
+
+def test_push_assigns_an_order_no_to_the_order(monkeypatch):
+    from app.models.order import Order
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    seen = {}
+
+    def _push(**kw):
+        # The real builder, so this pins the route -> push_shipment -> payload
+        # wiring rather than just what the stub was handed.
+        seen["payload"] = ss.build_push_payload(**kw)
+        return {"ok": True, "message": "Data has been recorded successfully"}
+
+    monkeypatch.setattr(ss, "push_shipment", _push)
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-NO-1", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+        data = r.json()["data"]
+        assert data["order_no"].startswith(_shipment_day())
+        assert data["order_no"].endswith("-001")
+        assert seen["payload"]["OrderNo"] == data["order_no"]
+        db = mk()
+        try:
+            assert db.query(Order).filter_by(id=oid).first().internal_order_number \
+                == data["order_no"]
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_numbers_are_sequential_across_pushes(monkeypatch):
+    from app.models.order import Order
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid1 = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch)
+    db = mk()
+    try:
+        o2 = Order(business_id=bid, internal_order_number="MAN-P2",
+                   shopify_order_id="MANUAL-P2",
+                   order_date=datetime.now(timezone.utc))
+        db.add(o2)
+        db.commit()
+        db.refresh(o2)
+        oid2 = o2.id
+    finally:
+        db.close()
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    try:
+        first = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid1, "tracking_no": "EG-NO-A", "courier_code": "IP"})
+        second = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid2, "tracking_no": "EG-NO-B", "courier_code": "DTDC"})
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert first.json()["data"]["order_no"].endswith("-001")
+        assert second.json()["data"]["order_no"].endswith("-002")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_rejects_a_courier_shipsagar_does_not_serve(monkeypatch):
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch, codes=("IP", "DTDC"))
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-BAD-C", "courier_code": "NOT_A_COURIER"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "UNSUPPORTED_COURIER"
+        db = mk()
+        try:
+            from app.models.shipment import Shipment
+            assert db.query(Shipment).filter_by(business_id=bid).count() == 0
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_accepts_india_post_even_when_the_catalogue_omits_it(monkeypatch):
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    _stub_couriers(monkeypatch, codes=("DTDC", "FEDEX"))
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-IP-OK", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_push_survives_an_unreachable_catalogue(monkeypatch):
+    """A GetCourier outage must not block a push; fall back to the allow-list."""
+    from app.services import shipsagar_service as ss
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+
+    def _boom(force=False):
+        raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "courier list down")
+
+    monkeypatch.setattr(ss, "get_couriers", _boom)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {"ok": True, "message": "ok"})
+    try:
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid, "tracking_no": "EG-FALLBACK", "courier_code": "IP"})
+        assert r.status_code == 200, r.text
+    finally:
+        app.dependency_overrides.clear()
 
 
 # --- sequential shipment order numbers ---

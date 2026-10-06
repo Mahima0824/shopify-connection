@@ -22,6 +22,10 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 SHIPMENT_TYPE_DEFAULT = "Road"
 COUNTRY_NAME_DEFAULT = "India"
 
+# India Post is ours to route, so it is always accepted even when ShipSagar's
+# GetCourier catalogue does not serve it.
+INDIA_POST_COURIER_CODES = ("IP", "INDIA_POST")
+
 
 def _order_fields(o) -> dict:
     """Display columns sourced from the Order. Every one of them is nullable.
@@ -195,6 +199,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
     from app.services import shipsagar_service as ss
+    from app.services.order_service import next_shipment_order_no
     if u.get("role") not in ("ADMIN", "WAREHOUSE"):
         return _err(403, "FORBIDDEN", "Warehouse role required")
     bid = u.get("business_id")
@@ -207,6 +212,19 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     if len(tracking_no) > PARCEL_BARCODE_MAX_LEN:
         return _err(400, "INVALID_TRACKING_NUMBER_LENGTH",
                     f"Tracking number must be {PARCEL_BARCODE_MAX_LEN} characters or fewer.")
+    # The catalogue decides what ShipSagar will accept, so it is checked before
+    # the Order lookup and before anything is written. An unreachable catalogue
+    # must not block a push, so the India Post allow-list stands alone.
+    allowed = set(INDIA_POST_COURIER_CODES)
+    try:
+        allowed.update(
+            str(row.get("courier_code") or "").strip().upper()
+            for row in (ss.get_couriers() or []))
+    except ss.ShipsagarError:
+        pass
+    if courier_code not in allowed:
+        return _err(400, "UNSUPPORTED_COURIER",
+                    f"ShipSagar does not serve courier '{courier_code}'.")
     order = db.query(Order).filter_by(id=body.order_id, business_id=bid).first()
     if order is None:
         return _err(404, "ORDER_NOT_FOUND", "Order not found in this business.")
@@ -240,6 +258,12 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         db.refresh(shipment)
         return {"success": True, "data": {**_sdict(shipment), "pushed": False,
                                           "message": ss.SHIPSAGAR_NOT_CONFIGURED_MESSAGE}}
+    # The shipment's PushShipment OrderNo is assigned here, at creation, and
+    # written onto the Order so build_push_payload's own fallback carries it to
+    # the wire: push_shipment takes no order_no argument of its own.
+    order_no = next_shipment_order_no(db, bid)
+    order.internal_order_number = order_no
+    db.flush()
     try:
         result = ss.push_shipment(tracking_no=tracking_no,
                                   courier_code=courier_code, order=order)
@@ -260,6 +284,7 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     db.commit()
     db.refresh(shipment)
     return {"success": True, "data": {**_sdict(shipment),
+                                      "order_no": order_no,
                                       "pushed": bool(result.get("ok")),
                                       "message": result.get("message", "")}}
 
