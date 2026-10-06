@@ -4435,3 +4435,199 @@ def test_history_endpoint_is_open_to_a_viewer(monkeypatch):
         assert r.json()["data"]["events"] == []
     finally:
         app.dependency_overrides.clear()
+
+
+# --- orders list carries shipment state ---
+
+def test_orders_list_includes_shipment_state(monkeypatch):
+    """Every order row carries a `shipment`, null when it has none.
+
+    The push_state ladder is asserted against how a refusal is ACTUALLY
+    recorded, which is not the shipments.shipsagar_tracking_id prefix:
+
+      * register_tracking writes SS-{awb} on BOTH an accepted push and a
+        provider refusal (shipsagar_service.py: `shipment.shipsagar_tracking_id
+        = tracking_id` runs before `pushed = bool(result.get("ok"))`), and the
+        Orders-driven push route does the same. So "starts with SS-" cannot
+        separate accepted from refused - only an audit_logs row can.
+      * The refusal trace is the SHIPSAGAR_PUSH_REJECTED audit row, and it is
+        resolved by a later SHIPSAGAR_PUSH_ACCEPTED row or a DONE retry job.
+        That is exactly the definition /api/v1/shipsagar/health already uses
+        for rejected_pushes, and this mirrors it rather than inventing a second
+        one.
+      * A manually created shipment (create_shipment / book) never reaches
+        ShipSagar at all: shipsagar_tracking_id stays NULL. Calling that
+        "rejected" would be a lie, and it is what a naive
+        `awb and not SS- -> rejected` sketch does.
+      * SS-STUB-* is a local placeholder written when credentials are absent,
+        never a provider id. It also starts with "SS-", so the naive prefix
+        test reports a not-configured stub as pushed.
+    """
+    from app.models.audit_log import AuditLog
+    from app.models.order import Order
+    from app.models.shipment import Shipment
+    from app.models.shipment_event import ShipsagarRetryJob
+    now = datetime.now(timezone.utc)
+    mk = _mk()
+    c, h, bid = _authed_for_list(monkeypatch, mk)
+    db = mk()
+    try:
+        def _order(tag):
+            o = Order(business_id=bid, internal_order_number=f"MAN-{tag}",
+                      shopify_order_id=f"MANUAL-{tag}", order_date=now)
+            db.add(o)
+            db.flush()
+            return o.id
+
+        ids = {t: _order(t) for t in ("B1", "W1", "P1", "R1", "M1", "S1", "R2", "R3")}
+
+        def _ship(tag, **kw):
+            s = Shipment(business_id=bid, order_id=ids[tag], **kw)
+            db.add(s)
+            db.flush()
+            return s
+
+        # No tracking number yet.
+        _ship("W1", parcel_id="pw", carrier_code="IP",
+              awb_number="", tracking_status="AWAITING_TRACKING")
+        # Accepted push: a real provider id.
+        _ship("P1", parcel_id="pp", carrier_code="IP",
+              awb_number="EG-P1", tracking_status="IN_TRANSIT",
+              current_location="Delhi", shipped_at=now,
+              last_checkpoint_at=now - timedelta(hours=1),
+              shipsagar_tracking_id="SS-EG-P1")
+        # Refused push: identical SS- shape to the accepted push above, and the
+        # audit row is the only thing telling them apart.
+        r1 = _ship("R1", parcel_id="pr", carrier_code="IP",
+                   awb_number="EG-R1", tracking_status="READY_TO_SHIP",
+                   shipsagar_tracking_id="SS-EG-R1")
+        # Never pushed: created manually, so no shipsagar_tracking_id at all.
+        m1 = _ship("M1", parcel_id="pm", carrier_code="MANUAL",
+                   awb_number="EG-M1", tracking_status="BOOKED")
+        # Not configured: a local stub placeholder, which is not a provider id.
+        _ship("S1", parcel_id="ps", carrier_code="IP",
+              awb_number="EG-S1", tracking_status="READY_TO_SHIP",
+              shipsagar_tracking_id="SS-STUB-IP-EG-S1")
+        # Refused then accepted: the later acceptance resolves the refusal.
+        r2 = _ship("R2", parcel_id="pr2", carrier_code="IP",
+                   awb_number="EG-R2", tracking_status="READY_TO_SHIP",
+                   shipsagar_tracking_id="SS-EG-R2")
+        # Refused, then landed on a queued retry: a DONE job also resolves it.
+        r3 = _ship("R3", parcel_id="pr3", carrier_code="IP",
+                   awb_number="EG-R3", tracking_status="READY_TO_SHIP",
+                   shipsagar_tracking_id="SS-EG-R3")
+        # The audit entity is the shipment, not the order.
+        for shipment, action in ((r1, "SHIPSAGAR_PUSH_REJECTED"),
+                                 (r2, "SHIPSAGAR_PUSH_REJECTED"),
+                                 (r2, "SHIPSAGAR_PUSH_ACCEPTED"),
+                                 (r3, "SHIPSAGAR_PUSH_REJECTED")):
+            db.add(AuditLog(business_id=bid, entity_type="shipment",
+                            entity_id=shipment.id, action=action, new_values={}))
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=r3.id, status="DONE"))
+        # A retry job for a shipment that was never refused resolves nothing.
+        db.add(ShipsagarRetryJob(business_id=bid, operation="register_tracking",
+                                 shipment_id=m1.id, status="DONE"))
+        # Another tenant's shipment must not leak onto this tenant's order.
+        db.add(Shipment(business_id="other-biz", order_id=ids["B1"],
+                        parcel_id="px", carrier_code="IP", awb_number="EG-X",
+                        shipsagar_tracking_id="SS-EG-X"))
+        db.commit()
+        r_ship = {s.order_id: s for s in db.query(Shipment).all()}
+        db.close()
+    except Exception:
+        db.close()
+        raise
+    try:
+        r = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r.status_code == 200, r.text
+        rows = {row["internal_order_number"]: row
+                for row in r.json()["data"]["items"]}
+
+        # No shipment row at all -> null, so the Orders page offers "Add
+        # Shipment". The foreign-tenant row must not appear here either.
+        assert rows["MAN-B1"]["shipment"] is None
+
+        w = rows["MAN-W1"]["shipment"]
+        assert w["push_state"] == "awaiting"
+        assert w["awb_number"] is None
+        assert w["id"] == r_ship[ids["W1"]].id
+
+        p = rows["MAN-P1"]["shipment"]
+        assert p["push_state"] == "pushed"
+        assert p["awb_number"] == "EG-P1"
+        assert p["carrier_code"] == "IP"
+        assert p["tracking_status"] == "IN_TRANSIT"
+        assert p["current_location"] == "Delhi"
+        assert p["last_checkpoint_at"]
+        assert p["shipped_at"]
+
+        # The refusal: same SS- shape as the accepted push above.
+        assert rows["MAN-R1"]["shipment"]["push_state"] == "rejected"
+        assert rows["MAN-R1"]["shipment"]["awb_number"] == "EG-R1"
+        # Never pushed is not rejected, even with a DONE retry job attached.
+        assert rows["MAN-M1"]["shipment"]["push_state"] == "awaiting"
+        # A stub is not a real provider id, so not pushed either.
+        assert rows["MAN-S1"]["shipment"]["push_state"] == "awaiting"
+        # Both resolution arms, matching /api/v1/shipsagar/health.
+        assert rows["MAN-R2"]["shipment"]["push_state"] == "pushed"
+        assert rows["MAN-R3"]["shipment"]["push_state"] == "pushed"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_orders_list_shipment_query_count_is_flat(monkeypatch):
+    """The shipment map costs the same at 5 rows as at 25.
+
+    _to_dict has no db session, so the shipment data is built in get_orders.
+    A per-row probe inside it would be an N+1 that is invisible in the response
+    body, so this compares two page sizes instead of pinning a magic number:
+    any per-order query would make the larger page cost more.
+    """
+    from app.models.order import Order
+    from app.models.shipment import Shipment
+    now = datetime.now(timezone.utc)
+    mk = _mk()
+    c, h, bid = _authed_for_list(monkeypatch, mk, email="nplus1@t.in")
+    db = mk()
+    try:
+        for i in range(25):
+            db.add(Order(business_id=bid, internal_order_number=f"N-{i}",
+                         shopify_order_id=f"N-{i}", order_date=now))
+        db.commit()
+        ids = {o.internal_order_number: o.id for o in db.query(Order).all()}
+        for i in range(25):
+            db.add(Shipment(business_id=bid, order_id=ids[f"N-{i}"],
+                            parcel_id=f"np{i}", carrier_code="IP",
+                            awb_number=f"EG-{i}", tracking_status="IN_TRANSIT",
+                            shipsagar_tracking_id=f"SS-EG-{i}"))
+        db.commit()
+        db.close()
+    except Exception:
+        db.close()
+        raise
+
+    from sqlalchemy import event as sa_event
+    from sqlalchemy.engine import Engine
+    counter = {"n": 0}
+
+    @sa_event.listens_for(Engine, "before_cursor_execute")
+    def _count(conn, cursor, statement, params, context, executemany):
+        counter["n"] += 1
+
+    def _statements_for(size):
+        counter["n"] = 0
+        r = c.get(f"/api/v1/orders?page_size={size}", headers=h)
+        assert r.status_code == 200, r.text
+        return counter["n"], r.json()["data"]["items"]
+
+    try:
+        small, small_items = _statements_for(5)
+        large, large_items = _statements_for(100)
+        assert len(small_items) == 5
+        assert len(large_items) == 25
+        assert all(i["shipment"]["push_state"] == "pushed" for i in large_items)
+        assert small == large, f"{small} statements at 5 rows, {large} at 25"
+    finally:
+        sa_event.remove(Engine, "before_cursor_execute", _count)
+        app.dependency_overrides.clear()
