@@ -422,20 +422,32 @@ def build_push_payload(*, tracking_no: str, courier_code: str, order,
 
     EmailID and CompanyName are the account constants when set, falling back to
     the order's own values when unset so a misconfigured deploy still sends
-    something usable rather than a blank. Every read goes through getattr with a
-    "" default: the receiver_* columns arrive with the India Post order
-    migration, and without the default a tree that does not carry them raised
+    something usable rather than a blank; each falls back on its own, so a
+    half-configured deploy keeps the configured field on the constant. Every
+    read goes through getattr with a "" default and an ``or ""`` guard: the
+    receiver_* columns arrive with the India Post order migration, and a NULL
+    one would otherwise reach the wire as the literal string "None". Without
+    the getattr default a tree that does not carry the columns raised
     AttributeError while building the payload.
+
+    ``order_no`` is the business-supplied number for the Orders-driven push
+    flow; omitted or blank, it falls back to the order's own number, which is
+    what register_tracking relies on.
     """
     email = (settings.shipsagar_email or "").strip() or str(
         getattr(order, "receiver_email", "") or "").strip()
     company = (settings.shipsagar_company or "").strip() or str(
         getattr(order, "receiver_company", "") or "").strip()
+    # A blank order_no is deliberately as absent as None: an empty OrderNo is
+    # never useful on the wire, and callers with no business-supplied number
+    # pass "" rather than None.
+    resolved_order_no = (order_no or "").strip() or str(
+        getattr(order, "internal_order_number", "")
+        or getattr(order, "shopify_order_name", "") or "").strip()
     return {
         "CourierCode": (courier_code or "").strip().upper(),
         "TrackingNo": (tracking_no or "").strip(),
-        "OrderNo": str(order_no or getattr(order, "internal_order_number", "")
-                       or getattr(order, "shopify_order_name", "") or "").strip(),
+        "OrderNo": resolved_order_no,
         "CustomerName": str(getattr(order, "receiver_name", "") or "").strip(),
         "EmailID": email,
         "ShipmentType": DEFAULT_SHIPMENT_TYPE,

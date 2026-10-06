@@ -787,8 +787,20 @@ def test_post_raises_bad_response_on_non_json(monkeypatch):
         assert exc.code == "SHIPSAGAR_BAD_RESPONSE"
 
 
-def test_build_push_payload_maps_every_business_field():
+def test_build_push_payload_maps_every_business_field(monkeypatch):
+    """Pins the shape of the body and, with the constants unset, the fallback.
+
+    The constants are pinned to "" rather than left to the environment: this
+    asserts that every other field is mapped correctly AND that a blank
+    constant falls through to the order's own receiver_email / receiver_company.
+    Without the monkeypatch an exported SHIPSAGAR_EMAIL or SHIPSAGAR_COMPANY
+    would silently redirect both assertions and the test would pass for the
+    wrong reason.
+    """
+    from app import config
     from app.services.shipsagar_service import build_push_payload
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
     payload = build_push_payload(
         tracking_no="EG080960145IN", courier_code="ip", order=_OrderStub())
     assert payload["CourierCode"] == "IP"
@@ -802,8 +814,16 @@ def test_build_push_payload_maps_every_business_field():
     assert payload["CompanyName"] == "Reshamgath"
 
 
-def test_build_push_payload_blanks_missing_optional_fields():
+def test_build_push_payload_blanks_missing_optional_fields(monkeypatch):
+    """Both sides blank -> both fields blank, never a placeholder.
+
+    The constants are pinned to "" so the assertion is about the unset
+    configuration rather than about whatever the ambient environment holds.
+    """
+    from app import config
     from app.services import shipsagar_service as ss
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
     o = _OrderStub()
     o.receiver_email = ""
     o.receiver_company = ""
@@ -3549,6 +3569,7 @@ def test_get_couriers_serves_the_stale_catalogue_when_a_refresh_fails(monkeypatc
     except ss.ShipsagarError as exc:
         assert exc.code == "SHIPSAGAR_API_ERROR"
 
+
 # --- build_push_payload uses the constants ---
 
 def test_push_payload_uses_constant_email_and_company(monkeypatch):
@@ -3583,13 +3604,95 @@ def test_push_payload_falls_back_to_the_order_when_a_constant_is_unset(monkeypat
 
 
 def test_push_payload_never_invents_an_email(monkeypatch):
+    """A missing value is "", never the string "None".
+
+    The hazard is the None COLUMN, not the empty string: these receiver_*
+    columns are nullable, and `str(getattr(order, "receiver_email", ""))` over a
+    None yields the literal "None", which would go on the wire as an address.
+    So the None cases are what this asserts; the "" cases only pin that an
+    empty string stays empty.
+    """
     from app import config
     from app.services.shipsagar_service import build_push_payload
     monkeypatch.setattr(config.settings, "shipsagar_email", "")
     monkeypatch.setattr(config.settings, "shipsagar_company", "Reshamgath")
     o = _OrderStub()
+    o.receiver_email = None
+    o.receiver_company = None
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == ""
+    assert p["CompanyName"] == "Reshamgath"
+
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
+    o = _OrderStub()
+    o.receiver_email = None
+    o.receiver_company = None
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == ""
+    assert p["CompanyName"] == ""
+
+    o = _OrderStub()
     o.receiver_email = ""
     o.receiver_company = ""
     p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
     assert p["EmailID"] == ""
+    assert p["CompanyName"] == ""
+
+
+def test_push_payload_mixes_constant_and_order_fallback_per_field(monkeypatch):
+    """Each of EmailID/CompanyName falls back independently of the other.
+
+    ShipSagar takes one address for the whole account, so a half-configured
+    deploy (email set, company not, or the reverse) must not carry the order's
+    value into the field that IS configured.
+    """
+    from app import config
+    from app.services.shipsagar_service import build_push_payload
+
+    monkeypatch.setattr(config.settings, "shipsagar_email", "ops@example.com")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
+    o = _OrderStub()
+    o.receiver_email = "customer@own.com"
+    o.receiver_company = "Customer Co"
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == "ops@example.com"
+    assert p["CompanyName"] == "Customer Co"
+
+    monkeypatch.setattr(config.settings, "shipsagar_email", "")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "Reshamgath")
+    o = _OrderStub()
+    o.receiver_email = "customer@own.com"
+    o.receiver_company = "Customer Co"
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == "customer@own.com"
     assert p["CompanyName"] == "Reshamgath"
+
+    # Blank on both sides of the mixed pair still never invents a value.
+    monkeypatch.setattr(config.settings, "shipsagar_email", "ops@example.com")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "")
+    o = _OrderStub()
+    o.receiver_email = None
+    o.receiver_company = None
+    p = build_push_payload(tracking_no="EG1", courier_code="IP", order=o)
+    assert p["EmailID"] == "ops@example.com"
+    assert p["CompanyName"] == ""
+
+
+def test_push_payload_treats_a_blank_order_no_as_absent(monkeypatch):
+    """order_no="" is as absent as None: the order's own number is used.
+
+    An empty OrderNo is never useful on the wire, and the caller that has no
+    business-supplied number passes the empty string rather than None, so the
+    two must not diverge.
+    """
+    from app import config
+    from app.services.shipsagar_service import build_push_payload
+    monkeypatch.setattr(config.settings, "shipsagar_email", "ops@example.com")
+    monkeypatch.setattr(config.settings, "shipsagar_company", "Reshamgath")
+    p = build_push_payload(tracking_no="EG1", courier_code="IP",
+                           order=_OrderStub(), order_no="")
+    assert p["OrderNo"] == "MAN-AB12CD34"
+    p = build_push_payload(tracking_no="EG1", courier_code="IP",
+                           order=_OrderStub(), order_no="   ")
+    assert p["OrderNo"] == "MAN-AB12CD34"
