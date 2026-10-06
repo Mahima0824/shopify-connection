@@ -1,7 +1,16 @@
 // web/src/lib/shipments.ts — shipment page helpers (pure, unit-tested).
 
+// An order synced from Shopify with no tracking number yet. Deliberately listed
+// AFTER NOT_CREATED: it is the one status that is terminal to the backend
+// (shipment_service.TERMINAL — there is no tracking number to poll) but NOT to
+// this page, because it is precisely the state that prompts the user for one.
+// Do not add it to TERMINAL_STATUSES below; that would hide the rows the Orders
+// table exists to surface. shipments-client.test.tsx pins the split.
+export const AWAITING_TRACKING = "AWAITING_TRACKING";
+
 export const SHIPMENT_STATUSES = [
   "NOT_CREATED",
+  AWAITING_TRACKING,
   "READY_TO_SHIP",
   "IN_TRANSIT",
   "OUT_FOR_DELIVERY",
@@ -53,6 +62,7 @@ const TONES: Record<string, Tone> = {
   LOST: "danger",
   CLOSED: "neutral",
   NOT_CREATED: "neutral",
+  AWAITING_TRACKING: "info",
 };
 
 export function statusTone(status?: string | null): Tone {
@@ -118,4 +128,41 @@ export function validatePush(form: {
   if (!form.tracking_no.trim()) errors.tracking_no = "Tracking number is required.";
   if (!form.courier_code.trim()) errors.courier_code = "Courier is required.";
   return errors;
+}
+
+export const PUSH_STATES = ["none", "awaiting", "pushed", "rejected"] as const;
+
+export type PushState = (typeof PUSH_STATES)[number];
+
+/** The shipment slice of an Order row, as GET /api/v1/orders returns it. */
+export type OrderShipment = {
+  id?: string | null;
+  awb_number?: string | null;
+  carrier_code?: string | null;
+  tracking_status?: string | null;
+  current_location?: string | null;
+  last_checkpoint_at?: string | null;
+  shipped_at?: string | null;
+  push_state?: string | null;
+};
+
+/** True when the order has a shipment row that still needs a tracking number. */
+export function isAwaiting(shipment: OrderShipment | null | undefined): boolean {
+  return (shipment?.push_state ?? "") === "awaiting";
+}
+
+const PUSH_LABELS: Record<string, string> = {
+  none: "No shipment",
+  awaiting: "Awaiting tracking number",
+  pushed: "Tracking",
+  rejected: "Not accepted by ShipSagar",
+};
+
+/**
+ * Label for an order row's shipment state. Anything unrecognised reads as "No
+ * shipment" rather than blank, so a state added on the backend shows as wrong
+ * but never as an empty cell.
+ */
+export function pushStateLabel(state?: string | null): string {
+  return PUSH_LABELS[state ?? ""] ?? PUSH_LABELS.none;
 }

@@ -1,17 +1,28 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
+  AWAITING_TRACKING,
   COURIER_OPTIONS,
+  PUSH_STATES,
   SHIPMENT_STATUSES,
   TERMINAL_STATUSES,
   carrierLabel,
   formatEntryDate,
   formatOrderAmount,
+  isAwaiting,
   isTerminal,
   pushOrderLabel,
+  pushStateLabel,
   statusTone,
   validatePush,
 } from "../src/lib/shipments";
-import { listOrdersForPush, listShipments, pushShipment, syncShipment } from "../src/lib/api";
+import {
+  getShipmentCouriers,
+  getShipmentHistory,
+  listOrdersForPush,
+  listShipments,
+  pushShipment,
+  syncShipment,
+} from "../src/lib/api";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 beforeEach(() => { localStorage.clear(); });
@@ -29,6 +40,7 @@ const EXPECTED_TONES: Record<string, string> = {
   LOST: "danger",
   CLOSED: "neutral",
   EXCEPTION: "warning",
+  AWAITING_TRACKING: "info",
 };
 
 test("status tone covers the whole vocabulary", () => {
@@ -253,4 +265,80 @@ test("listOrdersForPush returns a bare array response unchanged", async () => {
   expect(out).toHaveLength(1);
   expect(out[0]).toEqual(PUSH_ORDER_ROWS[0]);
   expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/orders");
+});
+
+test("AWAITING_TRACKING is filterable but not terminal", () => {
+  expect(AWAITING_TRACKING).toBe("AWAITING_TRACKING");
+  expect(SHIPMENT_STATUSES).toContain(AWAITING_TRACKING);
+  // Deliberately NOT terminal here. The backend treats it as terminal because
+  // there is no tracking number to poll, but on the page it is precisely the
+  // state that prompts the user for one, so it must stay actionable. A future
+  // "tidy-up" that adds it to TERMINAL_STATUSES would hide those rows.
+  expect(TERMINAL_STATUSES as readonly string[]).not.toContain(AWAITING_TRACKING);
+  expect(isTerminal(AWAITING_TRACKING)).toBe(false);
+  expect(statusTone(AWAITING_TRACKING)).toBe("info");
+  expect(isAwaiting({ push_state: "awaiting" })).toBe(true);
+  expect(isAwaiting({ push_state: "pushed" })).toBe(false);
+  expect(isAwaiting(null)).toBe(false);
+  expect(isAwaiting({})).toBe(false);
+  expect(pushStateLabel("none")).toBe("No shipment");
+  expect(pushStateLabel("awaiting")).toBe("Awaiting tracking number");
+  expect(pushStateLabel("pushed")).toBe("Tracking");
+  expect(pushStateLabel("rejected")).toBe("Not accepted by ShipSagar");
+  // An unknown state must never render as blank or as "Tracking".
+  expect(pushStateLabel("something-new")).toBe("No shipment");
+  expect(pushStateLabel(null)).toBe("No shipment");
+  expect(PUSH_STATES).toEqual(["none", "awaiting", "pushed", "rejected"]);
+});
+
+test("getShipmentCouriers unwraps the courier list", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ success: true, data: { couriers: [
+      { courier_code: "IP", courier_name: "India Post" }] } }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const out = await getShipmentCouriers();
+  expect(out[0].courier_code).toBe("IP");
+  expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/shipments/couriers");
+});
+
+test("getShipmentCouriers yields an empty list, not a rejection, when the catalogue is down", async () => {
+  // GET /api/v1/shipments/couriers answers 502 with data.couriers === [] when
+  // ShipSagar has no cached catalogue. The Add Shipment dialog must still be
+  // able to open and push, so the client resolves to an array on failure.
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: false,
+    status: 502,
+    json: async () => ({
+      success: false,
+      error: { code: "SHIPSAGAR_API_ERROR", message: "courier list down" },
+      data: { couriers: [] },
+    }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(getShipmentCouriers()).resolves.toEqual([]);
+});
+
+test("getShipmentHistory returns the events newest first", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ success: true, data: {
+      awb: "EG1", courier_code: "IP", status: "OUT_FOR_DELIVERY",
+      tracking_url: null,
+      events: [
+        { action_date: "17-May-2023", action_time: "09:00",
+          action_location: "Delhi", action_description: "Out for delivery",
+          normalized_status: "OUT_FOR_DELIVERY" },
+        { action_date: "16-May-2023", action_time: "12:27",
+          action_location: "", action_description: "Label Created",
+          normalized_status: "READY_TO_SHIP" },
+      ] } }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const out = await getShipmentHistory("s1");
+  expect(out.events[0].action_description).toBe("Out for delivery");
+  expect(out.status).toBe("OUT_FOR_DELIVERY");
+  expect(out.tracking_url).toBeNull();
+  expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/shipments/s1/history");
 });

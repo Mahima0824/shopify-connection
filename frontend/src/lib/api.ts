@@ -554,7 +554,14 @@ export type ShipmentListResult = {
   facets: ShipmentFacets;
 };
 
-export type PushShipmentResult = ShipmentRow & { pushed: boolean; message: string };
+// order_no is re-declared as required here (it is optional-nullable on
+// ShipmentRow, because a list row whose Order was deleted reports null) because
+// the push endpoint always joins the order back in.
+export type PushShipmentResult = ShipmentRow & {
+  order_no: string;
+  pushed: boolean;
+  message: string;
+};
 
 export type ShipmentSyncResult = {
   synced: boolean;
@@ -615,4 +622,43 @@ export function syncShipment(id: string, token?: string): Promise<ShipmentSyncRe
 export function listOrdersForPush(token?: string): Promise<PushOrderOption[]> {
   return api<any>("/api/v1/orders?page_size=100", {}, token).then((data: any) =>
     Array.isArray(data) ? data : (data?.items ?? []));
+}
+
+// --- Shipments: courier catalogue + live history (Orders-driven push) ---
+
+export type CourierOption = { courier_code: string; courier_name: string };
+
+/**
+ * The courier catalogue ShipSagar serves, for the Add Shipment dropdown.
+ *
+ * Resolves to an array on failure rather than rejecting: the endpoint answers
+ * 502 with `couriers: []` when ShipSagar has no cached catalogue, and a dead
+ * catalogue must not be able to block a push. Callers fall back to a built-in
+ * list on an empty result.
+ */
+export function getShipmentCouriers(token?: string): Promise<CourierOption[]> {
+  return api<{ couriers?: CourierOption[] }>("/api/v1/shipments/couriers", {}, token)
+    .then((data: any) => (Array.isArray(data?.couriers) ? data.couriers : []))
+    .catch(() => []);
+}
+
+export type ShipmentHistoryEvent = {
+  action_date: string;
+  action_time: string;
+  action_location: string;
+  action_description: string;
+  normalized_status: string;
+};
+
+export type ShipmentHistory = {
+  awb: string;
+  courier_code: string;
+  status: string;
+  tracking_url: string | null;
+  /** Newest scan first — the backend reverses ShipSagar's oldest-first list. */
+  events: ShipmentHistoryEvent[];
+};
+
+export function getShipmentHistory(id: string, token?: string): Promise<ShipmentHistory> {
+  return api<ShipmentHistory>(`/api/v1/shipments/${id}/history`, {}, token);
 }
