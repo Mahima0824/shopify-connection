@@ -100,6 +100,55 @@ test("an unreachable courier catalogue still offers a usable dropdown", async ()
   await waitFor(() => expect(onPushed).toHaveBeenCalled());
 });
 
+test("a ShipSagar outage refreshes the order instead of inviting a doomed retry", async () => {
+  // The 502 path commits the AWB and queues a retry job, so the shipment EXISTS.
+  // The Orders cell would keep offering Add Shipment (push_state is still
+  // "awaiting") and the retry would 400 SHIPMENT_EXISTS with no way out - so the
+  // dialog must report the save, refresh, and not show a failure alert.
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+    if (String(url).includes("/api/v1/shipments/push")) {
+      return { ok: false, status: 502, json: async () => ({ success: false,
+        error: { code: "SHIPSAGAR_API_ERROR", message: "connection reset" },
+        data: { id: "s1", awb_number: "EG1", carrier_code: "IP",
+                order_no: "20261006-001", pushed: false,
+                message: "connection reset" } }) };
+    }
+    if (String(url).includes("/couriers")) {
+      return { ok: true, json: async () => ({ success: true, data: { couriers: COURIERS } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, data: {} }) };
+  }));
+  const onPushed = vi.fn();
+  const onRecovered = vi.fn();
+  render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
+    onClose={() => {}} onPushed={onPushed} onRecovered={onRecovered} />);
+  await screen.findByLabelText("Courier");
+  fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
+  fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
+  await waitFor(() => expect(onRecovered).toHaveBeenCalled());
+  expect(screen.getByRole("status").textContent).toContain("queued");
+  expect(screen.queryByRole("alert")).toBeNull();
+  // onPushed is the success callback; the shipment is not "pushed" yet.
+  expect(onPushed).not.toHaveBeenCalled();
+  // The box is cleared so a retry cannot double-post a number already stored.
+  expect((screen.getByLabelText("Tracking No") as HTMLInputElement).value).toBe("");
+});
+
+test("a null order id is refused before any request", async () => {
+  // Without the guard this posts order_id: "" and earns a guaranteed 400 that
+  // reads like the tracking number was the problem.
+  const fetchMock = stubFetch();
+  vi.stubGlobal("fetch", fetchMock);
+  render(<AddShipmentDialog open orderId={null} orderLabel="MAN-1"
+    onClose={() => {}} onPushed={() => {}} />);
+  await screen.findByLabelText("Courier");
+  fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
+  fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
+  await waitFor(() =>
+    expect(screen.getByText(/No order was selected/i)).toBeTruthy());
+  expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("/push"))).toBe(false);
+});
+
 test("a backend validation code shows the server message in an alert", async () => {
   // Ported from the deleted push-shipment-dialog.test.tsx ("a validation code
   // from the backend lands on the field it belongs to" / "an unrecognised code

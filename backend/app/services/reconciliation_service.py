@@ -151,6 +151,47 @@ def _shipments(db, o):
     return db.query(Shipment).filter_by(business_id=o.business_id, order_id=o.id).all()
 
 
+# How long an order may sit awaiting its tracking number before "dispatched but
+# no shipment record" stops being the normal path. Three hours is one warehouse
+# shift: long past the seconds between a dispatch scan and typing the number off
+# the same sheet, and short enough that a genuinely forgotten order surfaces
+# within the working day rather than at month end. Deliberately not the SLA
+# scale (days) - this is about an operator's in-flight task, not the courier.
+AWAITING_STALE_AFTER = timedelta(hours=3)
+
+
+def _awaiting_rows(db, o):
+    from app.services.shipment_service import is_awaiting_awb
+    return [s for s in _shipments(db, o) if is_awaiting_awb(s.awb_number)]
+
+
+def _has_awaiting_shipment(db, o) -> bool:
+    return bool(_awaiting_rows(db, o))
+
+
+def _awaiting_is_stale(db, o) -> bool:
+    """True when every awaiting row is older than AWAITING_STALE_AFTER.
+
+    created_at is the row's age: an awaiting row is only ever written once, when
+    the order is synced, and it is never touched again until the push adopts it.
+    A row with no created_at (a hand-built fixture, a server default that did not
+    fire) is treated as fresh, so a missing timestamp cannot manufacture a HIGH.
+    """
+    rows = _awaiting_rows(db, o)
+    if not rows:
+        return False
+    now = datetime.now(timezone.utc)
+    for s in rows:
+        created = getattr(s, "created_at", None)
+        if created is None:
+            return False
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if now - created < AWAITING_STALE_AFTER:
+            return False
+    return True
+
+
 def check_r009(db, o):
     from app.models.scan_event import ScanEvent
     from app.models.parcel import Parcel
@@ -161,6 +202,15 @@ def check_r009(db, o):
     # went out without one, and the awaiting row would silence exactly that.
     if disp > 0 and not [s for s in _shipments(db, o)
                          if not is_awaiting_awb(s.awb_number)]:
+        # ...but only once the waiting has gone on long enough to be a real gap.
+        # A DISPATCHED scan and the tracking-number entry are the same desk
+        # workflow a minute apart, so flagging the normal path is what made this
+        # rule and check_r010 disagree on one state: r010 deliberately skips an
+        # awaiting row (see below) while r009 opened a HIGH on it. Two rules
+        # must not return opposite verdicts for one state, so the gate lives
+        # here and r010's skip stands.
+        if _has_awaiting_shipment(db, o) and not _awaiting_is_stale(db, o):
+            return []
         return [_open(db, o, 'DISPATCHED_WITHOUT_SHIPMENT', 'HIGH', 'Dispatched but no shipment/AWB record exists.')]
     return []
 

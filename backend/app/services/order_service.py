@@ -7,6 +7,63 @@ from sqlalchemy.orm import Session
 from app.models.order import Order
 
 
+def create_manual_order(db: Session, business_id: str, payload) -> Order:
+    """Create a manual (India Post) order. payload is OrderCreateManual.
+
+    Landed with the POST /orders route: the committed NewOrderDialog posts here,
+    so without this the committed frontend called a route that did not exist.
+    Numbered MAN-<8 hex> so a manual order is distinguishable from a synced
+    Shopify one (gid://...) and from a shipment number (YYYYMMDD-NNN), which
+    next_shipment_order_no keys on - see its docstring for why that sequence
+    ignores anything not matching its own prefix.
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    hex8 = uuid.uuid4().hex[:8].upper()
+    cod_mode = str(data.get("cod_mode") or "COD").upper()
+    cod_value = data.get("cod_value")
+    o = Order(
+        business_id=business_id,
+        internal_order_number=f"MAN-{hex8}",
+        shopify_order_id=f"MANUAL-{hex8}",
+        order_date=datetime.now(timezone.utc),
+        total_amount=cod_value or 0,
+        financial_status="PENDING" if cod_mode == "COD" else "PAID",
+        operational_status="NEW",
+        cod_mode=cod_mode,
+        dropoff_pincode=data.get("receiver_pincode"),
+    )
+    for key in (
+        "receiver_name",
+        "receiver_mobile",
+        "receiver_add1",
+        "receiver_city",
+        "receiver_state",
+        "receiver_pincode",
+        "sender_name",
+        "sender_add1",
+        "sender_city",
+        "sender_state",
+        "sender_pincode",
+        "sender_mobile",
+        "weight_grams",
+        "length_cm",
+        "breadth_cm",
+        "height_cm",
+        "shape",
+        "cod_value",
+        "barcode_no",
+    ):
+        if key in data:
+            setattr(o, key, data[key])
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    return o
+
+
 def list_orders(
     db: Session,
     business_id: str | None = None,

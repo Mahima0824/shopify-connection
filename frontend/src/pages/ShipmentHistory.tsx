@@ -90,6 +90,19 @@ export default function ShipmentHistoryPage() {
                 {data.status}
               </span>
             )}
+            {/* The carrier's own page is the only place that shows the scans
+                ShipSagar has not delivered yet: this timeline is built from the
+                events already pulled, so it can lag a live parcel by a poll. */}
+            {data?.tracking_url && (
+              <a
+                href={data.tracking_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white border border-emerald-300 hover:bg-emerald-50 transition"
+              >
+                Track on courier site
+              </a>
+            )}
             <button type="button" onClick={() => load()}
               className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 shadow-xs transition">
               Refresh

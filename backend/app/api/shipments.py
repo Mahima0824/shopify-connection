@@ -269,12 +269,30 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
     # to refuse, so the push adopts it instead of creating a second row. Any
     # other existing shipment is still SHIPMENT_EXISTS: a real one means the
     # order was already pushed, and pushing again would double-book the AWB.
-    awaiting = db.query(Shipment).filter_by(order_id=order.id).first()
+    # Newest first, id breaking the tie. create_shipment and book do not refuse a
+    # second shipment for an order, so an order can genuinely carry several, and
+    # .first() on an unordered query would let the database pick: had it returned
+    # the awaiting placeholder while a real booked shipment also existed, this
+    # would adopt the placeholder and the order would end up with two live
+    # shipments for one AWB. created_at is a second-resolution server default, so
+    # rows written in the same request tie-break on id.
+    awaiting = (db.query(Shipment)
+                .filter_by(order_id=order.id)
+                .order_by(Shipment.created_at.desc(), Shipment.id.desc())
+                .first())
     if awaiting is not None and not is_awaiting_awb(awaiting.awb_number):
         return _err(400, "SHIPMENT_EXISTS", "This order already has a shipment.")
-    if db.query(Shipment).filter_by(
-            business_id=bid, carrier_code=courier_code,
-            awb_number=tracking_no).first() is not None:
+    # courier_code_variants, not the raw code: this probe mirrors the column's
+    # own UNIQUE(business_id, carrier_code, awb_number), but rows are written
+    # under two spellings of India Post - resolve_courier("IP") on the awaiting
+    # row, the raw catalogue "IP" here and in Dispatch bookings. Comparing one
+    # spelling against the other misses, the awaiting placeholder gets adopted,
+    # and one AWB ends up on two live shipments. A code with no alias keeps its
+    # single spelling, so this is a no-op for every other courier.
+    if db.query(Shipment).filter(
+            Shipment.business_id == bid,
+            Shipment.carrier_code.in_(ss.courier_code_variants(courier_code)),
+            Shipment.awb_number == tracking_no).first() is not None:
         return _err(400, "DUPLICATE_TRACKING",
                     f"Tracking number {tracking_no} is already used for {courier_code}.")
     if db.query(Parcel).filter_by(
@@ -340,7 +358,18 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
                           error=f"{exc.code}: {exc.message}",
                           payload={"courier": courier_code, "tracking_number": tracking_no})
         db.commit()
-        return _err(502, exc.code, exc.message)
+        db.refresh(shipment)
+        # The AWB is committed on this path, so the caller must be able to see
+        # that. Returning a bare error left the row `awaiting` with a real AWB
+        # and shipsagar_tracking_id NULL, which the Orders cell renders as a
+        # green Add Shipment button; retrying from there 400s SHIPMENT_EXISTS
+        # and the dialog had no way to recover. `pushed: false` plus the
+        # shipment's own id and order_no is the same shape the success paths
+        # return, so the dialog can refresh the row and the retry queue owns the
+        # registration from here.
+        return _err(502, exc.code, exc.message,
+                    data={**_sdict(shipment), "order_no": order_no,
+                          "pushed": False, "message": exc.message})
     shipment.shipsagar_tracking_id = f"SS-{tracking_no}"
     pushed = bool(result.get("ok"))
     message = result.get("message", "")
@@ -571,7 +600,15 @@ def correct_awb(sid: str, body: CorrectAwbIn, db: Session = Depends(get_db), u: 
         raise HTTPException(400, "awb_number is required")
     if new == old:
         return {"success": True, "data": _sdict(s)}
-    dup = db.query(Shipment).filter_by(business_id=s.business_id, carrier_code=s.carrier_code, awb_number=new).first()
+    # Same spelling-independent lookup the push route uses: the probe stands in
+    # for the column's own uniqueness, and reading s.carrier_code verbatim would
+    # miss the same AWB held under an alias spelling and fall through to an
+    # IntegrityError from the commit instead of this readable 400.
+    from app.services.shipsagar_service import courier_code_variants
+    dup = db.query(Shipment).filter(
+        Shipment.business_id == s.business_id,
+        Shipment.carrier_code.in_(courier_code_variants(s.carrier_code)),
+        Shipment.awb_number == new).first()
     if dup is not None:
         raise HTTPException(400, "AWB already linked")
     s.awb_number = new

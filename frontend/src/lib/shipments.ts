@@ -40,13 +40,6 @@ export const TERMINAL_STATUSES = [
 
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 
-export const COURIER_OPTIONS = [
-  { code: "IP", label: "IP — India Post" },
-  { code: "DTDC", label: "DTDC" },
-  { code: "FEDEX", label: "FEDEX" },
-  { code: "OTHER", label: "Other (type below)…" },
-] as const;
-
 export type Tone = "success" | "info" | "warning" | "danger" | "neutral";
 
 const TONES: Record<string, Tone> = {
@@ -94,11 +87,12 @@ export function isTerminal(status?: string | null): boolean {
  * Label for one row of the push dialog's order picker.
  *
  * Reads only fields GET /api/v1/orders genuinely returns (see
- * PushOrderOption). It previously read order_no / customer_name /
- * receiver_city / receiver_pincode, none of which the committed serializer
- * sends, so the label fell back to a raw order uuid and then appended the
- * literal "No name" to every row. internal_order_number is the real order
- * number and is what the shipments list already displays as order_no.
+ * backend/app/api/orders.py::_to_dict). It previously read order_no /
+ * customer_name / receiver_city / receiver_pincode, none of which the committed
+ * serializer sends, so the label fell back to a raw order uuid and then
+ * appended the literal "No name" to every row. internal_order_number is the
+ * real order number and is what the shipments list already displays as
+ * order_no.
  */
 export function pushOrderLabel(order: {
   id?: string | null;
@@ -120,16 +114,6 @@ export function formatOrderAmount(
   return `${order.currency ? `${order.currency} ` : ""}${amount.toLocaleString()}`;
 }
 
-export function validatePush(form: {
-  tracking_no: string;
-  courier_code: string;
-}): Record<string, string> {
-  const errors: Record<string, string> = {};
-  if (!form.tracking_no.trim()) errors.tracking_no = "Tracking number is required.";
-  if (!form.courier_code.trim()) errors.courier_code = "Courier is required.";
-  return errors;
-}
-
 export const PUSH_STATES = ["none", "awaiting", "pushed", "rejected"] as const;
 
 export type PushState = (typeof PUSH_STATES)[number];
@@ -146,9 +130,33 @@ export type OrderShipment = {
   push_state?: string | null;
 };
 
-/** True when the order has a shipment row that still needs a tracking number. */
+/**
+ * True when the order has a shipment row that still needs a tracking number —
+ * i.e. when Add Shipment is the right ACTION, not just the right label.
+ *
+ * `push_state === "awaiting"` alone is too weak, and the backend says so in
+ * writing (orders.py `_push_state`): awaiting means "no ShipSagar tracking
+ * number yet", which is also true of a Dispatch-booked or create_shipment row
+ * that already owns a real AWB. Those can only 400 on a push — SHIPMENT_EXISTS
+ * for the AWB, NON_COURIER_CODES for MANUAL — so offering the button is a dead
+ * end with no recovery.
+ *
+ * So the gate mirrors the push route's own adoption test rather than the state
+ * label: it accepts only when the order has no tracking number yet. Two payload
+ * facts together say that, and both come straight from the backend:
+ *   - `awb_number` is null. The serializer masks the awaiting placeholder to
+ *     null exactly so "the Orders page shows Add Shipment instead of a link",
+ *     and the push route adopts a row precisely when `is_awaiting_awb` holds.
+ *   - `carrier_code` is not MANUAL, which is the other case _push_state
+ *     documents and register_tracking refuses.
+ * Both are needed: a MANUAL row and a booked row are different failures, and
+ * dropping either condition re-opens one of them.
+ */
 export function isAwaiting(shipment: OrderShipment | null | undefined): boolean {
-  return (shipment?.push_state ?? "") === "awaiting";
+  if (!shipment) return false;
+  if ((shipment.push_state ?? "") !== "awaiting") return false;
+  if ((shipment.awb_number ?? "").trim() !== "") return false;
+  return (shipment.carrier_code ?? "").trim().toUpperCase() !== "MANUAL";
 }
 
 const PUSH_LABELS: Record<string, string> = {

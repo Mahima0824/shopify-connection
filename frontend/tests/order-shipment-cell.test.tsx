@@ -34,8 +34,8 @@ test("an awaiting order offers Add Shipment and fires the callback", () => {
   const onAddShipment = vi.fn();
   render(
     <MemoryRouter>
-      <OrderTable orders={[order({ shipment: { id: "s1", awb_number: "",
-        carrier_code: "IP", tracking_status: "AWAITING_TRACKING",
+      <OrderTable orders={[order({ shipment: { id: "s1", awb_number: null,
+        carrier_code: "INDIA_POST", tracking_status: "AWAITING_TRACKING",
         push_state: "awaiting" } })]} onAddShipment={onAddShipment} />
     </MemoryRouter>,
   );
@@ -43,6 +43,25 @@ test("an awaiting order offers Add Shipment and fires the callback", () => {
   fireEvent.click(screen.getByText("Add Shipment", { selector: "button" }));
   expect(onAddShipment).toHaveBeenCalled();
   expect(onAddShipment.mock.calls[0][0].internal_order_number).toBe("MAN-1");
+});
+
+test("a shipment awaiting only a ShipSagar id does not offer a push that can 400", () => {
+  // A Dispatch-booked row owns a real AWB and no SS- id, so the backend reports
+  // push_state "awaiting" while any push answers SHIPMENT_EXISTS. A green Add
+  // Shipment button here is a dead end, so it must render as tracking instead.
+  renderTable([order({ shipment: { id: "s2", awb_number: "EG080960145IN",
+    carrier_code: "INDIA_POST", tracking_status: "BOOKED",
+    push_state: "awaiting" } })]);
+  expect(screen.queryByText("Add Shipment", { selector: "button" })).toBeNull();
+  expect(screen.getByText("EG080960145IN")).toBeTruthy();
+});
+
+test("a MANUAL shipment is never offered a push", () => {
+  // register_tracking refuses MANUAL as a courier, so the button could only 400.
+  renderTable([order({ shipment: { id: "s3", awb_number: "EG-MANUAL",
+    carrier_code: "MANUAL", tracking_status: "BOOKED",
+    push_state: "awaiting" } })]);
+  expect(screen.queryByText("Add Shipment", { selector: "button" })).toBeNull();
 });
 
 test("a pushed order links its tracking number to the history page", () => {

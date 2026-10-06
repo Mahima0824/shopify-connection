@@ -589,7 +589,12 @@ def monthly_report(db, business_id: str, month: str) -> dict:
                  "dispatched": sum(ops.count(s) for s in ("DISPATCHED",)),
                  "delivered": 0, "returned": 0, "rto": 0}
     ships = db.query(Shipment).filter_by(business_id=business_id).all()
-    in_month = [s for s in ships if s.order_id in set(oids)]
+    # Awaiting shipments are excluded, matching courier_report above and the
+    # shipment_rows filter below. Every order synced from Shopify now owns one, so
+    # leaving them in invented a courier row for a carrier the parcel has not
+    # reached and inflated that courier's shipment and breached counts.
+    in_month = [s for s in ships
+                if s.order_id in set(oids) and not is_awaiting_awb(s.awb_number)]
     courier_sec: dict[str, dict] = {}
     for s in in_month:
         c = courier_sec.setdefault(s.carrier_code, {"shipments": 0, "delivered": 0, "in_transit": 0,

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   AWAITING_TRACKING,
-  COURIER_OPTIONS,
   PUSH_STATES,
   SHIPMENT_STATUSES,
   TERMINAL_STATUSES,
@@ -13,12 +12,10 @@ import {
   pushOrderLabel,
   pushStateLabel,
   statusTone,
-  validatePush,
 } from "../src/lib/shipments";
 import {
   getShipmentCouriers,
   getShipmentHistory,
-  listOrdersForPush,
   listShipments,
   pushShipment,
   syncShipment,
@@ -74,11 +71,7 @@ test("terminal statuses are the non-refreshing ones", () => {
   }
 });
 
-test("courier options include IP, DTDC and FEDEX", () => {
-  const codes = COURIER_OPTIONS.map((o) => o.code);
-  expect(codes).toContain("IP");
-  expect(codes).toContain("DTDC");
-  expect(codes).toContain("FEDEX");
+test("courier codes render in their canonical upper-case form", () => {
   expect(carrierLabel("ip")).toBe("IP");
   expect(carrierLabel("")).toBe("—");
 });
@@ -96,23 +89,7 @@ test("entry date formatting returns a date or an em dash", () => {
   expect(formatEntryDate("not-a-date")).toBe("—");
 });
 
-test("push validation requires a tracking number and a courier", () => {
-  expect(validatePush({ tracking_no: "", courier_code: "" })).toEqual({
-    tracking_no: "Tracking number is required.",
-    courier_code: "Courier is required.",
-  });
-  expect(validatePush({ tracking_no: "  ", courier_code: "IP" })).toHaveProperty("tracking_no");
-  expect(validatePush({ tracking_no: "EG1", courier_code: "IP" })).toEqual({});
-});
-
 test("the push picker labels an order from fields the orders API actually returns", () => {
-  // DELIBERATE REPLACEMENT (fix wave 2, item 1). This replaces
-  // "isPushable blocks orders that already carry a shipment", which filtered on
-  // shipment_id - a field GET /api/v1/orders never sends, so the filter was a
-  // permanent no-op and the test passed only against a stub that invented the
-  // field. Whether an order already has a shipment is not derivable from that
-  // endpoint; the push endpoint's SHIPMENT_EXISTS refusal is the authority, and
-  // push-shipment-dialog.test.tsx pins that it lands on the Order control.
   expect(pushOrderLabel({ id: "o1", internal_order_number: "MAN-1" })).toBe("MAN-1");
   // shopify_order_name is the fallback, then the id, so a row is never blank.
   expect(pushOrderLabel({ id: "o2", shopify_order_name: "#1002" })).toBe("#1002");
@@ -238,35 +215,6 @@ test("syncShipment POSTs to the shipment sync route", async () => {
   expect(fetchMock.mock.calls[0][1].method).toBe("POST");
 });
 
-// Shaped as the committed backend/app/api/orders.py::_to_dict answers: only
-// fields that serializer really returns.
-const PUSH_ORDER_ROWS = [
-  { id: "o1", business_id: "b1", internal_order_number: "MAN-1",
-    shopify_order_name: "#1001", currency: "INR", total_amount: 1499.0 },
-];
-
-test("listOrdersForPush reads the items envelope shape", async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true, json: async () => ({ success: true, data: { items: PUSH_ORDER_ROWS, total: 1 } }),
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  const out = await listOrdersForPush();
-  expect(out).toHaveLength(1);
-  expect(out[0].id).toBe("o1");
-  expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/orders");
-});
-
-test("listOrdersForPush returns a bare array response unchanged", async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true, json: async () => ({ success: true, data: PUSH_ORDER_ROWS }),
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  const out = await listOrdersForPush();
-  expect(out).toHaveLength(1);
-  expect(out[0]).toEqual(PUSH_ORDER_ROWS[0]);
-  expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/orders");
-});
-
 test("AWAITING_TRACKING is filterable but not terminal", () => {
   expect(AWAITING_TRACKING).toBe("AWAITING_TRACKING");
   expect(SHIPMENT_STATUSES).toContain(AWAITING_TRACKING);
@@ -289,6 +237,23 @@ test("AWAITING_TRACKING is filterable but not terminal", () => {
   expect(pushStateLabel("something-new")).toBe("No shipment");
   expect(pushStateLabel(null)).toBe("No shipment");
   expect(PUSH_STATES).toEqual(["none", "awaiting", "pushed", "rejected"]);
+});
+
+test("isAwaiting means the button can do something, not merely that the label says so", () => {
+  // A Dispatch-booked or create_shipment row owns a real AWB and no SS- id, so
+  // the backend reports push_state "awaiting" — but pushing it can only 400
+  // (SHIPMENT_EXISTS, or NON_COURIER_CODES for MANUAL). isAwaiting gates the
+  // Add Shipment button, so it has to agree with the push route's own adoption
+  // test: only a shipment with no tracking number yet can be pushed.
+  const awaiting = { push_state: "awaiting", carrier_code: "INDIA_POST", awb_number: null };
+  expect(isAwaiting(awaiting)).toBe(true);
+  // A booked row: real AWB, so SHIPMENT_EXISTS on any push.
+  expect(isAwaiting({ ...awaiting, awb_number: "EG080960145IN" })).toBe(false);
+  expect(isAwaiting({ ...awaiting, push_state: "pushed", awb_number: "EG1" })).toBe(false);
+  // MANUAL can never be pushed: register_tracking refuses it as a courier.
+  expect(isAwaiting({ ...awaiting, carrier_code: "MANUAL" })).toBe(false);
+  expect(isAwaiting({ ...awaiting, carrier_code: "manual" })).toBe(false);
+  expect(isAwaiting({ ...awaiting, carrier_code: " ip " })).toBe(true);
 });
 
 test("getShipmentCouriers unwraps the courier list", async () => {

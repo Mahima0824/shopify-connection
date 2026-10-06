@@ -60,6 +60,35 @@ test("renders the tracking number, status and every scan newest first", async ()
   expect(screen.getByText(/17-May-2023/)).toBeTruthy();
 });
 
+test("the courier's own tracking link is rendered when the carrier provides one", async () => {
+  // tracking_url was computed by the backend, typed on ShipmentHistory, and
+  // never rendered: the one place that can show scans ShipSagar has not
+  // delivered yet was unreachable from the page.
+  const url = "https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx";
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true, json: async () => ({ success: true,
+      data: { ...HISTORY, tracking_url: url } }),
+  }));
+  renderPage();
+  await waitFor(() => expect(screen.getByText("EG080960145IN")).toBeTruthy());
+  const link = screen.getByText("Track on courier site").closest("a");
+  expect(link?.getAttribute("href")).toBe(url);
+  // A new tab, with noopener: the carrier page is a third-party origin.
+  expect(link?.getAttribute("target")).toBe("_blank");
+  expect(link?.getAttribute("rel")).toContain("noopener");
+});
+
+test("no tracking link is rendered for a carrier that supplies none", async () => {
+  // HISTORY.tracking_url is null, which is what DTDC and every non-HTTP provider
+  // returns; a dead link would be worse than none.
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true, json: async () => ({ success: true, data: HISTORY }),
+  }));
+  renderPage();
+  await waitFor(() => expect(screen.getByText("EG080960145IN")).toBeTruthy());
+  expect(screen.queryByText("Track on courier site")).toBeNull();
+});
+
 test("an empty history says so explicitly instead of rendering blank", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true, json: async () => ({ success: true, data: { ...HISTORY, events: [] } }),

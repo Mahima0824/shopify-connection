@@ -5245,24 +5245,84 @@ def test_a_synced_order_opens_no_reconciliation_exception(monkeypatch):
         db.close()
 
 
+def _dispatch_scan(db, bid, oid, parcel_id):
+    from app.models.scan_event import ScanEvent
+    db.add(ScanEvent(business_id=bid, parcel_id=parcel_id, order_id=oid,
+                     event_type="DISPATCHED", performed_by="tester"))
+    db.commit()
+
+
+def test_a_just_dispatched_parcel_waiting_for_its_number_is_not_flagged(monkeypatch):
+    """The normal path is not an anomaly.
+
+    A DISPATCHED scan and typing the tracking number off the same sheet are a
+    minute apart, so an order awaiting its number must open no exception - the
+    same verdict check_r010 reaches by deliberately skipping awaiting rows. Two
+    rules must not disagree on one state.
+    """
+    from app.models.shipment import Shipment
+    from app.services.reconciliation_service import reconcile_order
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "r009fresh@t.in")
+    db = mk()
+    try:
+        pid = db.query(Shipment).filter_by(order_id=oid).first().parcel_id
+        _dispatch_scan(db, bid, oid, pid)
+        codes = {i["code"] for i in reconcile_order(db, oid)["issues"]}
+        assert "DISPATCHED_WITHOUT_SHIPMENT" not in codes, codes
+    finally:
+        db.close()
+
+
 def test_dispatched_parcel_with_only_an_awaiting_shipment_is_flagged(monkeypatch):
     """The awaiting row must not satisfy "dispatched but no shipment".
 
     R009 exists to catch a parcel that physically went out with no shipment
     record. An awaiting row is a row, not a shipment with a tracking number, so
     without this the exception is silenced for exactly the case it exists for.
+
+    DELIBERATE UPDATE (final review round 1, finding 6): this used to pass with a
+    freshly created awaiting row, which made the rule fire on the normal path.
+    The awaiting row is now aged past AWAITING_STALE_AFTER first, so the case
+    the rule exists for - dispatched hours ago, number still never entered - is
+    what the test sets up.
     """
-    from app.models.scan_event import ScanEvent
+    from datetime import timedelta
     from app.models.shipment import Shipment
-    from app.services.reconciliation_service import reconcile_order
+    from app.services.reconciliation_service import (AWAITING_STALE_AFTER,
+                                                     reconcile_order)
     mk = _mk()
     bid, oid = _awaiting_tenant(mk, "r009@t.in")
     db = mk()
     try:
-        pid = db.query(Shipment).filter_by(order_id=oid).first().parcel_id
-        db.add(ScanEvent(business_id=bid, parcel_id=pid, order_id=oid,
-                         event_type="DISPATCHED", performed_by="tester"))
+        s = db.query(Shipment).filter_by(order_id=oid).first()
+        _dispatch_scan(db, bid, oid, s.parcel_id)
+        s.created_at = datetime.now(timezone.utc) - AWAITING_STALE_AFTER - timedelta(minutes=1)
         db.commit()
+        codes = {i["code"] for i in reconcile_order(db, oid)["issues"]}
+        assert "DISPATCHED_WITHOUT_SHIPMENT" in codes, codes
+    finally:
+        db.close()
+
+
+def test_a_dispatch_with_no_shipment_row_at_all_is_still_flagged(monkeypatch):
+    """The gate must not disarm the rule for its original case.
+
+    No awaiting row means nothing is waiting: there is genuinely no shipment
+    record for a parcel that went out, which is exactly what r009 is for and
+    what the staleness gate must not swallow.
+    """
+    from app.models.shipment import Shipment
+    from app.services.reconciliation_service import reconcile_order
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "r009none@t.in")
+    db = mk()
+    try:
+        s = db.query(Shipment).filter_by(order_id=oid).first()
+        pid = s.parcel_id
+        db.delete(s)
+        db.commit()
+        _dispatch_scan(db, bid, oid, pid)
         codes = {i["code"] for i in reconcile_order(db, oid)["issues"]}
         assert "DISPATCHED_WITHOUT_SHIPMENT" in codes, codes
     finally:
@@ -5355,6 +5415,27 @@ def test_courier_report_excludes_awaiting_shipments(monkeypatch):
         db.close()
 
 
+def test_monthly_report_courier_section_excludes_awaiting_shipments(monkeypatch):
+    """The monthly courier breakdown must agree with courier_report.
+
+    It counted awaiting rows where courier_report and the monthly shipment_rows
+    both exclude them, so every synced order added a phantom INDIA_POST row and
+    inflated that courier's shipment and breached counts.
+    """
+    from app.services import report_service as rs
+    mk = _mk()
+    bid, oid = _awaiting_tenant(mk, "mrep@t.in")
+    db = mk()
+    try:
+        month = rs.monthly_report(db, bid, datetime.now(timezone.utc).strftime("%Y-%m"))
+        assert month["courier"] == {}, month["courier"]
+        assert month["shipment_rows"] == [], month["shipment_rows"]
+        # The order itself is still counted - only its shipment is excluded.
+        assert month["orders"]["total"] >= 1, month["orders"]
+    finally:
+        db.close()
+
+
 def test_push_refuses_a_placeholder_shaped_tracking_number(monkeypatch):
     """A client must not be able to push one of our own placeholders.
 
@@ -5398,6 +5479,158 @@ def test_push_refuses_a_placeholder_shaped_tracking_number(monkeypatch):
             assert is_awaiting_awb(s.awb_number), "the push overwrote the placeholder"
         finally:
             db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_duplicate_awb_guard_is_spelling_independent(monkeypatch):
+    """One AWB, one shipment - whichever spelling of the courier is used.
+
+    shipments is UNIQUE(business_id, carrier_code, awb_number), and the awaiting
+    row stores resolve_courier("IP") == INDIA_POST while the push route stored
+    the raw catalogue code "IP". A duplicate check that compares the raw code
+    therefore cannot see the other spelling: book AWB X as INDIA_POST, push the
+    same X as IP, and the guard misses, the awaiting placeholder is adopted, and
+    one AWB ends up on two live shipments - two timelines, SLA counted twice.
+    """
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.models.user import User
+    from app.services import shipsagar_service as ss
+    from app.services.auth_service import hash_password
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="spell@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="spell@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    # Order 1 synced from Shopify: it already owns an awaiting placeholder row.
+    oid1 = _upsert_shopify_order(mk, bid, 1)
+    oid2 = _upsert_shopify_order(mk, bid, 2)
+    c = _client(monkeypatch, mk)
+    _configured(monkeypatch)
+    monkeypatch.setattr(ss, "push_shipment", lambda **kw: {
+        "ok": True, "message": "ok"})
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'spell@t.in')}"}
+        # A booked shipment for order 1 owns EG-SPELL under the canonical
+        # spelling a Dispatch-side booking would send.
+        db = mk()
+        try:
+            p = Parcel(business_id=bid, order_id=oid1, parcel_code="UNRELATED-S",
+                       barcode_value="UNRELATED-S", status="CREATED")
+            db.add(p)
+            db.commit()
+            db.refresh(p)
+            pid = p.id
+        finally:
+            db.close()
+        r = c.post("/api/v1/shipments", headers=h, json={
+            "parcel_id": pid, "carrier_code": "INDIA_POST", "awb_number": "EG-SPELL"})
+        assert r.status_code == 200, r.text
+
+        # The same AWB pushed for another order under the alias spelling.
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid2, "tracking_no": "EG-SPELL", "courier_code": "IP"})
+        assert r.status_code == 400, (
+            "the alias spelling bypassed the duplicate-AWB guard: " + r.text)
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING", r.text
+
+        # ...and the reverse direction: booked as IP, pushed as INDIA_POST.
+        oid3 = _upsert_shopify_order(mk, bid, 3)
+        db = mk()
+        try:
+            p = Parcel(business_id=bid, order_id=oid3, parcel_code="UNRELATED-T",
+                       barcode_value="UNRELATED-T", status="CREATED")
+            db.add(p)
+            db.commit()
+            db.refresh(p)
+            pid3 = p.id
+        finally:
+            db.close()
+        r = c.post("/api/v1/shipments", headers=h, json={
+            "parcel_id": pid3, "carrier_code": "IP", "awb_number": "EG-SPELL2"})
+        assert r.status_code == 200, r.text
+        oid4 = _upsert_shopify_order(mk, bid, 4)
+        r = c.post("/api/v1/shipments/push", headers=h, json={
+            "order_id": oid4, "tracking_no": "EG-SPELL2",
+            "courier_code": "INDIA_POST"})
+        assert r.status_code == 400, (
+            "the canonical spelling bypassed the duplicate-AWB guard: " + r.text)
+        assert r.json()["error"]["code"] == "DUPLICATE_TRACKING", r.text
+
+        db = mk()
+        try:
+            # Exactly one shipment may own an AWB under any India Post spelling.
+            assert db.query(Shipment).filter_by(
+                business_id=bid, awb_number="EG-SPELL").count() == 1
+        finally:
+            db.close()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_correct_awb_duplicate_guard_is_spelling_independent(monkeypatch):
+    """The correct-awb probe has the same (business, carrier, awb) shape.
+
+    It reads s.carrier_code straight off the row, so an operator correcting an
+    INDIA_POST AWB onto one already held by an "IP" row would have hit the
+    column's own uniqueness rather than a readable 400.
+    """
+    from app.models.business import Business
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="spell2@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="spell2@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    oids = []
+    for n in (1, 2):
+        o = Order(business_id=bid, internal_order_number=f"MAN-C{n}",
+                  shopify_order_id=f"MANUAL-C{n}",
+                  order_date=datetime.now(timezone.utc))
+        db.add(o)
+        db.commit()
+        db.refresh(o)
+        oids.append(o.id)
+        p = Parcel(business_id=bid, order_id=o.id, parcel_code=f"PC{n}",
+                   barcode_value=f"PC{n}", status="CREATED")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        s = Shipment(business_id=bid, order_id=o.id, parcel_id=p.id,
+                     carrier_code="IP" if n == 1 else "INDIA_POST",
+                     awb_number=f"OLD-{n}", tracking_status="BOOKED")
+        db.add(s)
+        db.commit()
+    sid1 = db.query(Shipment).filter_by(order_id=oids[0]).first().id
+    db.close()
+    c = _client(monkeypatch, mk)
+    try:
+        h = {"Authorization": f"Bearer {_tok(c, 'spell2@t.in')}"}
+        # The IP row wants the AWB the INDIA_POST row already holds.
+        r = c.post(f"/api/v1/shipments/{sid1}/correct-awb", headers=h, json={
+            "awb_number": "OLD-2", "reason": "typo"})
+        assert r.status_code == 400, r.text
+        assert "already linked" in r.text, r.text
     finally:
         app.dependency_overrides.clear()
 

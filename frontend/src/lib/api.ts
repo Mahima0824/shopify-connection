@@ -569,15 +569,6 @@ export type ShipmentSyncResult = {
   reason?: string;
 };
 
-export type PushOrderOption = {
-  id: string;
-  order_no?: string | null;
-  customer_name?: string | null;
-  receiver_city?: string | null;
-  receiver_pincode?: string | null;
-  shipment_id?: string | null;
-};
-
 export function listShipments(
   params: {
     date_from?: string;
@@ -617,11 +608,6 @@ export function pushShipment(
 
 export function syncShipment(id: string, token?: string): Promise<ShipmentSyncResult> {
   return api<ShipmentSyncResult>(`/api/v1/shipments/${id}/sync`, { method: "POST" }, token);
-}
-
-export function listOrdersForPush(token?: string): Promise<PushOrderOption[]> {
-  return api<any>("/api/v1/orders?page_size=100", {}, token).then((data: any) =>
-    Array.isArray(data) ? data : (data?.items ?? []));
 }
 
 // --- Shipments: courier catalogue + live history (Orders-driven push) ---

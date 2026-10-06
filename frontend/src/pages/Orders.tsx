@@ -168,6 +168,12 @@ export default function OrdersPage() {
         onPushed={() => {
           fetchOrders(true);
         }}
+        // A 502 means the AWB was committed and a retry job is queued, so the
+        // row changed even though the provider refused. Refreshing is what stops
+        // it still offering Add Shipment on a shipment that would now 400.
+        onRecovered={() => {
+          fetchOrders(true);
+        }}
       />
 
     </div>

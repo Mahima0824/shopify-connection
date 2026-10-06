@@ -13,6 +13,16 @@ export type AddShipmentDialogProps = {
   orderLabel?: string;
   onClose: () => void;
   onPushed: (result: PushShipmentResult) => void;
+  /**
+   * Called when the shipment was saved but ShipSagar could not be reached.
+   *
+   * The backend commits the AWB before it contacts ShipSagar, so a 502 leaves a
+   * real shipment on the order that the retry queue will register later. Without
+   * a refresh the Orders row keeps rendering Add Shipment (push_state is still
+   * "awaiting") and retrying from there 400s SHIPMENT_EXISTS. This is the
+   * refresh the deleted PushShipmentDialog used to do on the same path.
+   */
+  onRecovered?: () => void;
 };
 
 // Shown until the live catalogue loads, and kept for good if it never does:
@@ -22,6 +32,18 @@ const FALLBACK_COURIERS: CourierOption[] = [
   { courier_code: "IP", courier_name: "India Post" },
   { courier_code: "DTDC", courier_name: "DTDC" },
 ];
+
+/**
+ * True for the push route's queued-retry 502.
+ *
+ * `api()` puts the structured `status` on the thrown Error; the message text is
+ * not matched, so a genuine outage whose wording happens to mention a retry is
+ * not mistaken for one. A queued retry means the shipment was committed.
+ */
+function isQueuedRetry(err: unknown): boolean {
+  const e = err as { status?: number } | null;
+  return e?.status === 502;
+}
 
 const inputClass =
   "w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition shadow-xs";
@@ -34,6 +56,7 @@ export default function AddShipmentDialog({
   orderLabel,
   onClose,
   onPushed,
+  onRecovered,
 }: AddShipmentDialogProps) {
   const [couriers, setCouriers] = useState<CourierOption[]>(FALLBACK_COURIERS);
   const [trackingNo, setTrackingNo] = useState("");
@@ -67,10 +90,17 @@ export default function AddShipmentDialog({
       setError("Tracking number is required.");
       return;
     }
+    // A null orderId would post order_id: "" and earn a guaranteed 404/400 with
+    // no idea which side was at fault. The Orders table only opens this dialog
+    // for a real row, so reaching here means a caller passed nothing.
+    if (!orderId) {
+      setError("No order was selected, so the tracking number cannot be attached.");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await pushShipment({
-        order_id: orderId ?? "",
+        order_id: orderId,
         tracking_no: trackingNo.trim(),
         courier_code: courier,
       });
@@ -84,7 +114,22 @@ export default function AddShipmentDialog({
       }
       onPushed(result);
     } catch (err: unknown) {
-      setSubmitError(err instanceof Error && err.message ? err.message : "Failed to push shipment");
+      // A 502 is the transport-failure path: the shipment IS saved and a retry
+      // job is queued, so the caller refreshes rather than treating it as a
+      // lost attempt. Anything else (a validation code, a duplicate) really did
+      // fail and keeps the alert.
+      if (isQueuedRetry(err)) {
+        setNotice(
+          "The tracking number was saved, but ShipSagar could not be reached. " +
+          "The registration is queued and will be retried automatically.",
+        );
+        setTrackingNo("");
+        onRecovered?.();
+      } else {
+        setSubmitError(
+          err instanceof Error && err.message ? err.message : "Failed to push shipment",
+        );
+      }
     } finally {
       setSubmitting(false);
     }

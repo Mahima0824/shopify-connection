@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.database import get_db
-from app.services.order_service import list_orders
+from app.schemas.india_post import OrderCreateManual
+from app.services.order_service import create_manual_order, list_orders
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
 
@@ -187,8 +189,38 @@ def _to_dict(o, shipment=None) -> dict:
         "operational_status": o.operational_status,
         "shopify_created_at": iso(o.shopify_created_at),
         "shopify_updated_at": iso(o.shopify_updated_at),
+        "receiver_name": o.receiver_name,
+        "receiver_city": o.receiver_city,
+        "receiver_pincode": o.receiver_pincode,
+        "receiver_mobile": o.receiver_mobile,
+        "cod_mode": o.cod_mode,
+        "cod_value": num(o.cod_value),
+        "weight_grams": o.weight_grams,
+        "barcode_no": o.barcode_no,
         "shipment": shipment,
     }
+
+
+@router.post("")
+def post_order(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    """Create a manual India Post order.
+
+    The committed frontend calls this route (NewOrderDialog posts to
+    /api/v1/orders), so it has to exist in the committed tree - not only in the
+    uncommitted India Post working set. Validation lives in
+    schemas.india_post.OrderCreateManual, so a malformed payload is a 422 with
+    the field that failed rather than a 500 from the model layer.
+    """
+    try:
+        data = OrderCreateManual(**payload)
+    except ValidationError as e:
+        raise HTTPException(422, str(e))
+    o = create_manual_order(db, _user.get("business_id"), data)
+    return {"success": True, "data": _to_dict(o)}
 
 
 @router.get("")

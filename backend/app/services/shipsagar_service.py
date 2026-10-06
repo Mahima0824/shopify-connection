@@ -52,6 +52,29 @@ def resolve_courier(code: str | None) -> str:
 # resolve_courier cannot help with inside SQL.
 ACCEPTED_COURIER_CODES = tuple(dict.fromkeys((*SUPPORTED_COURIERS, *COURIER_ALIASES)))
 
+
+def courier_code_variants(code: str | None) -> tuple[str, ...]:
+    """Every stored spelling of one courier, for a spelling-independent lookup.
+
+    resolve_courier answers "what is this code called" but a SQL filter needs the
+    reverse: given a code, which values in shipments.carrier_code mean the same
+    carrier. Without this, a uniqueness probe on (business, carrier, awb) reads
+    INDIA_POST and IP as two different carriers, so the same AWB can be booked
+    once under each spelling - two live shipments, two timelines, SLA and
+    reconciliation double-counted. resolve_courier cannot be pushed into SQL, so
+    the set is computed here and handed over as an .in_() argument.
+
+    A code with no alias of its own yields exactly itself, so an unrelated
+    courier (FEDEX, DTDC) keeps behaving exactly as it did before this existed.
+    """
+    canonical = resolve_courier(code)
+    if not canonical:
+        return ()
+    spellings = {canonical}
+    spellings.update(alias for alias, target in COURIER_ALIASES.items()
+                     if target == canonical)
+    return tuple(sorted(spellings))
+
 # Codes that name the absence of a courier rather than a courier. register_tracking
 # refuses these and accepts every other code, because ShipSagar aggregates many
 # carriers while SUPPORTED_COURIERS only lists the ones this app has hand-written
