@@ -3427,3 +3427,124 @@ def test_push_payload_constant_settings_exist_and_default_empty():
     s = Settings(_env_file=None)
     assert s.shipsagar_email == ""
     assert s.shipsagar_company == ""
+
+
+# --- GetCourier ---
+
+COURIER_OK = {
+    "status": "SUCCESS",
+    "message": "48 Record Found",
+    "getCourier": [
+        {"courierName": "Amazon Tracking Services", "courierCode": "ATS"},
+        {"courierName": "ARAMEX", "courierCode": "ARAMEX"},
+        {"courierName": "DTDC", "courierCode": "DTDC"},
+    ],
+}
+
+
+def test_get_couriers_parses_and_sorts_by_name(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    seen = {}
+
+    def _fake_post(path, payload):
+        seen["path"] = path
+        seen["body"] = dict(payload)
+        return COURIER_OK
+
+    monkeypatch.setattr(ss, "_post", _fake_post)
+    out = ss.get_couriers()
+    assert [c["courier_code"] for c in out] == ["ARAMEX", "ATS", "DTDC"]
+    assert out[1]["courier_name"] == "Amazon Tracking Services"
+    assert seen["path"] == "/GetCourier"
+    assert seen["body"]["ClientCode"] == "C1001"
+
+
+def test_get_couriers_is_cached_until_forced(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    calls = []
+
+    def _fake_post(path, payload):
+        calls.append(path)
+        return COURIER_OK
+
+    monkeypatch.setattr(ss, "_post", _fake_post)
+    ss.get_couriers()
+    ss.get_couriers()
+    assert len(calls) == 1
+    ss.get_couriers(force=True)
+    assert len(calls) == 2
+
+
+def test_get_couriers_raises_on_error_status(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "Status": "ERROR", "Message": "please try again later"})
+    try:
+        ss.get_couriers()
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_API_ERROR"
+        assert "please try again later" in exc.message
+
+
+def test_get_couriers_handles_an_empty_list(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    monkeypatch.setattr(ss, "_post", lambda path, payload: {
+        "status": "SUCCESS", "message": "0 Record Found", "getCourier": []})
+    assert ss.get_couriers() == []
+
+
+# --- GetCourier: cache expiry and fallback ---
+
+def test_get_couriers_refetches_once_the_cache_expires(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    calls = []
+    clock = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    monkeypatch.setattr(ss, "_now", lambda: clock[0])
+    monkeypatch.setattr(ss, "_post", lambda path, payload: calls.append(path) or COURIER_OK)
+
+    ss.get_couriers()
+    clock[0] = clock[0] + timedelta(seconds=ss.COURIER_CACHE_SECONDS - 1)
+    ss.get_couriers()
+    assert len(calls) == 1
+    clock[0] = clock[0] + timedelta(seconds=2)
+    ss.get_couriers()
+    assert len(calls) == 2
+
+
+def test_get_couriers_serves_the_stale_catalogue_when_a_refresh_fails(monkeypatch):
+    from app.services import shipsagar_service as ss
+    _configured(monkeypatch)
+    ss.reset_courier_cache()
+    bodies = [COURIER_OK,
+              {"Status": "ERROR", "Message": "please try again later"},
+              None]
+
+    def _fake_post(path, payload):
+        if not bodies:
+            raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "ShipSagar request failed: boom")
+        body = bodies.pop(0)
+        if body is None:
+            raise ss.ShipsagarError("SHIPSAGAR_API_ERROR", "ShipSagar request failed: boom")
+        return body
+
+    monkeypatch.setattr(ss, "_post", _fake_post)
+    first = ss.get_couriers()
+    assert ss.get_couriers(force=True) == first
+    assert ss.get_couriers(force=True) == first
+    ss.reset_courier_cache()
+    try:
+        ss.get_couriers()
+        raise AssertionError("expected ShipsagarError")
+    except ss.ShipsagarError as exc:
+        assert exc.code == "SHIPSAGAR_API_ERROR"

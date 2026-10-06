@@ -7,9 +7,10 @@ ShipSagar aggregates courier tracking for many carriers. Identity chain::
 
 ShipSagar IDs are provider references only — never business IDs.
 
-Two endpoints are integrated against https://app.shipsagar.com/api/Web:
-``PushShipment`` (register a shipment) and ``TrackShipment`` (poll history).
-Both authenticate with ``Token`` + ``ClientCode`` carried in the JSON body.
+Three endpoints are integrated against https://app.shipsagar.com/api/Web:
+``PushShipment`` (register a shipment), ``TrackShipment`` (poll history) and
+``GetCourier`` (the account's courier catalogue). All authenticate with
+``Token`` + ``ClientCode`` carried in the JSON body.
 
 Webhook ingest, signature verification, idempotency, retry/backoff and health
 counters are unchanged. ShipSagar's own key casing is inconsistent between its
@@ -86,6 +87,11 @@ SHIPSAGAR_NOT_CONFIGURED_MESSAGE = (
 DEFAULT_COUNTRY = "India"
 DEFAULT_SHIPMENT_TYPE = "Road"
 
+# The courier catalogue ShipSagar serves for this account. It changes rarely and
+# the push dialog opens often, so it is cached in-process for an hour.
+COURIER_PATH = "/GetCourier"
+COURIER_CACHE_SECONDS = 3600
+
 
 def _now():
     return datetime.now(timezone.utc)
@@ -153,7 +159,8 @@ _MATRIX: list[tuple[str, str, str]] = [
 
 
 # Fallback for every courier outside INDIA_POST / DTDC (ShipSagar aggregates many
-# carriers and GetCourier is not integrated, so codes arrive unvalidated).
+# carriers and only the two above have a hand-written matrix here, so codes from
+# the GetCourier catalogue still arrive unvalidated).
 # Rows match on whole words only (see _GENERIC_MATCHERS), otherwise "rto" would
 # also match "carton" and "attempt" would also match "reattempt".
 # Plan #15's ordering rule applies in full: every negative/attempt and return row
@@ -411,6 +418,9 @@ def _post(path: str, payload: dict) -> dict:
 
 def build_push_payload(*, tracking_no: str, courier_code: str, order) -> dict:
     """Map an Order onto the PushShipment business fields."""
+    # The receiver_* reads go through getattr with a "" default: those columns
+    # arrive with the India Post order migration, and without the default a tree
+    # that does not carry it raised AttributeError while building the payload.
     return {
         "CourierCode": (courier_code or "").strip().upper(),
         "TrackingNo": (tracking_no or "").strip(),
@@ -911,3 +921,59 @@ def drain_retry_queue(db, limit: int = 50) -> dict:
             out["requeued"] += 1
     db.flush()
     return out
+
+
+# ---------------------------------------------------------------------------
+# Courier catalogue (GetCourier)
+# ---------------------------------------------------------------------------
+
+_courier_cache: list[dict] | None = None
+_courier_cached_at = None
+
+
+def reset_courier_cache():
+    global _courier_cache, _courier_cached_at
+    _courier_cache = None
+    _courier_cached_at = None
+
+
+def get_couriers(force: bool = False) -> list[dict]:
+    """The courier list ShipSagar serves for this account, sorted by code.
+
+    Cached in-process for COURIER_CACHE_SECONDS because the catalogue changes
+    rarely and the dropdown is opened often. A failed refresh keeps serving the
+    previous list rather than failing the caller.
+    """
+    global _courier_cache, _courier_cached_at
+    now = _now()
+    if (not force and _courier_cache is not None and _courier_cached_at is not None
+            and (now - _courier_cached_at).total_seconds() < COURIER_CACHE_SECONDS):
+        return list(_courier_cache)
+    try:
+        # GetCourier carries no business fields, only the credentials _post
+        # merges in from settings; they are passed explicitly because the
+        # catalogue is only meaningful for the account they identify.
+        data = _post(COURIER_PATH, _auth_payload())
+    except ShipsagarError:
+        if _courier_cache is not None:
+            return list(_courier_cache)
+        raise
+    if not _is_ok(data):
+        if _courier_cache is not None:
+            return list(_courier_cache)
+        raise ShipsagarError("SHIPSAGAR_API_ERROR",
+                             _message_of(data) or "ShipSagar GetCourier failed.")
+    rows = []
+    for raw in (data.get("getCourier") or []):
+        raw = raw or {}
+        code = str(raw.get("courierCode") or "").strip()
+        name = str(raw.get("courierName") or "").strip()
+        if code:
+            rows.append({"courier_code": code, "courier_name": name or code})
+    # Ordered by code, not by name: ShipSagar's codes are the stable identity
+    # the push path stores, and "Amazon Tracking Services" sorts before "ARAMEX"
+    # by name while its code (ATS) sorts after it.
+    rows.sort(key=lambda r: r["courier_code"])
+    _courier_cache = rows
+    _courier_cached_at = now
+    return list(rows)
