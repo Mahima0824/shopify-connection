@@ -237,6 +237,13 @@ def upsert_order(db: Session, business_id: str, payload: dict) -> str:
         log.exception("parcel autocreate failed")
         db.rollback()
     try:
+        from app.services.shipment_service import ensure_awaiting_shipment
+        ensure_awaiting_shipment(db, o)
+        db.commit()
+    except Exception:
+        log.exception("awaiting shipment autocreate failed")
+        db.rollback()
+    try:
         from app.services.reconciliation_service import reconcile_order
         reconcile_order(db, o.id)
     except Exception: pass

@@ -26,7 +26,16 @@ def _json_safe(value):
     return json.loads(json.dumps(value, default=_json_default))
 
 
-TERMINAL = ("DELIVERED", "RETURNED", "RTO_DELIVERED", "LOST", "CLOSED")
+AWAITING_TRACKING = "AWAITING_TRACKING"
+
+# Terminal for the backend only: there is no tracking number to poll, so sync
+# and poll-sweep must skip the row instead of asking ShipSagar about nothing.
+# The frontend deliberately does NOT treat it as terminal - it is the state
+# that prompts the user for a tracking number. Divergence is pinned by
+# test_terminal_status_vocabulary_is_shared_by_the_backend_and_the_page and by
+# the frontend's TERMINAL_STATUSES.
+TERMINAL = ("DELIVERED", "RETURNED", "RTO_DELIVERED", "LOST", "CLOSED",
+            AWAITING_TRACKING)
 
 TERMINAL_EVENT_MAP = {
     "DELIVERED": "delivered_at",
@@ -150,3 +159,41 @@ def edict(ev) -> dict:
         "message": ev.message, "location": ev.location, "event_time": iso(ev.event_time),
         "received_at": iso(ev.received_at), "source": ev.source,
     }
+
+
+def ensure_awaiting_shipment(db, order):
+    """Give an order a shipment row that is waiting for a tracking number.
+
+    ShipSagar's PushShipment requires a TrackingNo, so a freshly synced order
+    cannot be pushed yet. It still gets a row so the Orders page shows a
+    consistent Shipment cell and prompts for the number instead of saying
+    "No shipment". Never touches an order that already has a shipment.
+
+    Returns None when the order has no Parcel to attach: shipments.parcel_id is a
+    NOT NULL foreign key, so there is nothing to build a row from yet.
+    """
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services.shipsagar_service import resolve_courier
+    existing = (db.query(Shipment)
+                .filter(Shipment.business_id == order.business_id,
+                        Shipment.order_id == order.id)
+                .first())
+    if existing is not None:
+        return existing
+    parcel = (db.query(Parcel)
+              .filter(Parcel.business_id == order.business_id,
+                      Parcel.order_id == order.id)
+              .first())
+    if parcel is None:
+        return None
+    s = Shipment(
+        business_id=order.business_id, order_id=order.id, parcel_id=parcel.id,
+        # "IP" is the deployment's India Post spelling and an alias of the
+        # provider code, so it goes through resolve_courier instead of being
+        # hardcoded into a second spelling of the same carrier.
+        carrier_code=resolve_courier("IP"), awb_number="",
+        tracking_status=AWAITING_TRACKING)
+    db.add(s)
+    db.flush()
+    return s

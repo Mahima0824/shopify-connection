@@ -4760,3 +4760,228 @@ def test_push_acceptance_is_audited_the_same_way(monkeypatch):
         assert row["shipment"]["push_state"] == "pushed"
     finally:
         app.dependency_overrides.clear()
+
+
+# --- Shopify auto-creates an awaiting shipment ---
+
+
+def _shopify_payload(n: int) -> dict:
+    return {
+        "id": 9000 + n, "name": f"#S{9000 + n}",
+        "created_at": "2026-10-06T10:00:00Z",
+        "email": "buyer@example.com", "total_price": "1500.00",
+        "currency": "INR", "financial_status": "paid",
+        "shipping_address": {"first_name": "Asha", "last_name": "Rao",
+                             "city": "Nashik", "zip": "422001"},
+        "line_items": [{"title": "Item", "quantity": 1, "price": "1500.00"}],
+    }
+
+
+def _upsert_shopify_order(mk, business_id: str, n: int) -> str:
+    from app.services.shopify_service import upsert_order
+    db = mk()
+    try:
+        return upsert_order(db, business_id, _shopify_payload(n))
+    finally:
+        db.close()
+
+
+def test_ensure_awaiting_shipment_creates_one_and_is_idempotent(monkeypatch):
+    from app.models.order import Order
+    from app.services.barcode_service import ensure_parcel_for_order
+    from app.services.shipment_service import (AWAITING_TRACKING,
+                                                ensure_awaiting_shipment)
+    from app.services.shipsagar_service import resolve_courier
+    assert AWAITING_TRACKING == "AWAITING_TRACKING"
+    assert resolve_courier("IP") == "INDIA_POST"
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    db = mk()
+    try:
+        o = db.query(Order).filter_by(id=oid).first()
+        parcel = ensure_parcel_for_order(db, o.id)
+        first = ensure_awaiting_shipment(db, o)
+        assert first is not None
+        assert first.tracking_status == AWAITING_TRACKING
+        assert first.awb_number == ""
+        assert first.parcel_id == parcel.id
+        # "IP" is an alias, so the row stores the canonical provider spelling
+        # rather than the alias it was seeded from.
+        assert first.carrier_code == resolve_courier("IP")
+        sid = first.id
+        second = ensure_awaiting_shipment(db, o)
+        assert second.id == sid
+        from app.models.shipment import Shipment
+        assert db.query(Shipment).filter_by(order_id=oid).count() == 1
+    finally:
+        db.close()
+
+
+def test_ensure_awaiting_shipment_leaves_an_existing_shipment_alone(monkeypatch):
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services.shipment_service import ensure_awaiting_shipment
+    mk = _mk()
+    c, h, bid, oid = _authed_with_order(monkeypatch, mk)
+    db = mk()
+    try:
+        o = db.query(Order).filter_by(id=oid).first()
+        p = Parcel(business_id=bid, order_id=o.id, parcel_code="P1",
+                   barcode_value="EG-EXIST")
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        s = Shipment(business_id=bid, order_id=o.id, parcel_id=p.id,
+                     carrier_code="IP", awb_number="EG-EXIST",
+                     tracking_status="IN_TRANSIT",
+                     shipsagar_tracking_id="SS-EG-EXIST")
+        db.add(s)
+        db.commit()
+        out = ensure_awaiting_shipment(db, o)
+        assert out.id == s.id
+        assert out.awb_number == "EG-EXIST"
+        assert out.tracking_status == "IN_TRANSIT"
+        assert out.shipsagar_tracking_id == "SS-EG-EXIST"
+    finally:
+        db.close()
+
+
+def test_awaiting_tracking_is_terminal_on_the_backend():
+    """Nothing to poll without a tracking number, so sync and poll-sweep stop.
+
+    It is deliberately NOT terminal on the frontend: that side must keep showing
+    the prompt for a tracking number.
+    """
+    from app.services.shipment_service import AWAITING_TRACKING, TERMINAL
+    assert AWAITING_TRACKING in TERMINAL
+
+
+def test_shopify_upsert_creates_the_awaiting_shipment(monkeypatch):
+    """A synced Shopify order lands with a shipment already waiting for tracking."""
+    from app.models.order import Order
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    from app.services.barcode_service import ensure_parcel_for_order
+    from app.services.shipment_service import AWAITING_TRACKING
+    from app.services.shopify_service import upsert_order
+    mk = _mk()
+    db = mk()
+    from app.models.business import Business
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    try:
+        oid = upsert_order(db, b.id, _shopify_payload(1))
+        o = db.query(Order).filter_by(id=oid).first()
+        parcel = db.query(Parcel).filter_by(order_id=oid).first()
+        assert parcel is not None, "the parcel autocreate must run first"
+        s = db.query(Shipment).filter_by(order_id=oid).first()
+        assert s is not None
+        assert s.tracking_status == AWAITING_TRACKING
+        assert s.awb_number == ""
+        assert s.shipsagar_tracking_id is None
+        assert s.parcel_id == parcel.id
+        assert s.business_id == b.id
+        assert s.order_id == oid
+    finally:
+        db.close()
+
+
+def test_a_freshly_synced_order_reads_as_awaiting_on_the_orders_list(monkeypatch):
+    """The Orders page must see `awaiting`, not "No shipment" (push_state null).
+
+    This is the whole point of the task: the Shipment cell has to offer the Add
+    Shipment button on a brand new sync. It runs the real upsert_order and then
+    reads GET /api/v1/orders, because asserting on the Shipment row alone would
+    not catch the case where orders._push_state classifies the new row as
+    something else.
+    """
+    from app.models.business import Business
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="sync@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="sync@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    oid = _upsert_shopify_order(mk, bid, 1)
+    c = _client(monkeypatch, mk)
+    try:
+        tok = c.post("/api/v1/auth/login",
+                     json={"email": "sync@t.in", "password": "x"}).json()["data"]["token"]
+        h = {"Authorization": f"Bearer {tok}"}
+        r = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r.status_code == 200, r.text
+        row = next(i for i in r.json()["data"]["items"] if i["id"] == oid)
+        ship = row["shipment"]
+        assert ship is not None, "a synced order must report a shipment cell"
+        assert ship["push_state"] == "awaiting"
+        assert ship["awb_number"] is None
+        assert ship["tracking_status"] == "AWAITING_TRACKING"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.xfail(strict=False, reason=(
+    "BLOCKER for this task: shipments is UNIQUE(business_id, carrier_code, "
+    "awb_number) and every awaiting row is (tenant, resolve_courier('IP'), ''), "
+    "so a tenant can hold exactly ONE awaiting shipment. The second synced order "
+    "hits the constraint; upsert_order's wrapper logs it and rolls back, so the "
+    "sync survives but that order keeps showing 'No shipment'. Fixing it needs a "
+    "migration to relax uq_ship_biz_carrier_awb, which this task forbids."))
+def test_every_synced_order_gets_its_own_awaiting_shipment(monkeypatch):
+    """Two orders on one tenant, two shipments - the second must not be lost.
+
+    Documents the collision rather than hiding it: an empty AWB is what makes
+    _push_state report "awaiting", but it is also half of the unique key, so the
+    insert fails on the tenant's second synced order.
+    """
+    from app.models.business import Business
+    from app.models.shipment import Shipment
+    from app.models.user import User
+    from app.services.auth_service import hash_password
+    mk = _mk()
+    db = mk()
+    b = Business(name="B", email="two@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    u = User(business_id=b.id, name="A", email="two@t.in",
+             password_hash=hash_password("x"), role="ADMIN")
+    db.add(u)
+    db.commit()
+    bid = b.id
+    db.close()
+    oid1 = _upsert_shopify_order(mk, bid, 1)
+    oid2 = _upsert_shopify_order(mk, bid, 2)
+    db = mk()
+    try:
+        ships = db.query(Shipment).filter(
+            Shipment.business_id == bid).order_by(Shipment.order_id).all()
+        assert len(ships) == 2, "each synced order needs its own shipment row"
+        assert {s.order_id for s in ships} == {oid1, oid2}
+        assert {s.tracking_status for s in ships} == {"AWAITING_TRACKING"}
+        assert len({s.parcel_id for s in ships}) == 2
+    finally:
+        db.close()
+    c = _client(monkeypatch, mk)
+    try:
+        tok = c.post("/api/v1/auth/login",
+                     json={"email": "two@t.in", "password": "x"}).json()["data"]["token"]
+        h = {"Authorization": f"Bearer {tok}"}
+        r = c.get("/api/v1/orders?page_size=100", headers=h)
+        assert r.status_code == 200, r.text
+        rows = {i["id"]: i["shipment"] for i in r.json()["data"]["items"]}
+        assert rows[oid1]["push_state"] == "awaiting"
+        assert rows[oid2]["push_state"] == "awaiting"
+    finally:
+        app.dependency_overrides.clear()
