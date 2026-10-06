@@ -1,3 +1,14 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/montserrat";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn's theme tokens live under the --sc- prefix (see the --sc-* block below the
+   legacy rules) so they cannot shadow this app's own --accent / --muted / --card.
+   @theme inline maps Tailwind's color-* utilities onto the --sc-* names. */
 :root{
   --canvas:#ffffff; --surface:#f8fafc; --card:#ffffff;
   --ink:#0f172a; --body:#334155; --muted:#64748b; --hairline:#e2e8f0;
@@ -5,6 +16,24 @@
   --success:#15803d; --warning:#b45309; --error:#b91c1c;
   --success-bg:#dcfce7; --warning-bg:#fef3c7; --error-bg:#fee2e2; --info-bg:#e0f2fe; --neutral-bg:#f1f5f9;
   --text-muted:#64748b; --border-color:#e2e8f0;
+}
+:root{
+  --sc-background:oklch(1 0 0); --sc-foreground:oklch(0.147 0.004 49.25);
+  --sc-card:oklch(1 0 0); --sc-card-foreground:oklch(0.147 0.004 49.25);
+  --sc-popover:oklch(1 0 0); --sc-popover-foreground:oklch(0.147 0.004 49.25);
+  --sc-primary:oklch(0.5 0.134 242.749); --sc-primary-foreground:oklch(0.977 0.013 236.62);
+  --sc-secondary:oklch(0.967 0.001 286.375); --sc-secondary-foreground:oklch(0.21 0.006 285.885);
+  --sc-muted:oklch(0.967 0.001 286.375); --sc-muted-foreground:oklch(0.553 0.013 58.071);
+  --sc-accent:oklch(0.97 0.001 106.424); --sc-accent-foreground:oklch(0.216 0.006 56.043);
+  --sc-destructive:oklch(0.577 0.245 27.325); --sc-border:oklch(0.923 0.003 48.717);
+  --sc-input:oklch(0.923 0.003 48.717); --sc-ring:oklch(0.709 0.01 56.259);
+  --sc-chart-1:oklch(0.828 0.111 230.318); --sc-chart-2:oklch(0.685 0.169 237.323);
+  --sc-chart-3:oklch(0.588 0.158 241.966); --sc-chart-4:oklch(0.5 0.134 242.749);
+  --sc-chart-5:oklch(0.443 0.11 240.79); --sc-radius:0.45rem;
+  --sc-sidebar:oklch(0.985 0.001 106.423); --sc-sidebar-foreground:oklch(0.147 0.004 49.25);
+  --sc-sidebar-primary:oklch(0.588 0.158 241.966); --sc-sidebar-primary-foreground:oklch(0.977 0.013 236.62);
+  --sc-sidebar-accent:oklch(0.97 0.001 106.424); --sc-sidebar-accent-foreground:oklch(0.216 0.006 56.043);
+  --sc-sidebar-border:oklch(0.923 0.003 48.717); --sc-sidebar-ring:oklch(0.709 0.01 56.259);
 }
 body{background:var(--canvas);color:var(--body);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;}
 a,a:visited{text-decoration:none;}
@@ -93,3 +122,92 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 .nav-drop{position:relative;}
 .nav-drop-menu{display:none;}
 .nav-drop.open .nav-drop-menu, .nav-drop:hover .nav-drop-menu{display:block;}
+
+.dark {
+  --sc-background:oklch(0.147 0.004 49.25);
+  --sc-foreground:oklch(0.985 0.001 106.423);
+  --sc-card:oklch(0.216 0.006 56.043);
+  --sc-card-foreground:oklch(0.985 0.001 106.423);
+  --sc-popover:oklch(0.216 0.006 56.043);
+  --sc-popover-foreground:oklch(0.985 0.001 106.423);
+  --sc-primary:oklch(0.443 0.11 240.79);
+  --sc-primary-foreground:oklch(0.977 0.013 236.62);
+  --sc-secondary:oklch(0.274 0.006 286.033);
+  --sc-secondary-foreground:oklch(0.985 0 0);
+  --sc-muted:oklch(0.268 0.007 34.298);
+  --sc-muted-foreground:oklch(0.709 0.01 56.259);
+  --sc-accent:oklch(0.268 0.007 34.298);
+  --sc-accent-foreground:oklch(0.985 0.001 106.423);
+  --sc-destructive:oklch(0.704 0.191 22.216);
+  --sc-border:oklch(1 0 0 / 10%);
+  --sc-input:oklch(1 0 0 / 15%);
+  --sc-ring:oklch(0.553 0.013 58.071);
+  --sc-chart-1:oklch(0.828 0.111 230.318);
+  --sc-chart-2:oklch(0.685 0.169 237.323);
+  --sc-chart-3:oklch(0.588 0.158 241.966);
+  --sc-chart-4:oklch(0.5 0.134 242.749);
+  --sc-chart-5:oklch(0.443 0.11 240.79);
+  --sc-sidebar:oklch(0.216 0.006 56.043);
+  --sc-sidebar-foreground:oklch(0.985 0.001 106.423);
+  --sc-sidebar-primary:oklch(0.685 0.169 237.323);
+  --sc-sidebar-primary-foreground:oklch(0.293 0.066 243.157);
+  --sc-sidebar-accent:oklch(0.268 0.007 34.298);
+  --sc-sidebar-accent-foreground:oklch(0.985 0.001 106.423);
+  --sc-sidebar-border:oklch(1 0 0 / 10%);
+  --sc-sidebar-ring:oklch(0.553 0.013 58.071);
+}
+
+@theme inline {
+  --font-sans:'IBM Plex Sans Variable', sans-serif;
+  --font-heading:'Montserrat Variable', sans-serif;
+  --color-sidebar-ring:var(--sc-sidebar-ring);
+  --color-sidebar-border:var(--sc-sidebar-border);
+  --color-sidebar-accent-foreground:var(--sc-sidebar-accent-foreground);
+  --color-sidebar-accent:var(--sc-sidebar-accent);
+  --color-sidebar-primary-foreground:var(--sc-sidebar-primary-foreground);
+  --color-sidebar-primary:var(--sc-sidebar-primary);
+  --color-sidebar-foreground:var(--sc-sidebar-foreground);
+  --color-sidebar:var(--sc-sidebar);
+  --color-chart-5:var(--sc-chart-5);
+  --color-chart-4:var(--sc-chart-4);
+  --color-chart-3:var(--sc-chart-3);
+  --color-chart-2:var(--sc-chart-2);
+  --color-chart-1:var(--sc-chart-1);
+  --color-ring:var(--sc-ring);
+  --color-input:var(--sc-input);
+  --color-border:var(--sc-border);
+  --color-destructive:var(--sc-destructive);
+  --color-accent-foreground:var(--sc-accent-foreground);
+  --color-accent:var(--sc-accent);
+  --color-muted-foreground:var(--sc-muted-foreground);
+  --color-muted:var(--sc-muted);
+  --color-secondary-foreground:var(--sc-secondary-foreground);
+  --color-secondary:var(--sc-secondary);
+  --color-primary-foreground:var(--sc-primary-foreground);
+  --color-primary:var(--sc-primary);
+  --color-popover-foreground:var(--sc-popover-foreground);
+  --color-popover:var(--sc-popover);
+  --color-card-foreground:var(--sc-card-foreground);
+  --color-card:var(--sc-card);
+  --color-foreground:var(--sc-foreground);
+  --color-background:var(--sc-background);
+  --radius-sm:calc(var(--sc-radius) * 0.6);
+  --radius-md:calc(var(--sc-radius) * 0.8);
+  --radius-lg:var(--sc-radius);
+  --radius-xl:calc(var(--sc-radius) * 1.4);
+  --radius-2xl:calc(var(--sc-radius) * 1.8);
+  --radius-3xl:calc(var(--sc-radius) * 2.2);
+  --radius-4xl:calc(var(--sc-radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
