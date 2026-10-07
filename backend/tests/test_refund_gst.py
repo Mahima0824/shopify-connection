@@ -1,0 +1,141 @@
+"""Task 3: cancellation is a marker; refunds reverse revenue AND post GST legs."""
+from datetime import datetime, timezone
+
+DT = datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc)
+
+
+def _env(items=(), total="1180.00", tax="180.00"):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.database import Base
+    import app.models  # noqa: F401
+    from app.models.business import Business
+    from app.models.customer import Customer
+    from app.models.order import Order, OrderItem
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                        poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    b = Business(name="B", email="b@t.in")
+    db.add(b); db.commit(); db.refresh(b)
+    c = Customer(business_id=b.id, first_name="C", last_name="T", email="c@t.in")
+    db.add(c); db.commit(); db.refresh(c)
+    o = Order(business_id=b.id, internal_order_number="ORD-1", shopify_order_id="g1",
+              shopify_order_name="#1001", customer_id=c.id, currency="INR",
+              subtotal_amount=float(total) - float(tax), discount_amount=0,
+              shipping_amount=0, tax_amount=float(tax), total_amount=float(total),
+              payment_status="PAID", financial_status="PAID",
+              fulfillment_status="FULFILLED", operational_status="SHIPPED", order_date=DT)
+    db.add(o); db.commit(); db.refresh(o)
+    for idx, it in enumerate(items or ((None, "1000.00", "90.00", "90.00", "0.00", 1, 18.0),)):
+        hsn, taxable, cgst, sgst, igst, qty, rate = it
+        db.add(OrderItem(business_id=b.id, order_id=o.id, title=f"P{idx}", sku=f"S{idx}",
+                         quantity=qty, price="1000.00", hsn_code=hsn,
+                         taxable_amount=float(taxable), cgst_amount=float(cgst),
+                         sgst_amount=float(sgst), igst_amount=float(igst),
+                         gst_rate=rate, tax_amount=float(cgst) + float(sgst) + float(igst)))
+    db.commit()
+    return db, b, o
+
+
+def _refund(db, b, o, amount):
+    from app.models.refund import Refund
+    r = Refund(business_id=b.id, order_id=o.id, shopify_refund_id="rf1",
+               amount=float(amount), currency="INR", status="COMPLETED")
+    db.add(r); db.commit(); db.refresh(r)
+    return r
+
+
+def test_refund_posts_real_cgst_sgst_legs():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env()
+    r = _refund(db, b, o, "1180.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    legs = db.query(FinancialTransaction).filter_by(transaction_type="REFUND").all()
+    assert len(legs) == 3, [(l.debit_account, l.credit_account, str(l.amount)) for l in legs]
+    assert str(sum((l.amount for l in legs if l.pnl_class == "REVERSAL"), 0)) == "1180.00"
+
+
+def test_refund_mixed_rates_is_not_a_flat_half_split():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    items = [(None, "400.00", "10.00", "10.00", "0.00", 1, 5.0),
+             (None, "600.00", "36.00", "36.00", "0.00", 1, 12.0),
+             (None, "0.00", "27.00", "27.00", "34.00", 1, 18.0)]
+    db, b, o = _env(items=items, total="1000.00", tax="180.00")
+    r = _refund(db, b, o, "1000.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    legs = db.query(FinancialTransaction).filter_by(transaction_type="REFUND").all()
+    by = {(l.debit_account, l.credit_account): str(l.amount) for l in legs}
+    assert by[("Sales Revenue", "Customer / Receivable")] == "820.00"
+    assert by[("Output CGST", "Customer / Receivable")] == "73.00"
+    assert by[("Output SGST", "Customer / Receivable")] == "73.00"
+    assert by[("Output IGST", "Customer / Receivable")] == "34.00"
+
+
+def test_refund_posts_a_separate_payout_voucher():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env()
+    r = _refund(db, b, o, "590.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    pay = db.query(FinancialTransaction).filter_by(transaction_type="REFUND_PAYOUT").all()
+    assert len(pay) == 1
+    assert pay[0].debit_account == "Customer / Receivable"
+    assert pay[0].credit_account == "Payment Gateway"
+    assert str(pay[0].amount) == "590.00"
+    assert pay[0].pnl_class == "NONE"
+
+
+def test_paid_cancel_then_refund_nets_to_zero_not_negative():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env()
+    ls.record_event(db, b.id, "SALE", "1180.00", "180.00", transaction_date=DT,
+                    order_id=o.id, idempotency_key=f"SALE:{o.id}")
+    r = _refund(db, b, o, "1180.00")
+    ls.record_cancellation(db, b.id, o)
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    from app.services.ledger_service import revenue_summary
+    rows = [{"transaction_type": x.transaction_type, "amount": str(x.amount),
+             "tax_amount": str(x.tax_amount), "pnl_class": x.pnl_class}
+            for x in db.query(FinancialTransaction).all()]
+    rev = revenue_summary(rows)
+    assert rev["gross_inclusive"] == "1180.00"
+    assert rev["refunds_inclusive"] == "1180.00"
+    assert rev["net_inclusive"] == "0.00"
+
+
+def test_cancellation_marker_carries_no_amount():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env()
+    ls.record_cancellation(db, b.id, o)
+    db.commit()
+    rows = db.query(FinancialTransaction).filter_by(transaction_type="CANCELLATION").all()
+    assert len(rows) == 1
+    assert str(rows[0].amount) == "0.00"
+    assert str(rows[0].tax_amount) == "0.00"
+    assert rows[0].pnl_class == "NONE"
+
+
+def test_refund_legs_do_not_collide_on_one_voucher_number():
+    """One refund writes several vouchers, so they must not share a
+    reference_number: tally_service derives voucher_number from it, and a repeat
+    blocks the whole export with VOUCHER_NOT_UNIQUE."""
+    from app.services import ledger_service as ls
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    r = _refund(db, b, o, "1180.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    nums = [row["voucher_number"] for row in ts.collect_export_rows(db, b.id)]
+    assert len(nums) == len(set(nums)), nums
+    assert ts.validate_export(db, b.id)["can_export"] is True

@@ -49,6 +49,9 @@ ACC_BANK = "Cash / Bank"
 ACC_GATEWAY = "Payment Gateway"
 ACC_INVENTORY = "Inventory / Stock"
 ACC_COGS = "Cost of Goods Sold"
+ACC_OUTPUT_CGST = "Output CGST"
+ACC_OUTPUT_SGST = "Output SGST"
+ACC_OUTPUT_IGST = "Output IGST"
 
 
 def _d(v) -> Decimal:
@@ -456,34 +459,112 @@ def record_payment_from_payment(db: Session, business_id: str, payment, method=N
         return None
 
 
-def record_refund_from_refund(db: Session, business_id: str, refund, tax_amount="0") -> FinancialTransaction | None:
+def refund_tax_split(db: Session, order, refund_amount) -> tuple:
+    """(cgst, sgst, igst) for a refund, pro-rated from the order's real OrderItem
+    tax figures (wave A §5).
+
+    Replaces the old tax/2 half-split, which ignored per-line GST rates and
+    filed IGST as 0 whenever the jurisdiction was unknown. Falls back to a
+    zero split when the order total is unusable; the caller surfaces that as a
+    CA-review flag rather than inventing tax.
+    """
+    from app.models.order import OrderItem
+    from decimal import Decimal as _Dec
+    total = _d(getattr(order, "total_amount", 0) or 0)
+    amt = _d(refund_amount)
+    if total <= 0 or amt <= 0:
+        return _Dec("0.00"), _Dec("0.00"), _Dec("0.00")
+    ratio = amt / total
     try:
-        return record_event(
-            db, business_id, "REFUND", refund.amount or 0, tax_amount,
+        items = db.query(OrderItem).filter_by(order_id=order.id).all()
+    except Exception:
+        items = []
+    c = sum((_d(i.cgst_amount) for i in items), _Dec("0.00"))
+    s = sum((_d(i.sgst_amount) for i in items), _Dec("0.00"))
+    i = sum((_d(i.igst_amount) for i in items), _Dec("0.00"))
+    if c + s + i <= 0:  # items carry no split tax; derive from the order tax
+        tax = _d(getattr(order, "tax_amount", 0) or 0) * ratio
+        half = (tax / 2).quantize(_Q, rounding=ROUND_HALF_UP)
+        return half, tax - half, _Dec("0.00")
+    return c * ratio, s * ratio, i * ratio
+
+
+def record_refund_from_refund(db: Session, business_id: str, refund, order=None) -> list:
+    """Credit Note (reverses revenue + GST) plus the gateway payout (§5).
+
+    Both vouchers are required and they net: the credit note re-creates the
+    receivable, the payout clears it. A single event cannot express this, which
+    is why GST on credit notes was always zero before.
+    """
+    o = order
+    if o is None:
+        try:
+            from app.models.order import Order
+            o = db.query(Order).filter_by(id=refund.order_id).first()
+        except Exception:
+            o = None
+    amt = _d(getattr(refund, "amount", 0) or 0)
+    tax = _d(getattr(refund, "tax_amount", 0) or 0)
+    if tax == 0 and o is not None:
+        cgst, sgst, igst = refund_tax_split(db, o, amt)
+        tax = cgst + sgst + igst
+    else:
+        cgst, sgst, igst = tax / 2, tax - (tax / 2), Decimal("0")
+    taxable = amt - tax
+    # No reference_number here: one refund now writes several vouchers, and
+    # tally_service derives voucher_number from reference_number, so sharing
+    # shopify_refund_id across all of them collided and blocked the whole export
+    # (VOUCHER_NOT_UNIQUE). The refund is still linked by refund_id. Wave B can
+    # group these legs into one real Tally Credit Note once it owns that mapping.
+    rows: list = []
+    if taxable > 0:
+        rows += post_voucher(
+            db, business_id, "REFUND",
+            [{"debit": ACC_SALES, "credit": ACC_RECEIVABLE, "amount": taxable}],
             order_id=refund.order_id, refund_id=refund.id,
-            currency=getattr(refund, "currency", "INR") or "INR",
-            debit_account="Sales Returns / Refunds", credit_account="Payment Gateway",
-            idempotency_key=f"REFUND:{refund.id}",
-            tally_voucher_type="Credit Note",
-        )
-    except Exception:
-        return None
+            transaction_date=getattr(refund, "created_at", None),
+            voucher_key=f"REFUND:{refund.id}:taxable",
+            tally_voucher_type="Credit Note")
+    for acct, val in ((ACC_OUTPUT_CGST, cgst), (ACC_OUTPUT_SGST, sgst), (ACC_OUTPUT_IGST, igst)):
+        if val > 0:
+            rows += post_voucher(
+                db, business_id, "REFUND",
+                [{"debit": acct, "credit": ACC_RECEIVABLE, "amount": val}],
+                order_id=refund.order_id, refund_id=refund.id,
+                transaction_date=getattr(refund, "created_at", None),
+                voucher_key=f"REFUND:{refund.id}:{acct}",
+                tally_voucher_type="Credit Note")
+    if amt > 0:
+        rows += post_voucher(
+            db, business_id, "REFUND_PAYOUT",
+            [{"debit": ACC_RECEIVABLE, "credit": ACC_GATEWAY, "amount": amt}],
+            order_id=refund.order_id, refund_id=refund.id,
+            transaction_date=getattr(refund, "created_at", None),
+            voucher_key=f"REFUND_PAYOUT:{refund.id}",
+            tally_voucher_type="Receipt")
+    return rows
 
 
-def record_cancellation(db: Session, business_id: str, order, refund_required=False) -> FinancialTransaction | None:
-    """Cancelled before payment -> zero-amount marker (no revenue impact, #43/#100)."""
-    try:
-        amt = order.total_amount if refund_required else 0
-        tax = order.tax_amount if refund_required else 0
-        return record_event(
-            db, business_id, "CANCELLATION", amt or 0, tax or 0,
-            order_id=order.id, currency=getattr(order, "currency", "INR") or "INR",
-            debit_account="Sales Returns / Refunds", credit_account="Customer / Receivable",
-            reference_number=getattr(order, "cancel_reason", None),
-            idempotency_key=f"CANCELLATION:{order.id}",
-        )
-    except Exception:
-        return None
+def record_cancellation(db: Session, business_id: str, order,
+                        refund_required=None) -> list:
+    """Void marker only (§2).
+
+    A paid cancellation keeps its sale on the books until the refund actually
+    posts: an unpaid liability is visible to an auditor, a silent write-off is
+    not. No amount is ever carried here, so CANCELLATION cannot be double-
+    counted against a REFUND.
+
+    `refund_required` is DEPRECATED and ignored. It used to decide whether the
+    full order total was written here, which double-counted every paid
+    cancellation against its own refund. It is kept only so existing callers and
+    tests keep working; nothing reads it.
+    """
+    return post_voucher(
+        db, business_id, "CANCELLATION",
+        [{"debit": ACC_SALES_RETURNS, "credit": ACC_RECEIVABLE, "amount": "0.00"}],
+        order_id=order.id, transaction_date=getattr(order, "cancelled_at", None),
+        reference_number=getattr(order, "cancel_reason", None),
+        voucher_key=f"CANCELLATION:{order.id}")
 
 
 def order_timeline(db: Session, business_id: str, order_id: str) -> list[dict]:
