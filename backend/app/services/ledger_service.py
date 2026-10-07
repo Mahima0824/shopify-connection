@@ -2,16 +2,43 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
-from app.models.financial_transaction import TRANSACTION_TYPES, FinancialTransaction
+from app.models.financial_transaction import (
+    DEFAULT_PNL_CLASS, PNL_CLASSES, TRANSACTION_TYPES, FinancialTransaction,
+)
 
 DISPLAY_TZ = "Asia/Kolkata"
 _Q = Decimal("0.01")
+
+
+class UnbalancedVoucher(ValueError):
+    """Raised when a voucher's debit legs do not equal its credit legs.
+
+    Balance is enforced at the only place that matters: an unbalanced voucher
+    never reaches the ledger, so no downstream reader (reports, Tally export)
+    can ever observe a malformed entry.
+    """
+
+
+# Canonical ledger account names. Wave B resolves these to the accountant's
+# configured Tally ledger names; until then they are the internal names.
+ACC_RECEIVABLE = "Customer / Receivable"
+ACC_SALES = "Sales Revenue"
+ACC_SALES_RETURNS = "Sales Returns / Refunds"
+ACC_COD_RECEIVABLE = "COD Receivable"
+ACC_CARRIER_FEE = "Carrier Freight / Fees"
+ACC_COD_DEDUCTION = "COD Deductions / Write-off"
+ACC_CARRIER_CLAIM = "Carrier Claim Receivable"
+ACC_BANK = "Cash / Bank"
+ACC_GATEWAY = "Payment Gateway"
+ACC_INVENTORY = "Inventory / Stock"
+ACC_COGS = "Cost of Goods Sold"
 
 
 def _d(v) -> Decimal:
@@ -136,66 +163,209 @@ def _next_txn_id(db: Session, business_id: str, prefix: str = "TXN") -> str:
     return f"{prefix}-{int(n) + 1:08d}"
 
 
+_KEY_MAX = 128  # width of FinancialTransaction.voucher_group_id / idempotency_key
+
+
+def _fit_key(value: str, limit: int = _KEY_MAX) -> str:
+    """Deterministically squeeze a key into a String(limit) column, never cutting it.
+
+    The auto-generated key reaches ~160 chars once order/payment/refund ids and an
+    ISO timestamp are in it. Plain truncation would give every leg of one voucher
+    the *same* key (unique-constraint blowout) and would let two distinct long keys
+    share a voucher_group_id (a replay of one silently returning the other). Hashing
+    the tail keeps keys unique and stable across retries.
+    """
+    if len(value) <= limit:
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return f"{value[:limit - len(digest) - 1]}:{digest}"
+
+
+def _voucher_key(voucher_key, idempotency_key, event_type, order_id, payment_id,
+                 refund_id, amount, tax, dt) -> str:
+    return voucher_key or idempotency_key or (
+        f"{event_type}:{order_id or '-'}:{payment_id or '-'}:{refund_id or '-'}:"
+        f"{amount}:{tax}:{dt.isoformat()}")
+
+
+def _leg_key(key: str, index: int) -> str:
+    """Per-leg idempotency key. Leg 0 keeps the caller's key verbatim so a
+    single-leg voucher is byte-identical to the pre-voucher ledger row that
+    report_service.backfill_ledger matches on; later legs are suffixed."""
+    return _fit_key(key) if index == 0 else _fit_key(f"{key}:{index}")
+
+
+def _acct_guard(db, business_id, dt, *, txn_type):
+    """Closed-period guard; imported lazily so the module stays importable alone."""
+    from app.services import accounting_service as _acct
+    _acct.assert_open_period(db, business_id, dt, txn_type=txn_type)
+
+
+def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict],
+                 *, order_id=None, payment_id=None, refund_id=None, expense_id=None,
+                 transaction_date=None, currency="INR", payment_method=None,
+                 reference_number=None, voucher_key=None, idempotency_key=None,
+                 reversal_of_id=None, tally_voucher_type=None, tally_voucher_number=None,
+                 _max_attempts: int = 5) -> list[FinancialTransaction]:
+    """Write a voucher as one FinancialTransaction row per leg, all sharing one
+    voucher_group_id (wave A §3).
+
+    `legs` items are ``{"debit": str, "credit": str, "amount": <Decimal-able>,
+    "tax_amount": optional, "pnl_class": optional}``. Raises UnbalancedVoucher
+    and writes nothing unless sum(debit legs) == sum(credit legs).
+
+    Idempotency contract: the group id is derived from the caller's key, so a
+    replay returns the rows already on file instead of appending duplicates. Only
+    rows with a non-NULL voucher_group_id are candidates for that lookup --
+    migration 0020 backfills pnl_class but never invents a group id, so every
+    legacy row is NULL-grouped and must never be adopted into a new voucher.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    t = (event_type or "").upper()
+    if t not in TRANSACTION_TYPES:
+        raise ValueError(f"Unknown transaction_type '{event_type}'.")
+    if not legs:
+        raise ValueError("post_voucher requires at least one leg.")
+
+    default_class = DEFAULT_PNL_CLASS.get(t, "NONE")
+    prepared = []
+    for raw in legs:
+        amt, tax = _d(raw.get("amount")), _d(raw.get("tax_amount"))
+        prepared.append({
+            "debit": (raw.get("debit") or "").strip(),
+            "credit": (raw.get("credit") or "").strip(),
+            "amount": amt,
+            "tax_amount": tax,
+            "net_amount": amt - tax,
+            "pnl_class": (raw.get("pnl_class") or default_class).upper(),
+            "payment_method": raw.get("payment_method") or payment_method,
+            "reference_number": raw.get("reference_number") or reference_number,
+        })
+        if prepared[-1]["pnl_class"] not in PNL_CLASSES:
+            raise ValueError(f"Unknown pnl_class '{prepared[-1]['pnl_class']}'.")
+
+    dr_total = sum((l["amount"] for l in prepared if l["debit"]), Decimal("0"))
+    cr_total = sum((l["amount"] for l in prepared if l["credit"]), Decimal("0"))
+    # Exact, not "within a paisa": amounts are already quantized, so any gap is a
+    # real one-paisa-or-more hole and this is the only place it can still be stopped.
+    if abs(dr_total - cr_total) >= _Q:
+        raise UnbalancedVoucher(
+            f"Voucher {t} does not balance: debits {_s(dr_total)} != credits {_s(cr_total)}.")
+
+    dt = _utc(transaction_date)
+    key = _voucher_key(voucher_key, idempotency_key, t, order_id, payment_id, refund_id,
+                       prepared[0]["amount"], prepared[0]["tax_amount"], dt)
+    group = _fit_key(key)
+
+    for _ in range(_max_attempts):
+        existing = db.query(FinancialTransaction).filter_by(
+            business_id=business_id).filter(
+            FinancialTransaction.voucher_group_id.isnot(None),
+            FinancialTransaction.voucher_group_id == group).order_by(
+            FinancialTransaction.leg_index).all()
+        if existing:
+            return existing  # idempotent replay, incl. a concurrent writer that won
+        try:  # closed-period guard #76/#95 (ADJUSTMENT correction path stays open)
+            _acct_guard(db, business_id, dt, txn_type=t)
+        except ImportError:
+            pass
+        rows: list[FinancialTransaction] = []
+        savepoint = db.begin_nested()  # SAVEPOINT: rollback discards only our legs
+        try:
+            for i, leg in enumerate(prepared):
+                leg_key = _leg_key(key, i)
+                if db.query(FinancialTransaction).filter_by(
+                        business_id=business_id, idempotency_key=leg_key).first():
+                    savepoint.rollback()
+                    rows = []
+                    break  # someone already holds this leg; re-check for the group
+                rows.append(FinancialTransaction(
+                    business_id=business_id,
+                    transaction_id=_next_txn_id(db, business_id),
+                    order_id=order_id, payment_id=payment_id, refund_id=refund_id,
+                    expense_id=expense_id, transaction_type=t, transaction_date=dt,
+                    amount=leg["amount"], tax_amount=leg["tax_amount"],
+                    net_amount=leg["net_amount"], currency=currency or "INR",
+                    debit_account=leg["debit"], credit_account=leg["credit"],
+                    payment_method=leg["payment_method"],
+                    reference_number=leg["reference_number"], status="POSTED",
+                    idempotency_key=leg_key, reversal_of_id=reversal_of_id,
+                    tally_voucher_type=tally_voucher_type,
+                    tally_voucher_number=tally_voucher_number,
+                    voucher_group_id=group, leg_index=i, pnl_class=leg["pnl_class"],
+                ))
+                db.add(rows[-1])
+                # Flush per leg: _next_txn_id counts rows already in the table, and
+                # production sessions run autoflush=False, so without this every leg
+                # of a voucher would be handed the same transaction_id.
+                db.flush()
+            else:
+                savepoint.commit()
+                return rows
+        except IntegrityError:
+            savepoint.rollback()
+            continue  # re-count transaction_ids and retry
+    # Re-check once more: a concurrent writer may have landed the whole voucher.
+    existing = db.query(FinancialTransaction).filter_by(business_id=business_id).filter(
+        FinancialTransaction.voucher_group_id.isnot(None),
+        FinancialTransaction.voucher_group_id == group).order_by(
+        FinancialTransaction.leg_index).all()
+    if existing:
+        return existing
+    raise IntegrityError("voucher insert failed after retries", None, None)
+
+
 def record_event(db: Session, business_id: str, transaction_type: str, amount,
                  tax_amount="0", transaction_date=None, order_id=None, payment_id=None,
                  refund_id=None, expense_id=None, currency="INR", debit_account="",
                  credit_account="", payment_method=None, reference_number=None,
                  idempotency_key=None, reversal_of_id=None,
                  tally_voucher_type=None, tally_voucher_number=None,
-                 _max_attempts: int = 5) -> FinancialTransaction:
-    from sqlalchemy.exc import IntegrityError
-    t = (transaction_type or "").upper()
-    if t not in TRANSACTION_TYPES:
-        raise ValueError(f"Unknown transaction_type '{transaction_type}'.")
+                 pnl_class=None, _max_attempts: int = 5) -> FinancialTransaction:
+    """Single debit/credit pair. Now a two-leg wrapper over post_voucher (§3).
+
+    `pnl_class` is optional: left None, the leg takes post_voucher's
+    DEFAULT_PNL_CLASS for the type, so every pre-existing caller is unaffected.
+    """
     a, x = _d(amount), _d(tax_amount)
-    if a < 0 and t not in ("REFUND", "CANCELLATION", "ADJUSTMENT"):
+    t = (transaction_type or "").upper()
+    # The sign is only judged for a known type, so an unknown one still reports
+    # the type error first, exactly as before this became a post_voucher wrapper.
+    if t in TRANSACTION_TYPES and a < 0 and t not in ("REFUND", "CANCELLATION", "ADJUSTMENT"):
         raise ValueError("Negative amounts only allowed for REFUND/CANCELLATION/ADJUSTMENT.")
-    dt = _utc(transaction_date)
-    try:  # closed-period guard #76/#95 (ADJUSTMENT correction path stays open)
-        from app.services import accounting_service as _acct
-        _acct.assert_open_period(db, business_id, dt, txn_type=t)
-    except ImportError:
-        pass
-    key = idempotency_key or f"{t}:{order_id or '-'}:{payment_id or '-'}:{refund_id or '-'}:{a}:{x}:{dt.isoformat()}"
-    for _ in range(_max_attempts):
-        existing = db.query(FinancialTransaction).filter_by(
-            business_id=business_id, idempotency_key=key).first()
-        if existing is not None:
-            return existing  # idempotent replay (incl. concurrent writer won the race)
-        txn = FinancialTransaction(
-            business_id=business_id, transaction_id=_next_txn_id(db, business_id),
-            order_id=order_id, payment_id=payment_id, refund_id=refund_id, expense_id=expense_id,
-            transaction_type=t, transaction_date=dt, amount=a, tax_amount=x, net_amount=(a - x),
-            currency=currency or "INR", debit_account=debit_account or "",
-            credit_account=credit_account or "", payment_method=payment_method,
-            reference_number=reference_number, status="POSTED", idempotency_key=key,
-            reversal_of_id=reversal_of_id, tally_voucher_type=tally_voucher_type,
-            tally_voucher_number=tally_voucher_number,
-        )
-        savepoint = db.begin_nested()  # SAVEPOINT: rollback below discards only our insert
-        db.add(txn)
-        try:
-            db.flush()
-        except IntegrityError:
-            savepoint.rollback()
-            continue  # re-count a fresh transaction_id (or find concurrent idempotent row) and retry
-        else:
-            savepoint.commit()
-            return txn
-    # Re-check once more: a concurrent idempotent insert may have landed.
-    existing = db.query(FinancialTransaction).filter_by(
-        business_id=business_id, idempotency_key=key).first()
-    if existing is not None:
-        return existing
-    raise IntegrityError("financial_transactions insert failed after retries", None, None)
+    leg = {"debit": debit_account or "", "credit": credit_account or "", "amount": amount}
+    if x != 0:
+        leg["tax_amount"] = tax_amount
+    if pnl_class:
+        leg["pnl_class"] = pnl_class
+    rows = post_voucher(
+        db, business_id, transaction_type, [leg], order_id=order_id, payment_id=payment_id,
+        refund_id=refund_id, expense_id=expense_id, transaction_date=transaction_date,
+        currency=currency, payment_method=payment_method, reference_number=reference_number,
+        idempotency_key=idempotency_key, reversal_of_id=reversal_of_id,
+        tally_voucher_type=tally_voucher_type, tally_voucher_number=tally_voucher_number,
+        _max_attempts=_max_attempts)
+    return rows[0]
 
 
 def reverse_event(db: Session, business_id: str, transaction_id: str, reason: str = "") -> FinancialTransaction:
-    """Correction via reversal: original stays; new ADJUSTMENT negates it (#95)."""
+    """Correction via reversal: original stays; new ADJUSTMENT negates it (#95).
+
+    The reversal is classed from what it reverses, never from the ADJUSTMENT
+    default (EXPENSE): a reversal of something P&L-bearing is REVERSAL (a
+    revenue correction is not a cost), and reversing a pure balance-sheet
+    movement stays NONE because it moves value without touching P&L. Legacy
+    rows may carry no usable pnl_class, so the original's type default stands in.
+    """
     orig = db.query(FinancialTransaction).filter_by(
         business_id=business_id, transaction_id=transaction_id).first()
     if orig is None:
         raise ValueError("Original transaction not found.")
+    orig_class = ((orig.pnl_class or "").strip().upper()
+                  or DEFAULT_PNL_CLASS.get(orig.transaction_type, "NONE"))
+    if orig_class not in PNL_CLASSES:
+        orig_class = DEFAULT_PNL_CLASS.get(orig.transaction_type, "NONE")
     return record_event(
         db, business_id, "ADJUSTMENT", -Decimal(str(orig.amount)), -Decimal(str(orig.tax_amount)),
         order_id=orig.order_id, payment_id=orig.payment_id, refund_id=orig.refund_id,
@@ -203,6 +373,7 @@ def reverse_event(db: Session, business_id: str, transaction_id: str, reason: st
         reference_number=f"REVERSAL of {orig.transaction_id}: {reason}"[:128],
         idempotency_key=f"REVERSAL:{orig.transaction_id}",
         reversal_of_id=orig.id,
+        pnl_class="REVERSAL" if orig_class != "NONE" else "NONE",
     )
 
 

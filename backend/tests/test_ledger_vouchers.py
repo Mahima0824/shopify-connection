@@ -1,4 +1,5 @@
-"""Task 1: voucher columns, new transaction types, pnl_class backfill, failure model."""
+"""Task 1: voucher columns, new transaction types, pnl_class backfill, failure model.
+Task 2: post_voucher - the balance-enforced multi-leg write primitive."""
 import importlib.util
 import os
 import re
@@ -215,3 +216,228 @@ def test_migration_0020_backfills_pnl_class():
             db.execute(text("SELECT id, pnl_class FROM financial_transactions")).all()}
     assert rows["x1"] == "REVENUE"
     assert rows["x2"] == "NONE"
+
+
+# --- Task 2: post_voucher ---
+
+def _db():
+    from sqlalchemy.orm import sessionmaker
+    from app.models.business import Business
+    db = sessionmaker(bind=_engine())()
+    b = Business(name="B", email="b@t.in")
+    db.add(b); db.commit(); db.refresh(b)
+    return db, b
+
+
+def test_post_voucher_rejects_unbalanced_and_writes_nothing():
+    """Legs name a single side each (that is how a real voucher is built: two
+    credits against one debit); 1100.00 debited with nothing credited is not a
+    voucher, so nothing may reach the ledger."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.ledger_service import UnbalancedVoucher, post_voucher
+    db, b = _db()
+    legs = [{"debit": "Cash / Bank", "amount": "1000.00"},
+            {"debit": "Carrier Freight / Fees", "amount": "100.00"}]
+    try:
+        post_voucher(db, b.id, "COD_REMIT", legs)
+        raise AssertionError("expected UnbalancedVoucher")
+    except UnbalancedVoucher as e:
+        assert "1100.00" in str(e) and "0.00" in str(e), str(e)
+    assert db.query(FinancialTransaction).count() == 0
+
+
+def test_post_voucher_rejects_a_voucher_off_by_one_paisa():
+    """The tolerance is exactly one cent, not 'close enough'."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.ledger_service import UnbalancedVoucher, post_voucher
+    db, b = _db()
+    legs = [{"debit": "COD Receivable", "amount": "1000.00"},
+            {"credit": "Cash / Bank", "amount": "900.00"},
+            {"credit": "COD Deductions / Write-off", "amount": "99.99"}]
+    try:
+        post_voucher(db, b.id, "COD_REMIT", legs)
+        raise AssertionError("expected UnbalancedVoucher")
+    except UnbalancedVoucher:
+        pass
+    assert db.query(FinancialTransaction).count() == 0
+
+
+def test_post_voucher_writes_legs_sharing_one_group_in_order():
+    from app.services.ledger_service import post_voucher
+    db, b = _db()
+    legs = [{"debit": "Bank", "credit": "COD Receivable", "amount": "900.00", "pnl_class": "NONE"},
+            {"debit": "Carrier Fee", "credit": "COD Receivable", "amount": "100.00", "pnl_class": "EXPENSE"}]
+    rows = post_voucher(db, b.id, "COD_REMIT", legs, voucher_key="K1")
+    db.commit()
+    assert [r.leg_index for r in rows] == [0, 1]
+    assert len({r.voucher_group_id for r in rows}) == 1
+    assert rows[0].voucher_group_id == "K1"
+    assert rows[0].debit_account == "Bank" and rows[0].credit_account == "COD Receivable"
+    assert rows[1].pnl_class == "EXPENSE"
+    assert str(rows[1].amount) == "100.00"
+
+
+def test_post_voucher_defaults_pnl_class_from_event_type():
+    from app.services.ledger_service import post_voucher
+    db, b = _db()
+    rows = post_voucher(db, b.id, "SALE",
+                        [{"debit": "Customer / Receivable", "credit": "Sales Revenue",
+                          "amount": "1180.00", "tax_amount": "180.00"}], voucher_key="K2")
+    db.commit()
+    assert rows[0].pnl_class == "REVENUE"
+    assert str(rows[0].net_amount) == "1000.00"
+
+
+def test_post_voucher_is_idempotent_on_replay():
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.ledger_service import post_voucher
+    db, b = _db()
+    legs = [{"debit": "Bank", "credit": "COD Receivable", "amount": "900.00"},
+            {"debit": "Carrier Fee", "credit": "COD Receivable", "amount": "100.00"}]
+    first = post_voucher(db, b.id, "COD_REMIT", legs, voucher_key="K3")
+    db.commit()
+    second = post_voucher(db, b.id, "COD_REMIT", legs, voucher_key="K3")
+    db.commit()
+    assert db.query(FinancialTransaction).count() == 2
+    assert {r.id for r in first} == {r.id for r in second}
+
+
+def test_post_voucher_ignores_legacy_rows_with_no_voucher_group():
+    """Migration 0020 backfills pnl_class but never invents a group id, so every
+    pre-existing row has voucher_group_id IS NULL. Those rows must never be
+    adopted as (part of) a new voucher."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.ledger_service import post_voucher
+    db, b = _db()
+    legacy = []
+    for i in (1, 2):
+        legacy.append(FinancialTransaction(
+            business_id=b.id, transaction_id=f"TXN-{i:08d}", transaction_type="SALE",
+            transaction_date=datetime(2026, 9, 1, tzinfo=timezone.utc),
+            amount=Decimal("100.00"), tax_amount=Decimal("0.00"),
+            net_amount=Decimal("100.00"), currency="INR", pnl_class="REVENUE",
+            debit_account="Customer / Receivable", credit_account="Sales Revenue",
+            status="POSTED", idempotency_key=f"legacy-{i}"))
+        db.add(legacy[-1])
+    db.commit()
+    assert {r.voucher_group_id for r in db.query(FinancialTransaction).all()} == {None}
+
+    rows = post_voucher(db, b.id, "COD_REMIT",
+                        [{"debit": "Cash / Bank", "credit": "COD Receivable", "amount": "100.00"}],
+                        voucher_key="K-LEGACY")
+    db.commit()
+    all_rows = db.query(FinancialTransaction).all()
+    assert len(all_rows) == 3
+    assert not ({r.id for r in rows} & {r.id for r in legacy})
+    assert {r.voucher_group_id for r in rows} == {"K-LEGACY"}
+
+
+def test_post_voucher_gives_each_leg_its_own_transaction_id_under_autoflush_off():
+    """app.database.SessionLocal runs autoflush=False. _next_txn_id counts committed
+    rows, so a multi-leg voucher must flush as it goes or every leg is handed the
+    same transaction_id and the unique constraint rejects the whole voucher."""
+    from sqlalchemy.orm import sessionmaker
+    from app.models.business import Business
+    from app.services.ledger_service import post_voucher
+    db = sessionmaker(bind=_engine(), autoflush=False)()
+    b = Business(name="B", email="b@t.in")
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    rows = post_voucher(db, b.id, "COD_REMIT",
+                        [{"debit": "COD Receivable", "amount": "1000.00"},
+                         {"credit": "Cash / Bank", "amount": "900.00"},
+                         {"credit": "Carrier Freight / Fees", "amount": "100.00"}],
+                        voucher_key="K-AF")
+    db.commit()
+    assert len({r.transaction_id for r in rows}) == 3
+    assert [r.leg_index for r in rows] == [0, 1, 2]
+
+
+def test_post_voucher_writes_distinct_leg_keys_for_an_over_long_key():
+    """idempotency_key is String(128); the auto-generated key can exceed that once
+    order/payment/refund ids and an ISO timestamp are in it. Truncating each leg key
+    would make every leg of the voucher share one key and blow the unique constraint."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.ledger_service import post_voucher
+    db, b = _db()
+    long_key = ("PAYMENT:" + "a" * 36 + ":" + "b" * 36 + ":" + "c" * 36 +
+                ":1180.00:0.00:2026-09-10T10:00:00+00:00")
+    assert len(long_key) > 128
+    rows = post_voucher(db, b.id, "COD_REMIT",
+                        [{"debit": "Cash / Bank", "credit": "COD Receivable", "amount": "900.00"},
+                         {"debit": "Carrier Freight / Fees", "credit": "COD Receivable", "amount": "100.00"}],
+                        voucher_key=long_key)
+    db.commit()
+    assert db.query(FinancialTransaction).count() == 2
+    assert len({r.idempotency_key for r in rows}) == 2
+    assert all(len(r.idempotency_key) <= 128 and len(r.voucher_group_id) <= 128 for r in rows)
+
+
+def test_record_event_behaviour_unchanged():
+    from app.services import ledger_service as ls
+    db, b = _db()
+    t = ls.record_event(db, b.id, "SALE", "1180.00", "180.00", idempotency_key="K4")
+    db.commit()
+    assert t.transaction_type == "SALE"
+    assert str(t.amount) == "1180.00" and str(t.tax_amount) == "180.00"
+    assert str(t.net_amount) == "1000.00"
+    assert t.debit_account == "" and t.credit_account == ""
+    assert t.leg_index == 0 and t.pnl_class == "REVENUE"
+    assert t.voucher_group_id == "K4"
+    assert t.status == "POSTED"
+
+
+def test_record_event_rejects_negative_amount_for_sale():
+    from app.services import ledger_service as ls
+    db, b = _db()
+    try:
+        ls.record_event(db, b.id, "SALE", "-5.00", "0")
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "Negative" in str(e)
+
+
+def test_record_event_defaults_pnl_class_from_transaction_type():
+    """No explicit class -> DEFAULT_PNL_CLASS for the type (here a COGS leg)."""
+    from app.services import ledger_service as ls
+    db, b = _db()
+    t = ls.record_event(db, b.id, "COGS", "500.00", "0", idempotency_key="K5")
+    db.commit()
+    assert t.pnl_class == "COGS"
+
+
+def test_record_event_honours_explicit_pnl_class():
+    from app.services import ledger_service as ls
+    db, b = _db()
+    t = ls.record_event(db, b.id, "ADJUSTMENT", "-100.00", "0",
+                        idempotency_key="K6", pnl_class="reversal")
+    db.commit()
+    assert t.pnl_class == "REVERSAL"
+
+
+def test_reverse_event_inherits_the_class_it_reverses():
+    """A reversal is never the generic ADJUSTMENT default (EXPENSE): reversing a
+    SALE is REVERSAL, reversing a pure balance-sheet movement stays NONE."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    sale = ls.record_event(db, b.id, "SALE", "1180.00", "180.00",
+                           debit_account="Customer / Receivable", credit_account="Sales Revenue",
+                           idempotency_key="K7")
+    payment = ls.record_event(db, b.id, "PAYMENT", "1180.00", "0",
+                              debit_account="Cash / Bank", credit_account="Customer / Receivable",
+                              idempotency_key="K8")
+    db.commit()
+
+    rev = ls.reverse_event(db, b.id, sale.transaction_id, reason="wrong amount")
+    rev_pay = ls.reverse_event(db, b.id, payment.transaction_id, reason="wrong amount")
+    db.commit()
+    stored = {r.id: r for r in db.query(FinancialTransaction).all()}
+    assert stored[rev.id].pnl_class == "REVERSAL", stored[rev.id].pnl_class
+    assert str(stored[rev.id].amount) == "-1180.00"
+    assert stored[rev_pay.id].pnl_class == "NONE"
+    # the original is untouched: reversal is append-only
+    assert stored[sale.id].pnl_class == "REVENUE"
