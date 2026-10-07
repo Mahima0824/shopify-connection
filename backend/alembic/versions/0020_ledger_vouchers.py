@@ -42,12 +42,17 @@ def upgrade():
         sa.Column("attempts", sa.Integer(), server_default="1", nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.UniqueConstraint("business_id", "source_type", "source_id", "event_type",
+                            name="uq_lpf_biz_source_event"),
     )
+    op.create_index("ix_lpf_biz_resolved", "ledger_posting_failures",
+                    ["business_id", "resolved_at"])
     for stmt in BACKFILL_SQL:
         op.execute(stmt)
 
 
 def downgrade():
+    op.drop_index("ix_lpf_biz_resolved", table_name="ledger_posting_failures")
     op.drop_table("ledger_posting_failures")
     op.drop_column("shipment_cases", "claim_amount")
     op.drop_index("ix_fintxn_biz_group", table_name="financial_transactions")

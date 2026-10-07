@@ -16,11 +16,16 @@ from .base import uuidpk
 
 PNL_CLASSES = ("REVENUE", "COGS", "EXPENSE", "REVERSAL", "NONE")
 
-# Per-leg P&L classification. A voucher of one transaction_type can contain
-# legs with different effects (COD_REMIT: the bank leg is NONE, the fee and
-# deduction legs are EXPENSE), so classification is per leg, never per type.
+# Per-leg P&L classification, keyed by transaction_type so that it can serve as the
+# migration backfill and as the fallback a reader applies when a row's pnl_class is
+# absent. It is NOT the classification of record: writers are expected to set
+# pnl_class explicitly per leg, because one voucher of a single transaction_type can
+# hold legs with different effects (COD_REMIT: the bank leg is NONE, while the fee and
+# deduction legs are EXPENSE). Values:
 #   REVENUE   - adds to gross revenue; the row's tax_amount splits taxable/tax
-#   REVERSAL  - reverses revenue and tax (Credit Note, claim filed)
+#   REVERSAL  - removes previously recognised value: a Credit Note reverses revenue
+#               and tax, while a carrier claim reverses the shipping/COGS expense it
+#               reimburses. Same class, opposite original posting.
 #   COGS      - reduces profit
 #   EXPENSE   - reduces profit
 #   NONE      - balance-sheet movement only, never touches P&L
