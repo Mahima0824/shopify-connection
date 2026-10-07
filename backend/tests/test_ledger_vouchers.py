@@ -302,26 +302,33 @@ def test_post_voucher_is_idempotent_on_replay():
     assert {r.id for r in first} == {r.id for r in second}
 
 
-def test_post_voucher_ignores_legacy_rows_with_no_voucher_group():
-    """Migration 0020 backfills pnl_class but never invents a group id, so every
-    pre-existing row has voucher_group_id IS NULL. Those rows must never be
-    adopted as (part of) a new voucher."""
+def _legacy_row(db, b, txn_id, key):
+    """A row written before migration 0020: pnl_class backfilled, group id never
+    populated, so voucher_group_id IS NULL exactly as in production."""
     from datetime import datetime, timezone
     from decimal import Decimal
     from app.models.financial_transaction import FinancialTransaction
+    row = FinancialTransaction(
+        business_id=b.id, transaction_id=txn_id, transaction_type="SALE",
+        transaction_date=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        amount=Decimal("100.00"), tax_amount=Decimal("0.00"),
+        net_amount=Decimal("100.00"), currency="INR", pnl_class="REVENUE",
+        debit_account="Customer / Receivable", credit_account="Sales Revenue",
+        status="POSTED", idempotency_key=key)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def test_post_voucher_ignores_legacy_rows_with_no_voucher_group():
+    """A NULL-group legacy row is never swept in by a *group* lookup: two of them
+    cannot be mistaken for one two-leg voucher, and neither is adopted by a key
+    it does not hold."""
+    from app.models.financial_transaction import FinancialTransaction
     from app.services.ledger_service import post_voucher
     db, b = _db()
-    legacy = []
-    for i in (1, 2):
-        legacy.append(FinancialTransaction(
-            business_id=b.id, transaction_id=f"TXN-{i:08d}", transaction_type="SALE",
-            transaction_date=datetime(2026, 9, 1, tzinfo=timezone.utc),
-            amount=Decimal("100.00"), tax_amount=Decimal("0.00"),
-            net_amount=Decimal("100.00"), currency="INR", pnl_class="REVENUE",
-            debit_account="Customer / Receivable", credit_account="Sales Revenue",
-            status="POSTED", idempotency_key=f"legacy-{i}"))
-        db.add(legacy[-1])
-    db.commit()
+    legacy = [_legacy_row(db, b, f"TXN-{i:08d}", f"legacy-{i}") for i in (1, 2)]
     assert {r.voucher_group_id for r in db.query(FinancialTransaction).all()} == {None}
 
     rows = post_voucher(db, b.id, "COD_REMIT",
@@ -332,6 +339,49 @@ def test_post_voucher_ignores_legacy_rows_with_no_voucher_group():
     assert len(all_rows) == 3
     assert not ({r.id for r in rows} & {r.id for r in legacy})
     assert {r.voucher_group_id for r in rows} == {"K-LEGACY"}
+
+
+def test_replaying_a_legacy_key_adopts_the_legacy_row():
+    """A pre-0020 row holding the key IS that voucher: backfill re-runs and webhook
+    redelivery both replay keys that pre-date 0020, and before post_voucher they got
+    that row back. Adopting it keeps them idempotent instead of 409-ing on a
+    unique-constraint conflict that can never resolve."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    legacy = _legacy_row(db, b, "TXN-00000001", "SALE:order-1")
+    assert legacy.voucher_group_id is None
+
+    got = ls.record_event(db, b.id, "SALE", "100.00", "0.00", idempotency_key="SALE:order-1")
+    db.commit()
+    assert got.id == legacy.id
+    assert db.query(FinancialTransaction).count() == 1
+    assert db.query(FinancialTransaction).one().voucher_group_id is None
+
+
+def test_post_voucher_names_the_group_that_owns_a_key_it_was_given():
+    """The leg0 key of one voucher can be the whole key of another (the known
+    group/leg namespace overlap). That is not a retryable race and must not reach
+    the API as a null-orig IntegrityError ("Transaction conflict: None")."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    # Two-leg voucher keyed "K": its leg 1 holds idempotency_key "K:1".
+    ls.post_voucher(db, b.id, "COD_REMIT",
+                    [{"debit": "COD Receivable", "amount": "1000.00"},
+                     {"credit": "Cash / Bank", "amount": "1000.00"}], voucher_key="K")
+    db.commit()
+
+    try:
+        ls.post_voucher(db, b.id, "COD_REMIT",
+                        [{"debit": "COD Receivable", "credit": "Cash / Bank",
+                          "amount": "5.00"}], voucher_key="K:1")
+        raise AssertionError("expected VoucherKeyConflict")
+    except ls.VoucherKeyConflict as e:
+        assert "K:1" in str(e) and "'K'" in str(e), str(e)
+    # A ValueError, so the API answers 400 with this message instead of a 409.
+    assert issubclass(ls.VoucherKeyConflict, ValueError)
+    assert db.query(FinancialTransaction).count() == 2
 
 
 def test_post_voucher_gives_each_leg_its_own_transaction_id_under_autoflush_off():

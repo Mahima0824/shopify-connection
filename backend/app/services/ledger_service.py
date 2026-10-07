@@ -26,6 +26,16 @@ class UnbalancedVoucher(ValueError):
     """
 
 
+class VoucherKeyConflict(ValueError):
+    """Raised when the key a caller offered is already held by another voucher.
+
+    Not a retryable race: uq_fintxn_biz_idem means a second row can never be
+    written under that key, so retrying only wastes the attempts and then reports
+    a conflict with no message. A ValueError, so the API answers 400 with this
+    text rather than a bare "Transaction conflict: None".
+    """
+
+
 # Canonical ledger account names. Wave B resolves these to the accountant's
 # configured Tally ledger names; until then they are the internal names.
 ACC_RECEIVABLE = "Customer / Receivable"
@@ -215,10 +225,20 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
     and writes nothing unless sum(debit legs) == sum(credit legs).
 
     Idempotency contract: the group id is derived from the caller's key, so a
-    replay returns the rows already on file instead of appending duplicates. Only
-    rows with a non-NULL voucher_group_id are candidates for that lookup --
-    migration 0020 backfills pnl_class but never invents a group id, so every
-    legacy row is NULL-grouped and must never be adopted into a new voucher.
+    replay returns the rows already on file instead of appending duplicates.
+    Legacy rows (migration 0020 backfilled pnl_class but never populated a group
+    id, so every pre-existing row is NULL-grouped) are handled on both sides of
+    that lookup, and the two halves pull in opposite directions:
+
+    - A *group* lookup considers non-NULL groups only, so two unrelated legacy
+      rows can never be mistaken for one two-leg voucher.
+    - A legacy row that *holds the key* is the existing voucher and is adopted as
+      a one-leg voucher, returning that row. Backfill re-runs and webhook
+      redelivery replay pre-0020 keys, and pre-refactor record_event matched on
+      idempotency_key alone, so adopting them is what keeps those replays
+      idempotent.
+    - A key held by a row in a *different* non-NULL group is the leg0/group key
+      namespace overlap, not a race, and raises VoucherKeyConflict.
 
     Scope of the balance check: it totals the accounts a leg *names*. A leg that
     names neither account is a self-balancing pair (its accounts are filled in at
@@ -280,11 +300,18 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
         try:
             for i, leg in enumerate(prepared):
                 leg_key = _leg_key(key, i)
-                if db.query(FinancialTransaction).filter_by(
-                        business_id=business_id, idempotency_key=leg_key).first():
+                holder = db.query(FinancialTransaction).filter_by(
+                    business_id=business_id, idempotency_key=leg_key).first()
+                if holder is not None:
                     savepoint.rollback()
-                    rows = []
-                    break  # someone already holds this leg; re-check for the group
+                    if holder.voucher_group_id is None:
+                        return [holder]  # pre-0020 single-leg voucher: it is ours
+                    if holder.voucher_group_id != group:
+                        raise VoucherKeyConflict(
+                            f"idempotency key '{leg_key}' is already held by voucher group "
+                            f"'{holder.voucher_group_id}', so it cannot open group '{group}'. "
+                            "Use a distinct voucher_key.")
+                    break  # our own group: a concurrent writer may have landed it
                 rows.append(FinancialTransaction(
                     business_id=business_id,
                     transaction_id=_next_txn_id(db, business_id),
