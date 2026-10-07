@@ -221,8 +221,13 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
     voucher_group_id (wave A §3).
 
     `legs` items are ``{"debit": str, "credit": str, "amount": <Decimal-able>,
-    "tax_amount": optional, "pnl_class": optional}``. Raises UnbalancedVoucher
-    and writes nothing unless sum(debit legs) == sum(credit legs).
+    "tax_amount": optional, "pnl_class": optional}``.
+
+    Raises, in both cases writing nothing:
+        UnbalancedVoucher - debits do not equal credits.
+        VoucherKeyConflict - the key is held by a row that cannot serve this
+            voucher: a row in another non-NULL group, or a legacy single-leg
+            event posted against a multi-leg voucher.
 
     Idempotency contract: the group id is derived from the caller's key, so a
     replay returns the rows already on file instead of appending duplicates.
@@ -233,10 +238,13 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
     - A *group* lookup considers non-NULL groups only, so two unrelated legacy
       rows can never be mistaken for one two-leg voucher.
     - A legacy row that *holds the key* is the existing voucher and is adopted as
-      a one-leg voucher, returning that row. Backfill re-runs and webhook
-      redelivery replay pre-0020 keys, and pre-refactor record_event matched on
-      idempotency_key alone, so adopting them is what keeps those replays
-      idempotent.
+      a one-leg voucher, returning that row -- for a single-leg post only. Backfill
+      re-runs and webhook redelivery replay pre-0020 keys, and pre-refactor
+      record_event matched on idempotency_key alone, so adopting them is what keeps
+      those replays idempotent. A legacy row holds exactly one leg, so adopting it
+      for an N-leg voucher would return one row, write nothing and raise nothing:
+      the caller would read a success and believe the whole voucher landed. That
+      raises VoucherKeyConflict instead, and only one leg may ever be adopted.
     - A key held by a row in a *different* non-NULL group is the leg0/group key
       namespace overlap, not a race, and raises VoucherKeyConflict.
 
@@ -305,6 +313,12 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
                 if holder is not None:
                     savepoint.rollback()
                     if holder.voucher_group_id is None:
+                        if len(prepared) > 1:
+                            raise VoucherKeyConflict(
+                                f"idempotency key '{leg_key}' is held by a legacy single-leg "
+                                f"event with no voucher group, which cannot satisfy this "
+                                f"{len(prepared)}-leg voucher '{group}'. Adopted for one-leg "
+                                "posts only; use a distinct voucher_key.")
                         return [holder]  # pre-0020 single-leg voucher: it is ours
                     if holder.voucher_group_id != group:
                         raise VoucherKeyConflict(

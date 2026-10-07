@@ -359,6 +359,29 @@ def test_replaying_a_legacy_key_adopts_the_legacy_row():
     assert db.query(FinancialTransaction).one().voucher_group_id is None
 
 
+def test_post_voucher_refuses_to_adopt_a_legacy_row_for_a_multi_leg_voucher():
+    """A legacy row is one leg, so adopting it for an N-leg voucher would return a
+    single row, write nothing, and raise nothing -- the caller would read a 200 and
+    believe the whole voucher landed. Any pre-0020 order keyed SALE:{order.id} is one
+    refactor away from that, so it must be loud instead of silent."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    legacy = _legacy_row(db, b, "TXN-00000001", "K-MULTI")
+
+    try:
+        ls.post_voucher(db, b.id, "COD_REMIT",
+                        [{"debit": "COD Receivable", "amount": "1000.00"},
+                         {"credit": "Cash / Bank", "amount": "1000.00"}],
+                        voucher_key="K-MULTI")
+        raise AssertionError("expected VoucherKeyConflict")
+    except ls.VoucherKeyConflict as e:
+        assert "K-MULTI" in str(e), str(e)
+        assert "2" in str(e), str(e)
+    rows = db.query(FinancialTransaction).all()
+    assert [r.id for r in rows] == [legacy.id], "the failed call wrote nothing"
+
+
 def test_post_voucher_names_the_group_that_owns_a_key_it_was_given():
     """The leg0 key of one voucher can be the whole key of another (the known
     group/leg namespace overlap). That is not a retryable race and must not reach
