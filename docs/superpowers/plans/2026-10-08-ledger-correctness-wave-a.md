@@ -661,7 +661,7 @@ record_event becomes a two-leg wrapper with an unchanged signature."
 - Produces:
   - `record_refund_from_refund(db, business_id, refund, order=None) -> list[FinancialTransaction]` — the `tax_amount` parameter is **removed**; tax is derived from the order's `OrderItem` rows. Returns the REFUND voucher legs plus the REFUND_PAYOUT voucher legs.
   - `refund_tax_split(db, order, refund_amount) -> tuple[Decimal, Decimal, Decimal]` — `(cgst, sgst, igst)` pro-rated to `refund_amount`
-  - `record_cancellation(db, business_id, order) -> list[FinancialTransaction]` — the `refund_required` parameter is **removed**; always posts a zero-amount marker
+  - `record_cancellation(db, business_id, order, refund_required=None) -> list[FinancialTransaction]` — posts a zero-amount marker. **Ruling (pre-flight A):** `refund_required` is retained as an accepted-and-ignored keyword so the two existing tests that pass it keep working unchanged. Document it as deprecated.
 - [ ] **Step 1: Write the failing tests**
 
 Create `backend/tests/test_refund_gst.py`:
@@ -887,13 +887,19 @@ def record_refund_from_refund(db: Session, business_id: str, refund, order=None)
     return rows
 
 
-def record_cancellation(db: Session, business_id: str, order) -> list:
+def record_cancellation(db: Session, business_id: str, order,
+                        refund_required=None) -> list:
     """Void marker only (§2).
 
     A paid cancellation keeps its sale on the books until the refund actually
     posts: an unpaid liability is visible to an auditor, a silent write-off is
     not. No amount is ever carried here, so CANCELLATION cannot be double-
     counted against a REFUND.
+
+    `refund_required` is DEPRECATED and ignored. It used to decide whether the
+    full order total was written here, which double-counted every paid
+    cancellation against its own refund. It is kept only so existing callers and
+    tests keep working; nothing reads it.
     """
     return post_voucher(
         db, business_id, "CANCELLATION",
@@ -924,18 +930,19 @@ ACC_OUTPUT_IGST = "Output IGST"
                 pass
 ```
 
+The `except Exception: pass` in this block is removed properly in Task 7 (durable failure
+records). Leave it in place for now — Task 3 is about the refund/cancellation amounts.
+
 Refund branch (lines 113-118):
 
 ```python
-        try:  # additive ledger hook: credit note + payout; idempotent
-            from app.services.ledger_service import record_refund_from_refund
-            record_refund_from_refund(db, business_id, r, order=o)
-            db.commit()
-        except Exception:
-            pass
+            try:  # additive ledger hook: void marker; never break webhook
+                from app.services.ledger_service import record_cancellation
+                record_cancellation(db, business_id, o)
+                db.commit()
+            except Exception:
+                pass
 ```
-
-(The `except Exception: pass` here is removed properly in Task 7; leave it for now.)
 
 `backend/app/services/report_service.py` line 258 — pass the order through so tax resolves without a second query:
 
@@ -1279,6 +1286,7 @@ Receivable and refuses to post a settlement that does not reconcile."
   - `settings.ledger_auto_post_costs: bool` (default `True`), `settings.ledger_auto_post_cod: bool` (default `True`)
   - `post_period_costs(db, business_id, start, end, *, dry_run=False) -> dict` — returns `{"cogs": {...}, "shipping": {...}, "packaging": {...}, "gateway_fee": {...}}`, each `{"posted": int, "skipped": int, "would_post": int}`
   - `ensure_period_postings(db, business_id, start, end, *, dry_run=False) -> dict` — orchestrator; returns `{"period": {...}, "costs": {...}, "cod": {...}, "auto_posted": bool}`
+  - `close_checks(db, business_id, year, month, post_costs=False) -> dict` — gains an opt-in `post_costs` flag so it stays a pure read for its GET caller; only `close_month` passes `True`
   - `POST /api/v1/ledger/post-period-costs?year=&month=` — ADMIN/ACCOUNTANT, returns the `ensure_period_postings` payload
 
 - [ ] **Step 1: Write the failing tests**
@@ -1653,30 +1661,63 @@ def post_period_costs_ep(year: int = Query(...), month: int = Query(...),
         db, u.get("business_id"), start, end, dry_run=dry_run)}
 ```
 
-- [ ] **Step 6: Wire `ensure_period_postings` into the export and close paths**
+- [ ] **Step 6: Wire `ensure_period_postings` into the two WRITE paths only**
 
-Spec §7 requires three call sites; this step adds the two that are not the new endpoint.
+Spec §7 said "the top of `close_checks`", but the pre-flight scan ruled that out:
+`close_checks` is reached from `GET /api/v1/accounting/periods/{year}/{month}`
+(`accounting.py:50-55`), so posting there would write to the ledger from a read request,
+and would break `test_final_fixes.py:72`, which hands `close_checks` a deliberately broken
+session to prove it fails closed. `close_checks` therefore stays read-only and pure, and the
+auto-post happens at the two write paths instead.
 
-In `backend/app/services/tally_service.py`, at the top of `generate_workbook_export`, immediately after the `from app.models.tally import TallyExportRecord` import and before `rows = collect_export_rows(...)`:
+In `backend/app/services/accounting_service.py`, change the signature at line 91 and add the
+guarded call as the first statement:
 
 ```python
+def close_checks(db: Session, business_id: str, year: int, month: int,
+                 post_costs: bool = False) -> dict:
+    """The five checks from #76, plus unresolved ledger posting failures (#95, wave A §9).
+
+    `post_costs` is False by default so this stays a pure read: it is called from
+    GET /accounting/periods/{year}/{month} and must never write. Only close_month,
+    which is a POST that actually changes state, passes True.
+    """
     from app.services.finance_posting import ensure_period_postings
-    if date_from is not None or date_to is not None:
+    start, end = month_window(year, month)
+    if post_costs:
+        ensure_period_postings(db, business_id, start, end)
+```
+
+And change the call in `close_month` at line 216 to:
+
+```python
+    checks = close_checks(db, business_id, year, month, post_costs=True)
+```
+
+In `backend/app/services/tally_service.py`, at the top of `generate_workbook_export`,
+immediately after the `from app.models.tally import TallyExportRecord` import and before
+`rows = collect_export_rows(...)`:
+
+```python
+    # An export must carry the period's freight and COGS, not just sales (wave A §7).
+    # With no explicit window there is no period to post, so skip rather than guess.
+    if date_from is not None and date_to is not None:
+        from app.services.finance_posting import ensure_period_postings
         ensure_period_postings(db, business_id, date_from, date_to)
-    else:
-        ensure_period_postings(db, business_id, datetime(1970, 1, 1, tzinfo=timezone.utc),
-                               datetime.now(timezone.utc))
-        db.rollback()  # unbounded window: post nothing, the caller meant a period
 ```
 
-In `backend/app/services/accounting_service.py`, in `close_checks`, immediately after `start, end = month_window(year, month)` (line 99):
+Add a test to `backend/tests/test_period_costs.py` proving `close_checks` stays read-only
+by default:
 
 ```python
-    from app.services.finance_posting import ensure_period_postings
-    ensure_period_postings(db, business_id, start, end)
+def test_close_checks_is_read_only_by_default():
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import accounting_service as acct
+    db, b = _env()
+    acct.close_checks(db, b.id, 2026, 9)
+    db.commit()
+    assert db.query(FinancialTransaction).count() == 0
 ```
-
-This is what makes `missing_cogs` self-healing: the costs land before the check runs, so a month is never blocked purely because nobody had posted them yet.
 
 - [ ] **Step 7: Document the switches in `.env.example`**
 
@@ -1692,7 +1733,7 @@ LEDGER_AUTO_POST_COD=true
 - [ ] **Step 8: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_period_costs.py -q`
-Expected: 7 passed
+Expected: 8 passed
 
 - [ ] **Step 9: Run the full suite for regressions**
 
@@ -1707,9 +1748,9 @@ git commit -m "feat(ledger): auto-posted period costs with kill switches
 
 Adds post_period_costs (COGS per order, freight per shipment, packaging and
 gateway fees per order), the idempotent ensure_period_postings orchestrator
-wired into the Tally export and month-close checks,
-POST /ledger/post-period-costs, and LEDGER_AUTO_POST_COSTS / _COD switches
-that turn a writer into a reporting dry run."
+wired into the Tally export and close_month (never into close_checks, which
+serves a GET), POST /ledger/post-period-costs, and LEDGER_AUTO_POST_COSTS / _COD
+switches that turn a writer into a reporting dry run."
 ```
 
 ---

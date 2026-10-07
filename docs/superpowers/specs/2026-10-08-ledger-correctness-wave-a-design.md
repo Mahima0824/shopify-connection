@@ -22,6 +22,8 @@ The ledger stops encoding one economic fact twice, stops losing events silently,
 
 **Decision:** `CANCELLATION` becomes amount-less — a void marker only, as it already is for unpaid orders. `REFUND` is the single revenue-reversing event. A paid order cancelled without a refund keeps its sale on the books until the refund actually posts (an auditor-visible liability, not a silent write-off).
 
+`record_cancellation` keeps its `refund_required` keyword as **accepted and ignored**, documented as deprecated. Existing callers and the two tests that pass it keep working unchanged; nothing reads the parameter.
+
 ## 3. Primitives — `post_voucher`
 
 A voucher is a list of legs; each leg is `{debit_account, credit_account, amount}` — exactly the shape `FinancialTransaction` already stores. A voucher becomes N rows, one per leg, tied by a new `voucher_group_id`, ordered by `leg_index`.
@@ -95,9 +97,11 @@ New module `backend/app/services/finance_posting.py`. Every function idempotent 
 
 One idempotent entry point, `ensure_period_postings(db, business_id, start, end)`, called from:
 
-- the top of `generate_workbook_export` (an export always contains the period's costs)
-- the top of `close_checks` (a month is never blocked on missing COGS)
+- the top of `generate_workbook_export`, when an explicit date window is given (an export must carry the period's freight and COGS, not just sales)
+- `close_month` — the POST that actually changes state
 - `POST /api/v1/ledger/post-period-costs?year=&month=` (accountant runs it early, or re-runs after fixing a `CostRule`)
+
+**Not** `close_checks` itself. It is reached from `GET /api/v1/accounting/periods/{year}/{month}`, so posting there would write to the ledger from a read request, and it is handed a deliberately broken session by `test_final_fixes.py` to prove it fails closed. `close_checks` therefore stays a pure read and gains an opt-in `post_costs: bool = False` flag that only `close_month` sets to `True`. The month preview therefore still reports missing COGS honestly — which is the correct preview behaviour, since the costs land at close or export.
 
 Config, matching the `india_post_enabled` style in `config.py`:
 
