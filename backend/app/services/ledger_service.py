@@ -219,6 +219,11 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
     rows with a non-NULL voucher_group_id are candidates for that lookup --
     migration 0020 backfills pnl_class but never invents a group id, so every
     legacy row is NULL-grouped and must never be adopted into a new voucher.
+
+    Scope of the balance check: it totals the accounts a leg *names*. A leg that
+    names neither account is a self-balancing pair (its accounts are filled in at
+    export time by to_double_entry), which is why record_event can keep posting
+    an amount with blank accounts as it always has.
     """
     from sqlalchemy.exc import IntegrityError
 
