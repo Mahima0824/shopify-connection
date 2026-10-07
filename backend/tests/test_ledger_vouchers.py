@@ -137,13 +137,14 @@ def test_ledger_posting_failure_allows_a_different_event_type():
 
 def test_ledger_posting_failure_is_indexed_for_unresolved_queries():
     """Month close scans unresolved rows per business; that must not full-scan."""
+    from sqlalchemy import UniqueConstraint
     from app.models.ledger_posting_failure import LedgerPostingFailure
     indexes = {ix.name: tuple(c.name for c in ix.columns)
                for ix in LedgerPostingFailure.__table__.indexes}
     assert ("business_id", "resolved_at") in indexes.values(), indexes
     unique = {tuple(c.name for c in uq.columns)
               for uq in LedgerPostingFailure.__table__.constraints
-              if uq.__class__.__name__ == "UniqueConstraint"}
+              if isinstance(uq, UniqueConstraint)}
     assert ("business_id", "source_type", "source_id", "event_type") in unique, unique
 
 
