@@ -17,6 +17,7 @@ from app.models.webhook_event import ShopifyWebhookEvent  # noqa: F401
 from app.models.refund import Refund  # noqa: F401
 from app.models.reconciliation import Reconciliation  # noqa: F401
 from app.models.tally import TallyMapping, ExportBatch, TallyExportRecord, TallyLedgerMapping  # noqa: F401
+from app.models.ledger_posting_failure import LedgerPostingFailure  # noqa: F401
 from app.models.shipment import Shipment, ShipmentEvent, CarrierConnection  # noqa: F401
 from app.models.shipment_event import ShipsagarWebhookFailure, ShipsagarRetryJob  # noqa: F401
 from app.models.sla import SLARule, ShipmentCase, ShipmentFinancial  # noqa: F401

@@ -32,6 +32,8 @@ class ShipmentCase(Base):
     last_followup_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=True)
     next_followup_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Wave A: carrier claims are posted to the ledger by hand from this amount.
+    claim_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=True)
