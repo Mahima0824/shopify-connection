@@ -125,12 +125,31 @@ def test_cancellation_marker_carries_no_amount():
     assert rows[0].pnl_class == "NONE"
 
 
+def test_refund_credit_note_legs_sum_to_the_refund_exactly():
+    """The taxable leg is derived from the tax legs, and post_voucher rounds each
+    leg on its own. An unrounded split therefore left the credit note a paisa
+    short of the refund on any amount that is not a clean fraction of the order.
+    """
+    from decimal import Decimal
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    for amount in ("1180.00", "590.00", "100.00", "333.33", "1.00", "777.77"):
+        db, b, o = _env()
+        r = _refund(db, b, o, amount)
+        ls.record_refund_from_refund(db, b.id, r, order=o)
+        db.commit()
+        legs = db.query(FinancialTransaction).filter_by(
+            refund_id=r.id, transaction_type="REFUND").all()
+        total = sum((l.amount for l in legs), Decimal("0"))
+        assert total == r.amount, f"{amount}: legs {[str(l.amount) for l in legs]} sum {total}"
+
+
 def test_refund_legs_do_not_collide_on_one_voucher_number():
     """One refund writes several vouchers, so they must not share a
     reference_number: tally_service derives voucher_number from it, and a repeat
     blocks the whole export with VOUCHER_NOT_UNIQUE."""
-    from app.services import ledger_service as ls
     from app.services import tally_service as ts
+    from app.services import ledger_service as ls
     db, b, o = _env()
     ls.record_sale_from_order(db, b.id, o)
     r = _refund(db, b, o, "1180.00")

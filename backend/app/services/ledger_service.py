@@ -479,14 +479,17 @@ def refund_tax_split(db: Session, order, refund_amount) -> tuple:
         items = db.query(OrderItem).filter_by(order_id=order.id).all()
     except Exception:
         items = []
-    c = sum((_d(i.cgst_amount) for i in items), _Dec("0.00"))
-    s = sum((_d(i.sgst_amount) for i in items), _Dec("0.00"))
-    i = sum((_d(i.igst_amount) for i in items), _Dec("0.00"))
+    c = sum((_d(i.cgst_amount) for i in items), _Dec("0.00")) * ratio
+    s = sum((_d(i.sgst_amount) for i in items), _Dec("0.00")) * ratio
+    i = sum((_d(i.igst_amount) for i in items), _Dec("0.00")) * ratio
     if c + s + i <= 0:  # items carry no split tax; derive from the order tax
         tax = _d(getattr(order, "tax_amount", 0) or 0) * ratio
         half = (tax / 2).quantize(_Q, rounding=ROUND_HALF_UP)
         return half, tax - half, _Dec("0.00")
-    return c * ratio, s * ratio, i * ratio
+    # Quantize HERE, not at post time: the caller derives the taxable leg from
+    # these figures and post_voucher rounds each leg on its own, so returning
+    # unrounded values made a refund's legs miss the refund by a paisa.
+    return (_d(c), _d(s), _d(i))
 
 
 def record_refund_from_refund(db: Session, business_id: str, refund, order=None) -> list:
