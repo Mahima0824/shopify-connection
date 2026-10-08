@@ -6,7 +6,7 @@ so a caller never has to re-check it.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -210,6 +210,22 @@ _FLAT_COSTS = (
 
 _COGS_RULE = "COGS_DEFAULT"
 
+# Per-record detail is capped: a 500-order month is ~1500 cost records, and an
+# unbounded list in an API response is a liability. The cap never hides anything,
+# because records_total, records_truncated and outcome_counts are computed over
+# every record and reported whether the list was cut or not.
+_MAX_RECORDS = 200
+
+# The consequence of pricing per record under a per-record voucher key, said to
+# the operator rather than only in a comment.
+_REPRICING_NOTE = (
+    "Each record is priced at its own date, so a rate change inside this period gives "
+    "records on either side of it different figures. Already-posted records are NOT "
+    "repriced: every voucher is keyed per record, so re-running after a rate change "
+    "is a no-op for them. To apply a change inside an open period, post the remainder "
+    "of the period, or post the difference by hand as an ADJUSTMENT. See rate_changes "
+    "for any rate version that began inside this period.")
+
 # The two halves of _FLAT_COSTS, named for what the rate is charged per and with the
 # per-record marker dropped, so the posting loops unpack five fields and never
 # re-filter the table. Split once here rather than per record.
@@ -300,6 +316,20 @@ def _isolated(db: Session, work, *, dry_run: bool):
     SAVEPOINT is released, so work that succeeded before a later step failed keeps
     its posting -- a raised COD collection is correct on its own even if the
     remittance it was raised for then turns out not to post.
+
+    COST, measured and accepted rather than restructured: this nests one level
+    inside post_voucher's own SAVEPOINT, so each record that reaches post_voucher
+    costs two SAVEPOINT statements plus one RELEASE or ROLLBACK -- three statements
+    per record, on top of the writes. That is roughly 4500 extra statements for a
+    1500-record period on a dry run, which is negligible against SQLite in-process
+    but worth re-measuring on Postgres before a very large backfill. The nesting is
+    not incidental: the outer SAVEPOINT is what makes a dry run write nothing, and
+    what keeps a failed record from leaving a partial write behind. Nothing here
+    nests a savepoint inside another savepoint of its own -- each of these is the
+    OUTERMOST transaction of its record -- and work that is a pure read does not go
+    through this at all unless its failure has to be reported rather than raised:
+    the rule book costs one SAVEPOINT for the whole period, and the per-record
+    voucher-key lookup is a dict access on rows already fetched.
     """
     savepoint = db.begin_nested()
     result, exc = _attempt(work)
@@ -360,6 +390,78 @@ def _debited(groups: dict, key: str, account: str) -> Decimal | None:
     return sum((a for dr, _cr, a in legs if dr == account), Decimal("0.00"))
 
 
+def _load_rate_book(db: Session, business_id: str, product_ids):
+    """The cost rows this period prices from: every CostRule for the business, and
+    the ProductCostHistory of the products its orders actually contain.
+
+    Two queries for the whole period, because pricing per record must not become
+    querying per record.
+    """
+    from app.models.cost import CostRule, ProductCostHistory
+    rules = db.query(CostRule).filter_by(business_id=business_id).all()
+    history = []
+    if product_ids:
+        history = db.query(ProductCostHistory).filter(
+            ProductCostHistory.business_id == business_id,
+            ProductCostHistory.product_id.in_(sorted(product_ids))).all()
+    return rules, history
+
+
+class _RateBook:
+    """Cost rules and product cost history, resolved AS OF each record's own date.
+
+    A period must not be priced at one instant. A rate effective 2026-09-15 has no
+    business being charged against a 2026-09-01 order, so every record resolves its
+    own `at`: an order's costs at its order_date, a shipment's freight at its
+    shipped_at. That is one price resolution per record instead of one per period,
+    so the rows are loaded once and selected locally -- two queries, not one per
+    record per rule.
+
+    Selection goes through cost_service._pick rather than a second copy of it:
+    get_cost's as-of rule is one definition, and a reimplementation here would
+    drift from it.
+    """
+    def __init__(self, rules, history):
+        self.rules = list(rules)
+        self.history = list(history)
+        self._rules: dict[str, list] = {}
+        for r in self.rules:
+            self._rules.setdefault(r.key, []).append(r)
+        self._history: dict[str, list] = {}
+        for h in self.history:
+            self._history.setdefault(h.product_id, []).append(h)
+
+    def at(self, key: str, when, product_id: str | None = None):
+        """(amount, source) for this key/product as of `when`, cost_service's rule."""
+        from app.services import cost_service
+        at = _ts(when)
+        if product_id:
+            best = cost_service._pick(self._history.get(product_id, []), at)
+            if best is not None:
+                return float(best.cost_price or 0), best.source
+        best = cost_service._pick(self._rules.get(key, []), at)
+        if best is not None:
+            return float(best.amount or 0), best.source
+        return 0.0, "DEFAULT"
+
+
+def _rate_changes(book: _RateBook, start, end) -> list[dict]:
+    """Cost rows whose own version began inside the period.
+
+    Reported so an operator can see that a period was priced across a rate change
+    rather than at one rate, and therefore why two records in it carry different
+    figures -- and that what was already posted keeps its old figure.
+    """
+    out = [{"key": r.key, "effective_from": _ts(r.effective_from).isoformat()}
+           for r in book.rules
+           if r.effective_from is not None and start <= _ts(r.effective_from) < end]
+    out += [{"key": f"{_COGS_RULE}:{h.product_id}",
+             "effective_from": _ts(h.effective_from).isoformat()}
+            for h in book.history
+            if h.effective_from is not None and start <= _ts(h.effective_from) < end]
+    return sorted(out, key=lambda r: (r["effective_from"], r["key"]))
+
+
 def _cod_cleared(sf) -> Decimal:
     """The gross the carrier settled: net plus fees plus other deductions."""
     return _d(sf.net_settlement) + _d(sf.fee_amount) + _d(sf.other_deduction)
@@ -394,7 +496,7 @@ def _one_cost_record(db: Session, business_id: str, legs_fn, *, vtype: str, key:
 
     `legs_fn` returns the legs, or None when nothing is due for this record --
     which it signals as `nothing_due` rather than this function inventing a second
-    vocabulary. Everything it raises is contained here, because a get_cost or
+    vocabulary. Everything it raises is contained here, because a pricing or
     database error on one record must cost that record its posting and not the
     whole period's.
     """
@@ -423,16 +525,22 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
     ProductCostHistory where available and CostRule otherwise, so the source of
     each number stays traceable and monthly_report's ESTIMATED label stays honest.
 
-    Every voucher is keyed `TYPE:{record id}`, so this is idempotent per record:
-    a repeat run reports the record as already_posted rather than appending a
-    second voucher. Each leg names both of its accounts -- a leg with one side
-    empty contributes 0 to that side and balances trivially, so a passing balance
-    check would not prove the accounts are right.
+    EACH RECORD IS PRICED AT ITS OWN DATE. An order's COGS, packaging and gateway
+    fee resolve at its order_date; a shipment's freight resolves at its shipped_at,
+    falling back to its order's date. Pricing the whole period at one instant would
+    charge a 2026-09-01 order at a rate that only became effective on 2026-09-15,
+    which is not a rate that applied when the order was placed. The rule rows are
+    loaded once into a _RateBook, so per-record pricing costs two queries, not one
+    per record.
 
-    Returns the four counters the brief's interface fixes, plus `records`: one
-    entry per record considered, saying which record it was and why it did or did
-    not post. The counters alone cannot separate "the period is fully posted"
-    from "120 orders have no cost data", and month-close needs to tell those apart.
+    KNOWN CONSEQUENCE, accepted and reported rather than worked around: every
+    voucher is keyed per record, so re-running a period after a rate change does
+    NOT reprice what is already posted -- the key is spent and the re-post is an
+    idempotent replay. A rate that changes mid-period therefore applies only to
+    records dated on or after it that were not already posted. To capture a change
+    inside an open period, post the remainder of the period, or post the difference
+    by hand as an ADJUSTMENT. `rate_changes` and `repricing_note` in the returned
+    payload say so to the operator.
 
     Every record is individually isolated, so no single record can abort its
     siblings, and nothing raises out of here for a record-level problem. Failures
@@ -440,40 +548,46 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
     because each record's SAVEPOINT is rolled back, not because any branch is
     skipped -- and not by rolling the session back, which would discard the
     caller's own uncommitted work.
+
+    Returns the four counters the brief's interface fixes, plus per-record detail.
+    `records` is capped at _MAX_RECORDS entries and says so: `records_total` is the
+    true number considered, `records_truncated` says the list was cut, and
+    `outcome_counts` breaks every record down by outcome regardless of the cap, so
+    a truncated list never hides "120 orders had no cost data".
     """
     from app.models.order import Order, OrderItem
     from app.models.shipment import Shipment
-    from app.services.cost_service import get_cost
 
     bucket = _blank_costs()
     records: list[dict] = []
+    outcome_counts: dict[str, int] = {}
     start, end = _ts(start), _ts(end)
     orders = db.query(Order).filter_by(business_id=business_id).filter(
         Order.order_date >= start, Order.order_date < end).all()
     by_order = {o.id: o for o in orders}
     ships = db.query(Shipment).filter(
         Shipment.order_id.in_(list(by_order))).all() if orders else []
-
-    # The cost rule in force at the END of the period. A rate changed mid-period is
-    # therefore applied from the next run rather than being backdated into this one.
-    anchor = end - timedelta(microseconds=1)
-    rates: dict[str, Decimal] = {}
-    rule_errors: dict[str, str] = {}
-    for rule in (_COGS_RULE, *(e[2] for e in _FLAT_COSTS)):
-        # A failed rule lookup is recorded, not turned into a silent zero rate that
-        # would then read as "no cost configured" for every order in the period.
-        amount, exc = _isolated(
-            db, lambda rule=rule: get_cost(db, business_id, rule, anchor)[0],
-            dry_run=True)
-        if exc is not None:
-            rates[rule] = Decimal("0.00")
-            rule_errors[rule] = _why(exc)
-        else:
-            rates[rule] = _d(amount)
     items_by_order: dict[str, list] = {}
     for it in db.query(OrderItem).filter(
             OrderItem.order_id.in_(list(by_order))).all():
         items_by_order.setdefault(it.order_id, []).append(it)
+
+    # Two queries for the whole period. If they fail, NO record can be priced, so
+    # every record is reported as an error naming the failure rather than as "no
+    # cost configured" -- the difference between "we have no data" and "we could
+    # not read the data".
+    book, book_error = None, ""
+    rows, exc = _isolated(
+        db, lambda: _load_rate_book(
+            db, business_id,
+            {it.product_id for o in orders for it in items_by_order.get(o.id, [])
+             if it.product_id}),
+        dry_run=True)
+    if exc is not None:
+        book_error = _why(exc)
+    else:
+        book = _RateBook(*rows)
+    rate_changes = _rate_changes(book, start, end) if book is not None else []
 
     groups = _posted_groups(db, business_id, [
         *(f"{e[1]}:{o.id}" for o in orders for e in _PER_ORDER),
@@ -482,42 +596,44 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
     ])
 
     def _record(report_key, outcome, *, order=None, shipment_id=None, key=None,
-                reason="") -> None:
+                priced_at=None, reason="") -> None:
         _slot(bucket, report_key)[_COUNTER_FOR.get(outcome, "skipped")] += 1
-        records.append({
-            "cost_type": report_key,
-            "order_id": getattr(order, "id", None),
-            "shipment_id": shipment_id,
-            "voucher_key": key,
-            "outcome": outcome,
-            "reason": reason,
-        })
+        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
+        if len(records) < _MAX_RECORDS:
+            records.append({
+                "cost_type": report_key,
+                "order_id": getattr(order, "id", None),
+                "shipment_id": shipment_id,
+                "voucher_key": key,
+                "outcome": outcome,
+                # The date this record was priced at, so two orders in one period
+                # carrying different figures is legible rather than puzzling.
+                "priced_at": _ts(priced_at).isoformat() if priced_at else None,
+                "reason": reason,
+            })
 
-    def _run(report_key, vtype, rule, key, order, legs_fn, *, shipment_id=None,
-             reference=None, nothing_due) -> None:
-        # A rule that could not be read is a failure of THIS record, not a statement
-        # that no cost is configured -- so it is reported as an error rather than
-        # folded into the "no rate in force" case for every order in the period.
-        if rule in rule_errors:
+    def _run(report_key, vtype, key, order, priced_at, legs_fn, *,
+             shipment_id=None, reference=None, nothing_due) -> None:
+        if book_error:
             _record(report_key, _OUT_ERROR, order=order, shipment_id=shipment_id,
-                    key=key, reason=rule_errors[rule])
+                    key=key, priced_at=priced_at, reason=book_error)
             return
         if _on_file(groups, key):
             _record(report_key, _OUT_ALREADY, order=order, shipment_id=shipment_id,
-                    key=key, reason="voucher already on file")
+                    key=key, priced_at=priced_at, reason="voucher already on file")
             return
         outcome, reason = _one_cost_record(
             db, business_id, legs_fn, vtype=vtype, key=key, order=order,
             reference=reference, dry_run=dry_run, nothing_due=nothing_due)
-        _record(report_key, outcome, order=order, shipment_id=shipment_id,
-                key=key, reason=reason)
+        _record(report_key, outcome, order=order, shipment_id=shipment_id, key=key,
+                priced_at=priced_at, reason=reason)
 
     def _cogs_legs(o):
-        """COGS for one order from its priced lines, or None when none is costed."""
+        """COGS for one order, priced at THAT order's date, from its priced lines."""
+        at = o.order_date
         total = Decimal("0.00")
         for it in items_by_order.get(o.id, []):
-            unit, _src = get_cost(db, business_id, _COGS_RULE, anchor,
-                                  product_id=it.product_id)
+            unit, _src = book.at(_COGS_RULE, at, product_id=it.product_id)
             total += _d(unit) * int(it.quantity or 0)  # Decimal throughout, never the float
         total = _d(total)
         if total <= 0:
@@ -525,38 +641,51 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
         return [{"debit": ls.ACC_COGS, "credit": ls.ACC_INVENTORY,
                  "amount": total, "pnl_class": "COGS"}]
 
-    def _flat_legs(rule, debit, credit):
-        """The flat-rate leg, or None when no rule is in force for this period."""
-        if rates[rule] <= 0:
+    def _flat_legs(rule, debit, credit, when):
+        """The flat-rate leg priced at `when`, or None when no rate is in force."""
+        amount = _d(book.at(rule, when)[0])
+        if amount <= 0:
             return None
-        return [{"debit": debit, "credit": credit, "amount": rates[rule],
+        return [{"debit": debit, "credit": credit, "amount": amount,
                  "pnl_class": "EXPENSE"}]
 
-    # COGS: priced per line, so it is not the flat rate. The default argument binds
-    # `o` now, because legs_fn is called later, inside the isolation.
+    # COGS: priced per line, so it is not the flat rate. The default arguments bind
+    # `o` and `at` now, because legs_fn is called later, inside the isolation.
     for o in orders:
-        _run("cogs", "COGS", _COGS_RULE, f"COGS:{o.id}", o,
+        _run("cogs", "COGS", f"COGS:{o.id}", o, o.order_date,
              lambda o=o: _cogs_legs(o),
              nothing_due=(_OUT_NO_COSTED_LINE,
                           "no line on this order has a cost in force"))
 
-    # Packaging and gateway fee: a flat rate each, charged per order.
+    # Packaging and gateway fee: a flat rate each, charged per order at the order's date.
     for o in orders:
         for report_key, vtype, rule, debit, credit in _PER_ORDER:
-            _run(report_key, vtype, rule, f"{vtype}:{o.id}", o,
-                 lambda rule=rule, debit=debit, credit=credit: _flat_legs(rule, debit, credit),
-                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this period"))
+            _run(report_key, vtype, f"{vtype}:{o.id}", o, o.order_date,
+                 lambda rule=rule, debit=debit, credit=credit, at=o.order_date:
+                     _flat_legs(rule, debit, credit, at),
+                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this order"))
 
-    # Freight is per shipment, dated on its order so it lands in the same period.
+    # Freight is per shipment: priced at its OWN shipped_at, falling back to the
+    # order's date for a shipment that has not shipped yet. Dated on the order, so
+    # it lands in the period the order does.
     for s in ships:
+        o = by_order[s.order_id]
+        at = s.shipped_at or o.order_date
         for report_key, vtype, rule, debit, credit in _PER_SHIPMENT:
-            _run(report_key, vtype, rule, f"{vtype}:{s.id}", by_order[s.order_id],
-                 lambda rule=rule, debit=debit, credit=credit: _flat_legs(rule, debit, credit),
+            _run(report_key, vtype, f"{vtype}:{s.id}", o, at,
+                 lambda rule=rule, debit=debit, credit=credit, at=at:
+                     _flat_legs(rule, debit, credit, at),
                  shipment_id=s.id, reference=s.awb_number,
-                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this period"))
+                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this shipment"))
 
-    return {**bucket, "records": records}
-
+    total = sum(outcome_counts.values())
+    return {**bucket,
+            "records": records,
+            "records_total": total,
+            "records_truncated": total > len(records),
+            "outcome_counts": outcome_counts,
+            "rate_changes": rate_changes,
+            "repricing_note": _REPRICING_NOTE}
 
 def _backfill_collection(db: Session, business_id: str, sf, order, shipment, original, *,
                          dry_run: bool) -> tuple[str, str, tuple | None]:

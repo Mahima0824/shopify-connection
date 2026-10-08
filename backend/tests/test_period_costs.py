@@ -514,31 +514,31 @@ def test_one_cost_record_failure_does_not_abort_the_period(monkeypatch):
         transaction_type="PAYMENT_GATEWAY_FEE").count() == 2, _rows(db)
 
 
-def test_a_cost_rate_lookup_failure_is_reported_not_read_as_no_cost_data():
-    """A failed rule lookup must not become a silent zero rate, which would then read
-    as "no cost configured" for every order in the period."""
-    from app.services import cost_service
+def test_a_cost_rate_read_failure_is_reported_not_read_as_no_cost_data():
+    """If the cost rows cannot be read, NO record can be priced. That is a failure,
+    and it must be reported as one -- not as "no cost configured" for every order in
+    the period, which is what month-close's missing_cogs check would read as."""
+    from app.services import finance_posting as fp
     from app.services.finance_posting import post_period_costs
     db, b = _env()
+    original = fp._load_rate_book
 
-    def boom(db_, business_id, key, at, product_id=None):
-        if key == "SHIPPING":
-            raise RuntimeError("simulated rule read failure")
-        return 200.0, "MANUAL"
+    def boom(*a, **kw):
+        raise RuntimeError("simulated rule read failure")
 
-    original = cost_service.get_cost
-    cost_service.get_cost = boom
+    fp._load_rate_book = boom
     try:
         out = post_period_costs(db, b.id, START, END)
     finally:
-        cost_service.get_cost = original
-    freight = [r for r in out["records"] if r["cost_type"] == "shipping"]
-    assert freight and freight[0]["outcome"] == "error", freight
-    assert "rule read failure" in freight[0]["reason"], freight
-    assert out["shipping"]["posted"] == 0 and out["shipping"]["skipped"] == 1, out
-    # The other three writers are untouched by the one bad rule.
-    assert out["cogs"]["posted"] == 1, out
-    assert out["packaging"]["posted"] == 1 and out["gateway_fee"]["posted"] == 1, out
+        fp._load_rate_book = original
+    assert out["records_total"] == 4, out
+    assert {r["outcome"] for r in out["records"]} == {"error"}, out["records"]
+    assert all("rule read failure" in r["reason"] for r in out["records"]), out["records"]
+    assert out["outcome_counts"] == {"error": 4}, out
+    for cost_type in ("cogs", "shipping", "packaging", "gateway_fee"):
+        assert out[cost_type]["posted"] == 0 and out[cost_type]["skipped"] == 1, out
+    from app.models.financial_transaction import FinancialTransaction
+    assert db.query(FinancialTransaction).count() == 0
 
 
 def test_missing_collection_on_an_undelivered_shipment_is_nothing_due_not_an_error():
@@ -783,6 +783,242 @@ def test_a_voucher_key_longer_than_the_column_is_matched_the_same_way_on_both_si
     assert key not in groups, "the fixture must actually be oversized"
     assert fp._on_file(groups, key) is True, "an oversized key must still be found"
     assert fp._credited(groups, key, "Payment Gateway") == Decimal("20.00")
+
+
+def _versioned_cost(db, b, key, old, new, effective_from, start="2026-01-01"):
+    """Two versions of one rule, written the way cost_service.set_cost versions them:
+    the open rule is closed at the new effective_from and a new one opened there."""
+    from app.services.cost_service import set_cost
+    set_cost(db, b.id, key, float(old), "MANUAL",
+             datetime.fromisoformat(start).replace(tzinfo=timezone.utc))
+    db.commit()
+    set_cost(db, b.id, key, float(new), "MANUAL", effective_from)
+    db.commit()
+
+
+def _shipped(db, b, o, *, shipped_at):
+    from app.models.parcel import Parcel
+    from app.models.shipment import Shipment
+    p = db.query(Parcel).filter_by(order_id=o.id).first()
+    s = Shipment(business_id=b.id, order_id=o.id, parcel_id=p.id, carrier_code="DTDC",
+                 awb_number=f"AWB-{o.internal_order_number}", tracking_status="SHIPPED",
+                 shipped_at=shipped_at)
+    db.add(s); db.commit(); db.refresh(s)
+    return s
+
+
+# --- Important 3: each record is priced at its OWN date (human-ruled) ----------
+
+def test_an_order_before_a_rate_change_prices_at_the_old_rate():
+    """Pricing a whole period at one instant would charge this 2026-09-01 order at a
+    rate that only became effective on 2026-09-15 -- a rate that did not apply when
+    the order was placed."""
+    from app.models.order import Order
+    from app.services.finance_posting import post_period_costs
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    early = _order(db, b, c, name="EARLY",
+                   date=datetime(2026, 9, 1, tzinfo=timezone.utc))
+    late = _order(db, b, c, name="LATE",
+                  date=datetime(2026, 9, 20, tzinfo=timezone.utc))
+    _versioned_cost(db, b, "PACKAGING", "10.00", "30.00",
+                    datetime(2026, 9, 15, tzinfo=timezone.utc))
+    out = post_period_costs(db, b.id, START, END)
+    db.commit()
+    from app.models.financial_transaction import FinancialTransaction
+    got = {row.order_id: str(row.amount) for row in db.query(
+        FinancialTransaction).filter_by(transaction_type="PACKAGING_EXPENSE").all()}
+    assert got == {early.id: "10.00", late.id: "30.00"}, got
+    # The date each was priced at is reported, so two figures in one period are
+    # legible rather than puzzling.
+    priced = {r["order_id"]: r["priced_at"] for r in out["records"]
+              if r["cost_type"] == "packaging"}
+    assert priced[early.id] == "2026-09-01T00:00:00+00:00", priced
+    assert priced[late.id] == "2026-09-20T00:00:00+00:00", priced
+    assert out["rate_changes"] == [
+        {"key": "PACKAGING", "effective_from": "2026-09-15T00:00:00+00:00"}], out
+    assert "ADJUSTMENT" in out["repricing_note"], out["repricing_note"]
+
+
+def test_a_rate_change_mid_period_does_not_reprice_an_already_posted_order():
+    """The accepted consequence, made observable: every voucher is keyed per record,
+    so a re-run after a rate change is a no-op for what is already on file. The new
+    rate applies only to records that were not already posted."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.finance_posting import ensure_period_postings
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    o = _order(db, b, c, name="A", date=datetime(2026, 9, 5, tzinfo=timezone.utc))
+    _versioned_cost(db, b, "PACKAGING", "10.00", "10.00",
+                    datetime(2026, 1, 1, tzinfo=timezone.utc))
+    first = ensure_period_postings(db, b.id, START, END)
+    db.commit()
+    assert first["costs"]["packaging"]["posted"] == 1, first
+    # The business raises the packaging rate, effective from the start of the period,
+    # so every order in September now "should" cost 30.00.
+    _versioned_cost(db, b, "PACKAGING", "10.00", "30.00",
+                    datetime(2026, 9, 1, tzinfo=timezone.utc))
+    second = ensure_period_postings(db, b.id, START, END)
+    db.commit()
+    assert second["costs"]["packaging"]["posted"] == 0, second
+    assert second["costs"]["packaging"]["skipped"] == 1, second
+    packaging = db.query(FinancialTransaction).filter_by(
+        transaction_type="PACKAGING_EXPENSE").all()
+    assert len(packaging) == 1 and str(packaging[0].amount) == "10.00", packaging
+    # The operator is told there was a change in the period and that it was not
+    # applied retroactively.
+    assert second["costs"]["rate_changes"] == [
+        {"key": "PACKAGING", "effective_from": "2026-09-01T00:00:00+00:00"}], second
+    assert "NOT" in second["costs"]["repricing_note"] and "ADJUSTMENT" in \
+        second["costs"]["repricing_note"], second["costs"]["repricing_note"]
+
+
+def test_freight_prices_at_the_shipments_own_date_not_the_order_date():
+    """A parcel ordered on 2026-09-05 and dispatched on 2026-09-20 travelled at the
+    rate in force on the day it travelled. Pricing it at the order date would charge
+    the older rate, and at the period end the newest rate -- neither is what the
+    courier charged."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.finance_posting import post_period_costs
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    held = _order(db, b, c, name="SE",
+                  date=datetime(2026, 9, 5, tzinfo=timezone.utc))
+    late = _order(db, b, c, name="SL",
+                  date=datetime(2026, 9, 20, tzinfo=timezone.utc))
+    # The first parcel sat for a fortnight: ordered before the change, sent after.
+    se = _shipped(db, b, held, shipped_at=datetime(2026, 9, 20, tzinfo=timezone.utc))
+    sl = _shipped(db, b, late, shipped_at=datetime(2026, 9, 20, tzinfo=timezone.utc))
+    _versioned_cost(db, b, "SHIPPING", "40.00", "90.00",
+                    datetime(2026, 9, 15, tzinfo=timezone.utc))
+    out = post_period_costs(db, b.id, START, END)
+    db.commit()
+    got = {r.order_id: str(r.amount) for r in db.query(FinancialTransaction).filter_by(
+        transaction_type="SHIPPING_EXPENSE").all()}
+    assert got == {held.id: "90.00", late.id: "90.00"}, got
+    priced = {r["shipment_id"]: r["priced_at"] for r in out["records"]
+              if r["cost_type"] == "shipping"}
+    assert priced[se.id] == "2026-09-20T00:00:00+00:00", priced
+    assert priced[sl.id] == "2026-09-20T00:00:00+00:00", priced
+    # The order's own costs still price at its own date, so a held order carries a
+    # pre-change packaging rate and a post-change freight rate. That is the point:
+    # each record is priced when it happened, not when the period ran.
+    pack = {r["order_id"]: r["priced_at"] for r in out["records"]
+            if r["cost_type"] == "packaging"}
+    assert pack[held.id] == "2026-09-05T00:00:00+00:00", pack
+
+
+def test_freight_falls_back_to_the_order_date_when_the_shipment_has_not_shipped():
+    from app.services.finance_posting import post_period_costs
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    o = _order(db, b, c, name="A", date=datetime(2026, 9, 5, tzinfo=timezone.utc))
+    _ship(db, b, o, status="IN_TRANSIT")  # shipped_at is None
+    _versioned_cost(db, b, "SHIPPING", "40.00", "90.00",
+                    datetime(2026, 9, 15, tzinfo=timezone.utc))
+    out = post_period_costs(db, b.id, START, END)
+    db.commit()
+    freight = [r for r in out["records"] if r["cost_type"] == "shipping"]
+    assert len(freight) == 1, freight
+    assert freight[0]["priced_at"] == "2026-09-05T00:00:00+00:00", freight
+    assert out["shipping"]["posted"] == 1, out
+
+
+def test_per_record_pricing_does_not_query_per_record(monkeypatch):
+    """Pricing per record must not become querying per record: the rule rows are
+    loaded once and selected locally, so the statement count does not grow with the
+    number of orders."""
+    from app.services import finance_posting as fp
+    from app.services.finance_posting import post_period_costs
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    for i in range(6):
+        o = _order(db, b, c, name=f"P{i}",
+                   date=datetime(2026, 9, 5 + i, tzinfo=timezone.utc))
+        _ship(db, b, o, status="IN_TRANSIT", awb=f"AWB-P{i}")
+    _cost_rules(db, b)
+
+    seen = []
+    real = fp._RateBook.at
+
+    def counting_at(self, *a, **kw):
+        seen.append(a)
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(fp._RateBook, "at", counting_at)
+    queries = []
+    from sqlalchemy import event
+    event.listen(db.get_bind(), "before_cursor_execute",
+                 lambda c, cur, st, p, ctx, em: queries.append(st))
+    post_period_costs(db, b.id, START, END)
+    assert len(seen) == 6 * 4, len(seen)  # per record, as the ruling requires
+    # One read per rule table for the whole period -- and none of these orders carry
+    # a product_id, so ProductCostHistory is not read at all.
+    rule_queries = [q for q in queries if "cost_rules" in q or "product_cost_history" in q]
+    assert len(rule_queries) == 1, rule_queries
+
+    # And it does not grow with the number of orders.
+    _eng2, mk2 = _db()
+    db2 = mk2()
+    b2, c2 = _biz(db2)
+    for i in range(12):
+        o = _order(db2, b2, c2, name=f"Q{i}",
+                   date=datetime(2026, 9, 5 + (i % 20), tzinfo=timezone.utc))
+        _ship(db2, b2, o, status="IN_TRANSIT", awb=f"AWB-Q{i}")
+    _cost_rules(db2, b2)
+    queries2 = []
+    event.listen(db2.get_bind(), "before_cursor_execute",
+                 lambda c, cur, st, p, ctx, em: queries2.append(st))
+    post_period_costs(db2, b2.id, START, END)
+    rule_queries2 = [q for q in queries2 if "cost_rules" in q or "product_cost_history" in q]
+    assert len(rule_queries2) == len(rule_queries), (len(rule_queries), len(rule_queries2))
+
+
+# --- Important 4 follow-up: records are capped, and say so --------------------
+
+def test_records_are_capped_and_the_truncation_is_reported(monkeypatch):
+    """A truncated list that does not say it was truncated is worse than a small
+    complete one, so the total and the per-outcome breakdown are reported over
+    every record whether or not the list was cut."""
+    from app.services import finance_posting as fp
+    from app.services.finance_posting import post_period_costs
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    for i in range(6):
+        o = _order(db, b, c, name=f"R{i}",
+                   date=datetime(2026, 9, 5 + i, tzinfo=timezone.utc))
+        _ship(db, b, o, status="IN_TRANSIT", awb=f"AWB-R{i}")
+    _cost_rules(db, b)
+    monkeypatch.setattr(fp, "_MAX_RECORDS", 5)
+    out = post_period_costs(db, b.id, START, END)
+    db.commit()
+    assert out["records_total"] == 24, out
+    assert len(out["records"]) == 5, out
+    assert out["records_truncated"] is True, out
+    # The counts are complete even though the list is not.
+    assert sum(out["outcome_counts"].values()) == 24, out
+    assert out["outcome_counts"] == {"posted": 24}, out
+    assert out["cogs"]["posted"] == 6 and out["shipping"]["posted"] == 6, out
+    # Every listed entry is still a real record.
+    assert {r["cost_type"] for r in out["records"]} <= {"cogs", "shipping", "packaging",
+                                                       "gateway_fee"}, out
+
+
+def test_a_short_period_is_not_marked_truncated(monkeypatch):
+    from app.services import finance_posting as fp
+    from app.services.finance_posting import post_period_costs
+    db, b = _env()
+    monkeypatch.setattr(fp, "_MAX_RECORDS", 200)
+    out = post_period_costs(db, b.id, START, END)
+    assert out["records_total"] == 4 and len(out["records"]) == 4, out
+    assert out["records_truncated"] is False, out
+    assert sum(out["outcome_counts"].values()) == 4, out
 
 
 # --- Minors -------------------------------------------------------------------
