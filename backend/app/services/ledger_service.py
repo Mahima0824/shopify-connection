@@ -87,15 +87,15 @@ def cogs_for_item(quantity, cost_price) -> str:
 def to_double_entry(txn: dict) -> list[dict]:
     """Transform a ledger event into double-entry lines per #22.
 
-    LEGACY DISPLAY HELPER. It re-derives an entry from one event's amount and
-    assumes a single gross SALE, hardcoding a credit to "Output GST" -- a ledger
-    that does not exist in the chart (the real names are Output CGST / Output SGST
-    / Output IGST). It therefore does not describe a split voucher, where each leg
-    already names its own accounts.
+    LEGACY DISPLAY HELPER, exercised ONLY by tests: no application code calls it, and
+    it is kept solely so the existing readers of it keep passing. A leg stored in the
+    ledger *is* the double entry -- post_voucher writes real legs, order_timeline
+    reports them, and tally_service exports the stored accounts.
 
-    Nothing on the write or export path uses it: post_voucher writes real legs,
-    order_timeline reports the stored leg, and tally_service exports the stored
-    accounts. It remains only for its existing callers and tests.
+    What it does not describe is a split voucher, where each leg already names its own
+    accounts: it re-derives an entry from one event's amount, assumes a single gross
+    SALE, and hardcodes a credit to "Output GST" -- a ledger that does not exist in the
+    chart (the real names are Output CGST / Output SGST / Output IGST).
     """
     t = (txn.get("transaction_type") or "").upper()
     amt = _s(_d(txn.get("amount")))
@@ -120,30 +120,65 @@ def to_double_entry(txn: dict) -> list[dict]:
     return [{"debit": dr, "credit": cr, "amount": amt}]
 
 
+def pnl_class_of(row: dict) -> str:
+    """Per-leg P&L class (wave A §8).
+
+    The stored `pnl_class` wins, with one deliberate exception. The column defaults to
+    "NONE" -- itself a valid class -- so a row written before the class existed, or one
+    whose writer never set one, carries "NONE" on a SALE; read at face value that
+    reports the sale's revenue as zero and the DEFAULT_PNL_CLASS fallback never fires.
+    So a stored "NONE" on a type whose default is non-NONE means *unclassified*, and
+    the type default stands in.
+
+    A genuinely classless row stays NONE: PAYMENT, REFUND_PAYOUT, COD_COLLECTION and
+    CANCELLATION all default to NONE, as do the bank and receivable legs of a
+    COD_REMIT, so this never invents P&L for a balance-sheet movement. It is also the
+    path a plain dict with no `pnl_class` key at all takes, which is what the
+    pure-function callers and tests pass.
+    """
+    explicit = (row.get("pnl_class") or "").strip().upper()
+    fallback = DEFAULT_PNL_CLASS.get((row.get("transaction_type") or "").upper(), "NONE")
+    if explicit in PNL_CLASSES and (explicit != "NONE" or fallback == "NONE"):
+        return explicit
+    return fallback
+
+
 def revenue_summary(txns: list[dict]) -> dict:
-    """Revenue = Gross(SALE) - Discounts - Refunds - applicable cancellations (#23)."""
-    gross = tax = refunds = refund_tax = canc = canc_tax = disc = Decimal("0")
+    """Revenue = Gross(SALE) - Discounts - Refunds (#23, wave A §8).
+
+    Classification is per leg via pnl_class_of, so one voucher's legs are read
+    individually: a COD_REMIT's bank leg never registers as revenue while its fee leg
+    can be classed revenue if a writer says so. CANCELLATION is a void marker and
+    carries no amount, so it has no branch here at all.
+    """
+    gross = tax = refunds = refund_tax = disc = Decimal("0")
     for t in txns:
+        cls = pnl_class_of(t)
         typ = (t.get("transaction_type") or "").upper()
         a, x = _d(t.get("amount")), _d(t.get("tax_amount"))
-        if typ == "SALE":
+        if cls == "REVENUE":
             gross += a
             tax += x
-        elif typ == "REFUND":
+        elif cls == "REVERSAL" and a > 0:
+            # A credit note: revenue previously recognised, now given back.
             refunds += a
             refund_tax += x
-        elif typ == "CANCELLATION":
-            canc += a
-            canc_tax += x
-        elif typ == "ADJUSTMENT" and a < 0:
+        elif a < 0 and (cls == "REVERSAL" or typ == "ADJUSTMENT"):
+            # A correction carries the mirror-image (negative) amount, and REVERSAL is
+            # also a carrier claim's class, so the row alone cannot say which bucket it
+            # reverses. Net it as a discount, which is what a reversed SALE has always
+            # done, and never let a negative correction RAISE revenue: that would be a
+            # guess in the flattering direction.
             disc += -a
-    net_inc = gross - refunds - canc - disc
-    net_tax = tax - refund_tax - canc_tax
+    net_inc = gross - refunds - disc
+    net_tax = tax - refund_tax
     return {
         "gross_inclusive": _s(gross),
         "discounts": _s(disc),
         "refunds_inclusive": _s(refunds),
-        "cancellations_inclusive": _s(canc),
+        # Kept as a key so existing consumers do not break; always "0.00" now that a
+        # cancellation carries no amount. Wave C may remove it.
+        "cancellations_inclusive": "0.00",
         "net_inclusive": _s(net_inc),
         "gst": _s(net_tax),
         "gross_exclusive": _s(gross - tax),
@@ -153,11 +188,17 @@ def revenue_summary(txns: list[dict]) -> dict:
 
 def profit_summary(net_sales_exclusive, cogs="0", shipping="0", packaging="0",
                    gateway_fees="0", other="0", costs_complete=True,
-                   missing_cogs_count=0) -> dict:
-    """Net Sales - COGS = Gross; Gross - direct exp = Operating (#24, ESTIMATED until complete)."""
-    net, c, s, p, g, o = (_d(v) for v in (net_sales_exclusive, cogs, shipping, packaging, gateway_fees, other))
+                   missing_cogs_count=0, carrier_fees="0", cod_deductions="0") -> dict:
+    """Net Sales - COGS = Gross; Gross - direct exp = Operating (#24, ESTIMATED until complete).
+
+    `carrier_fees` and `cod_deductions` are appended after the existing parameters so
+    every pre-existing positional and keyword caller keeps working.
+    """
+    net, c, s, p, g, o, cf, cd = (_d(v) for v in (
+        net_sales_exclusive, cogs, shipping, packaging, gateway_fees, other,
+        carrier_fees, cod_deductions))
     gross_profit = net - c
-    operating = gross_profit - s - p - g - o
+    operating = gross_profit - s - p - g - o - cf - cd
     label = "OPERATING PROFIT" if costs_complete else "ESTIMATED OPERATING PROFIT"
     warning = "" if costs_complete else (
         f"Profit calculation incomplete: COGS missing for {int(missing_cogs_count)} products.")
@@ -165,6 +206,7 @@ def profit_summary(net_sales_exclusive, cogs="0", shipping="0", packaging="0",
     return {
         "net_sales_exclusive": _s(net), "cogs": _s(c), "gross_profit": _s(gross_profit),
         "shipping": _s(s), "packaging": _s(p), "gateway_fees": _s(g), "other": _s(o),
+        "carrier_fees": _s(cf), "cod_deductions": _s(cd),
         "operating_profit": _s(operating), "label": label, "warning": warning,
         "margin_pct": _s(margin),
     }
@@ -263,9 +305,10 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
       namespace overlap, not a race, and raises VoucherKeyConflict.
 
     Scope of the balance check: it totals the accounts a leg *names*. A leg that
-    names neither account is a self-balancing pair (its accounts are filled in at
-    export time by to_double_entry), which is why record_event can keep posting
-    an amount with blank accounts as it always has.
+    names neither account is a self-balancing pair, which is why record_event can keep
+    posting an amount with blank accounts as it always has. Such a row is stored with
+    blank accounts and reported blank by order_timeline and by the Tally export; it is
+    never given accounts after the fact.
     """
     from sqlalchemy.exc import IntegrityError
 
@@ -652,15 +695,63 @@ def period_summary(db: Session, business_id: str, start: datetime, end: datetime
         rows = rows.filter(FinancialTransaction.order_id.in_(oids))
     rows = rows.all()
     txns = [{"transaction_type": r.transaction_type, "amount": str(r.amount),
-             "tax_amount": str(r.tax_amount)} for r in rows]
+             "tax_amount": str(r.tax_amount), "pnl_class": r.pnl_class} for r in rows]
     rev = revenue_summary(txns)
 
-    def _sum(*types):
-        return _s(sum((_d(r.amount) for r in rows if r.transaction_type in types), Decimal("0")))
+    # Direct costs are read per leg, not per transaction_type (wave A §8). One
+    # consistent rule, applied in this order:
+    #
+    #   1. The CLASS decides whether a leg touches profit at all (COGS or EXPENSE).
+    #      Read through pnl_class_of, so a legacy row that carries the column default
+    #      still classifies by its type.
+    #   2. Carrier fees and COD deductions are separated by DEBIT ACCOUNT, because
+    #      they share the EXPENSE class with shipping, packaging and gateway fees and
+    #      no class can tell them apart. This is the one place keying on an account
+    #      name is correct, and it is exact because finance_posting posts those two
+    #      legs to the ACC_* names defined here.
+    #   3. The TYPE picks between the remaining named lines, and `other` is the
+    #      RESIDUAL of every other EXPENSE leg. A partition, not a wish list: a direct
+    #      cost is counted exactly once and none is silently dropped.
+    #
+    # Two classes are deliberately NOT charged as costs here:
+    #   TAX - DEFAULT_PNL_CLASS calls it EXPENSE, but GST is collected on behalf of
+    #     the government. The SALE voucher's CGST/SGST/IGST legs already carry it in
+    #     tax_amount, which revenue_summary nets out of net sales, and a standalone TAX
+    #     event is the payment against that liability. Charging it as a cost too takes
+    #     the same rupee out of profit twice. The sale side is authoritative.
+    #   REVERSAL - revenue_summary already nets reversals against revenue, so adding
+    #     them to the cost side would reverse the same row twice. The cost of an
+    #     expense reversal (a carrier claim) is therefore not yet netted off the cost
+    #     it reimburses; nothing writes one today.
+    lines: dict[str, Decimal] = {}
+    for r in rows:
+        cls = pnl_class_of({"transaction_type": r.transaction_type, "pnl_class": r.pnl_class})
+        if cls == "COGS":
+            line = "cogs"
+        elif cls != "EXPENSE" or r.transaction_type == "TAX":
+            continue
+        elif r.debit_account == ACC_CARRIER_FEE:
+            line = "carrier_fees"
+        elif r.debit_account == ACC_COD_DEDUCTION:
+            line = "cod_deductions"
+        elif r.transaction_type == "SHIPPING_EXPENSE":
+            line = "shipping"
+        elif r.transaction_type == "PACKAGING_EXPENSE":
+            line = "packaging"
+        elif r.transaction_type == "PAYMENT_GATEWAY_FEE":
+            line = "gateway_fees"
+        else:
+            line = "other"
+        lines[line] = lines.get(line, Decimal("0")) + _d(r.amount)
 
-    cogs_v, ship_v, pack_v, fee_v, other_v = (
-        _sum("COGS"), _sum("SHIPPING_EXPENSE"), _sum("PACKAGING_EXPENSE"),
-        _sum("PAYMENT_GATEWAY_FEE"), _sum("OTHER_EXPENSE"))
+    def _line(name: str) -> str:
+        return _s(lines.get(name, Decimal("0")))
+
+    cogs_v = _line("cogs")
+    ship_v, pack_v, fee_v, other_v = (
+        _line("shipping"), _line("packaging"), _line("gateway_fees"), _line("other"))
+    carrier_v, ded_v = _line("carrier_fees"), _line("cod_deductions")
+
     missing = 0
     try:  # incomplete-cost signal per #30: orders in scope without COGS events
         if order_ids is not None:
@@ -675,7 +766,8 @@ def period_summary(db: Session, business_id: str, start: datetime, end: datetime
     except Exception:
         pass
     profit = profit_summary(rev["net_exclusive"], cogs_v, ship_v, pack_v, fee_v, other_v,
-                            costs_complete=(missing == 0), missing_cogs_count=missing)
+                            costs_complete=(missing == 0), missing_cogs_count=missing,
+                            carrier_fees=carrier_v, cod_deductions=ded_v)
     return {
         "revenue": rev, "profit": profit,
         "cogs_total": cogs_v, "transaction_count": len(rows),

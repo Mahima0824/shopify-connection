@@ -514,3 +514,226 @@ def test_reverse_event_inherits_the_class_it_reverses():
     assert stored[rev_pay.id].pnl_class == "NONE"
     # the original is untouched: reversal is append-only
     assert stored[sale.id].pnl_class == "REVENUE"
+
+
+# --- Task 6: readers classify P&L per leg ---
+
+def test_pnl_class_of_falls_back_to_transaction_type():
+    from app.services.ledger_service import pnl_class_of
+    assert pnl_class_of({"transaction_type": "SALE"}) == "REVENUE"
+    assert pnl_class_of({"transaction_type": "PAYMENT"}) == "NONE"
+    assert pnl_class_of({"transaction_type": "COD_REMIT", "pnl_class": "EXPENSE"}) == "EXPENSE"
+    assert pnl_class_of({"transaction_type": "NOPE"}) == "NONE"
+
+
+def test_pnl_class_of_reads_a_stored_none_on_a_revenue_type_as_unclassified():
+    """The column defaults to "NONE", so a row written before the class existed
+    carries "NONE" on a SALE. Taking that at face value reports the sale's revenue as
+    zero, so a stored NONE on a type that implies P&L means "never classified" and
+    the type default stands in."""
+    from app.models.financial_transaction import DEFAULT_PNL_CLASS
+    from app.services.ledger_service import pnl_class_of
+    for typ in ("SALE", "REFUND", "COGS", "SHIPPING_EXPENSE", "PAYMENT_GATEWAY_FEE"):
+        assert pnl_class_of({"transaction_type": typ, "pnl_class": "NONE"}) == \
+            DEFAULT_PNL_CLASS[typ], typ
+    # and a stored class that does contradict the type still wins
+    assert pnl_class_of({"transaction_type": "OTHER_EXPENSE", "pnl_class": "REVENUE"}) == "REVENUE"
+    assert pnl_class_of({"transaction_type": "SALE", "pnl_class": "EXPENSE"}) == "EXPENSE"
+
+
+def test_pnl_class_of_keeps_none_for_types_that_never_touch_pnl():
+    """The fallback must not invent P&L for a balance-sheet movement: these types
+    default to NONE, so their stored NONE is the real answer, not a missing one."""
+    from app.services.ledger_service import pnl_class_of
+    for typ in ("PAYMENT", "REFUND_PAYOUT", "COD_COLLECTION", "CANCELLATION", "COD_REMIT"):
+        assert pnl_class_of({"transaction_type": typ, "pnl_class": "NONE"}) == "NONE", typ
+
+
+def test_revenue_summary_ignores_cancellation_amounts():
+    from app.services.ledger_service import revenue_summary
+    r = revenue_summary([
+        {"transaction_type": "SALE", "amount": "1180.00", "tax_amount": "180.00"},
+        {"transaction_type": "CANCELLATION", "amount": "1180.00", "tax_amount": "180.00"},
+    ])
+    assert r["gross_inclusive"] == "1180.00"
+    assert r["net_inclusive"] == "1180.00"
+    assert r["cancellations_inclusive"] == "0.00"
+
+
+def test_revenue_summary_uses_pnl_class_over_type():
+    from app.services.ledger_service import revenue_summary
+    # Both rows are COD_REMIT; only the fee leg may touch profit, and neither
+    # may touch revenue.
+    r = revenue_summary([
+        {"transaction_type": "SALE", "amount": "1000.00", "tax_amount": "0.00"},
+        {"transaction_type": "COD_REMIT", "amount": "900.00", "tax_amount": "0.00",
+         "pnl_class": "NONE"},
+    ])
+    assert r["gross_inclusive"] == "1000.00"
+    assert r["net_inclusive"] == "1000.00"
+    # the class decides, not the type: an expense row typed OTHER_EXPENSE but classed
+    # REVENUE is revenue, and a SALE classed EXPENSE is not.
+    r = revenue_summary([
+        {"transaction_type": "OTHER_EXPENSE", "amount": "50.00", "tax_amount": "0.00",
+         "pnl_class": "REVENUE"},
+        {"transaction_type": "SALE", "amount": "100.00", "tax_amount": "0.00",
+         "pnl_class": "EXPENSE"},
+    ])
+    assert r["gross_inclusive"] == "50.00"
+
+
+def test_revenue_summary_counts_a_sale_whose_stored_class_is_none():
+    """The regression the "NONE is unclassified" rule exists for: a legacy sale row
+    whose pnl_class is the column default must still be revenue, not zero."""
+    from app.services.ledger_service import revenue_summary
+    r = revenue_summary([{"transaction_type": "SALE", "amount": "1180.00",
+                          "tax_amount": "180.00", "pnl_class": "NONE"}])
+    assert r["gross_inclusive"] == "1180.00"
+    assert r["gst"] == "180.00"
+    assert r["net_exclusive"] == "1000.00"
+
+
+def test_period_summary_splits_carrier_fees_from_bank_leg():
+    from datetime import datetime, timezone
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    ls.record_event(db, b.id, "SALE", "1000.00", "0.00", transaction_date=dt, idempotency_key="S1")
+    ls.post_voucher(db, b.id, "COD_REMIT", [
+        {"debit": "Cash / Bank", "credit": "", "amount": "900.00", "pnl_class": "NONE"},
+        {"debit": ls.ACC_CARRIER_FEE, "credit": "", "amount": "100.00",
+         "pnl_class": "EXPENSE"},
+        {"debit": "", "credit": "COD Receivable", "amount": "1000.00", "pnl_class": "NONE"},
+    ], transaction_date=dt, voucher_key="CR1")
+    db.commit()
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["profit"]["carrier_fees"] == "100.00"
+    assert out["profit"]["operating_profit"] == "900.00"
+    assert out["revenue"]["net_exclusive"] == "1000.00"
+    # The fee is separated BY ACCOUNT, not by type: it must not also land in `other`.
+    assert out["profit"]["other"] == "0.00"
+    assert out["profit"]["cogs"] == "0.00"
+
+
+def test_period_summary_reports_cod_deductions_separately():
+    from datetime import datetime, timezone
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    ls.record_event(db, b.id, "SALE", "1000.00", "0.00", transaction_date=dt, idempotency_key="S1")
+    ls.post_voucher(db, b.id, "COD_REMIT", [
+        {"debit": "Cash / Bank", "credit": "", "amount": "900.00", "pnl_class": "NONE"},
+        {"debit": ls.ACC_CARRIER_FEE, "credit": "", "amount": "60.00",
+         "pnl_class": "EXPENSE"},
+        {"debit": ls.ACC_COD_DEDUCTION, "credit": "", "amount": "40.00",
+         "pnl_class": "EXPENSE"},
+        {"debit": "", "credit": "COD Receivable", "amount": "1000.00", "pnl_class": "NONE"},
+    ], transaction_date=dt, voucher_key="CR2")
+    db.commit()
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["profit"]["carrier_fees"] == "60.00"
+    assert out["profit"]["cod_deductions"] == "40.00"
+    assert out["profit"]["other"] == "0.00"
+    assert out["profit"]["operating_profit"] == "900.00"
+
+
+def test_period_summary_direct_costs_follow_the_class_not_the_type():
+    """A SALE stored as EXPENSE is a cost, and it must leave the revenue side. A
+    type-keyed reader would report it as revenue and never charge it."""
+    from datetime import datetime, timezone
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    ls.record_event(db, b.id, "SALE", "1180.00", "180.00", transaction_date=dt, idempotency_key="S1")
+    ls.record_event(db, b.id, "SALE", "100.00", "0.00", transaction_date=dt,
+                    idempotency_key="S2", pnl_class="EXPENSE")
+    ls.record_event(db, b.id, "COGS", "500.00", "0.00", transaction_date=dt, idempotency_key="S3")
+    ls.record_event(db, b.id, "SHIPPING_EXPENSE", "70.00", "0.00", transaction_date=dt,
+                    idempotency_key="S4")
+    db.commit()
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["revenue"]["gross_inclusive"] == "1180.00"
+    assert out["revenue"]["net_exclusive"] == "1000.00"
+    assert out["profit"]["cogs"] == "500.00"
+    assert out["profit"]["shipping"] == "70.00"
+    assert out["profit"]["other"] == "100.00"
+    assert out["profit"]["gross_profit"] == "500.00"
+    assert out["profit"]["operating_profit"] == "330.00"
+
+
+def test_period_summary_does_not_charge_gst_twice():
+    """DEFAULT_PNL_CLASS calls TAX an EXPENSE, but the SALE voucher's GST legs already
+    carry the tax in tax_amount, which revenue_summary nets out of net sales. A
+    standalone TAX event is the payment against that liability: charging it as a cost
+    as well would take the same rupee out of profit twice."""
+    from datetime import datetime, timezone
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    ls.record_event(db, b.id, "SALE", "1180.00", "180.00", transaction_date=dt, idempotency_key="S1")
+    ls.record_event(db, b.id, "TAX", "180.00", "0.00", transaction_date=dt, idempotency_key="T1")
+    db.commit()
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["revenue"]["gst"] == "180.00"
+    assert out["revenue"]["net_exclusive"] == "1000.00"
+    assert out["profit"]["other"] == "0.00"
+    assert out["profit"]["operating_profit"] == "1000.00"
+
+
+def test_period_summary_counts_every_legacy_null_group_row_separately():
+    """voucher_group_id is NULL on every pre-0020 row, so any grouping or counting by
+    group id has to filter IS NOT NULL: two unrelated legacy rows of one business
+    would otherwise collapse into one fake multi-leg voucher, and one of them would
+    vanish from revenue. Their pnl_class is the column default, so this also pins
+    that a stored NONE on a SALE is read as unclassified, not as "no P&L"."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    for i, amt in enumerate(("100.00", "300.00"), start=1):
+        db.add(FinancialTransaction(
+            business_id=b.id, transaction_id=f"LEG-{i}", transaction_type="SALE",
+            transaction_date=dt, amount=Decimal(amt), tax_amount=Decimal("0.00"),
+            net_amount=Decimal(amt), currency="INR", debit_account=ls.ACC_RECEIVABLE,
+            credit_account=ls.ACC_SALES, status="POSTED", pnl_class="NONE",
+            idempotency_key=f"legacy-sale-{i}"))
+    db.commit()
+    assert {r.voucher_group_id for r in db.query(FinancialTransaction).all()} == {None}
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["revenue"]["gross_inclusive"] == "400.00"
+    assert out["transaction_count"] == 2
+
+
+def test_profit_summary_counts_carrier_fees_and_cod_deductions():
+    from app.services.ledger_service import profit_summary
+    # every pre-existing positional/keyword caller keeps working
+    p = profit_summary("1000.00", "500.00", "70.00", "15.00", "20.00", "5.00", True, 0)
+    assert p["operating_profit"] == "390.00"
+    assert p["carrier_fees"] == "0.00" and p["cod_deductions"] == "0.00"
+
+    p = profit_summary(net_sales_exclusive="1000.00", cogs="500.00", carrier_fees="60.00",
+                       cod_deductions="40.00")
+    assert p["carrier_fees"] == "60.00"
+    assert p["cod_deductions"] == "40.00"
+    assert p["operating_profit"] == "400.00"
+
+
+def test_order_timeline_reads_stored_legs():
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b = _db()
+    ls.record_event(db, b.id, "SALE", "1180.00", "180.00",
+                    debit_account="Customer / Receivable", credit_account="Sales Revenue",
+                    idempotency_key="S9")
+    db.commit()
+    row = db.query(FinancialTransaction).first()
+    row.order_id = "o-1"
+    db.commit()
+    items = ls.order_timeline(db, b.id, "o-1")
+    assert len(items) == 1
+    entry = items[0]["double_entry"][0]
+    assert entry["debit"] == "Customer / Receivable"
+    assert entry["credit"] == "Sales Revenue"
+    assert entry["amount"] == "1180.00"
