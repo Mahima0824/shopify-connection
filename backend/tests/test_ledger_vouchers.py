@@ -778,6 +778,13 @@ def test_negative_taxable_refund_leg_is_not_charged_as_a_discount():
     r = Refund(business_id=b.id, order_id=o.id, shopify_refund_id="rf-neg",
                amount="1200.00", currency="INR", status="COMPLETED")
     db.add(r); db.commit(); db.refresh(r)
+    # Refund.created_at is server_default=now() and record_refund_from_refund uses it
+    # as the voucher's transaction_date, so the three credit-note legs land TODAY
+    # while the SALE leg is dated dt. period_summary below reads [dt, dt + 1 month),
+    # so this test passed only because wall-clock today was inside that window -- it
+    # would have started failing the day the window closed. Date the refund explicitly.
+    r.created_at = dt
+    db.commit()
     ls.record_event(db, b.id, "SALE", "1000.00", "0.00", order_id=o.id,
                     transaction_date=dt, idempotency_key="S1")
     ls.record_refund_from_refund(db, b.id, r, order=o)

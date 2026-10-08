@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
@@ -12,9 +14,11 @@ from sqlalchemy.orm import Session
 from app.models.financial_transaction import (
     DEFAULT_PNL_CLASS, PNL_CLASSES, TRANSACTION_TYPES, FinancialTransaction,
 )
+from app.models.ledger_posting_failure import LedgerPostingFailure
 
 DISPLAY_TZ = "Asia/Kolkata"
 _Q = Decimal("0.01")
+log = logging.getLogger(__name__)
 
 
 class UnbalancedVoucher(ValueError):
@@ -469,6 +473,75 @@ def record_event(db: Session, business_id: str, transaction_type: str, amount,
     return rows[0]
 
 
+def record_posting_failure(db: Session, business_id: str, source_type: str,
+                           source_id: str, event_type: str,
+                           reason: str) -> LedgerPostingFailure:
+    """Durably record a ledger posting that failed (wave A §9).
+
+    The webhook path must not 500 because the ledger rejected an event, but it must
+    not silently drop one either. This turns "lost revenue nobody can see" into "a
+    month you cannot close until it is fixed".
+
+    UPSERT, not insert: uq_lpf_biz_source_event holds one row per
+    (business, source, event), and a recurring failure is the normal case -- a
+    Shopify redelivery, a retry, a second run of a batch. A plain insert would raise
+    IntegrityError *inside the error handler*, so the failure being recorded, the
+    reason it is being recorded, and the original failure would all be lost, and the
+    one thing this function exists to prevent would be what actually happened.
+
+    A recurrence also clears `resolved_at`: resolved means somebody fixed it and
+    checked the box, and it breaking again is unresolved again, so the month
+    close-blocks again.
+    """
+    key = dict(business_id=business_id, source_type=source_type,
+               source_id=str(source_id), event_type=event_type)
+    f = db.query(LedgerPostingFailure).filter_by(**key).first()
+    if f is None:
+        f = LedgerPostingFailure(reason=str(reason)[:2000], attempts=1, **key)
+        db.add(f)
+    else:
+        f.reason = str(reason)[:2000]
+        f.attempts = (f.attempts or 0) + 1
+        f.resolved_at = None
+    db.commit()
+    return f
+
+
+@contextmanager
+def safe_post(db: Session, business_id: str, source_type: str, source_id: str,
+              event_type: str):
+    """Run a ledger posting; on failure, record it durably and carry on.
+
+    Swallows the exception so the caller (typically a Shopify webhook) can finish
+    its own work, but never loses the event: the failure row is committed before the
+    context exits. `db` and `business_id` are explicit parameters rather than
+    ambient state, so a failure is always attributable to the right business.
+
+    The rollback is not optional. A posting that raised part-way through may have
+    left a savepoint open or a batch half-flushed, and the failure row must be the
+    only thing this context commits -- otherwise it lands on top of a half-written
+    voucher the caller has already been told was rejected.
+
+    Recording can itself fail (the same outage that broke the posting breaks the
+    insert). That must not propagate into a webhook, but it is NOT a silent success:
+    it is logged, and at that point the event really is gone and only the log says
+    so. The alternative -- letting it raise -- would trade a lost event for a
+    redelivery that fails the same way.
+    """
+    try:
+        yield
+    except Exception as exc:
+        try:
+            db.rollback()
+            record_posting_failure(db, business_id, source_type, source_id,
+                                   event_type, f"{type(exc).__name__}: {exc}")
+        except Exception:
+            log.exception(
+                "ledger posting failure NOT recorded: %s/%s/%s for business %s. "
+                "This event is lost and nothing blocks the month close.",
+                source_type, source_id, event_type, business_id)
+
+
 def reverse_event(db: Session, business_id: str, transaction_id: str, reason: str = "") -> FinancialTransaction:
     """Correction via reversal: original stays; new ADJUSTMENT negates it (#95).
 
@@ -541,19 +614,16 @@ def record_sale_from_order(db: Session, business_id: str, order) -> list:
     )
 
 
-def record_payment_from_payment(db: Session, business_id: str, payment, method=None) -> FinancialTransaction | None:
-    try:
-        return record_event(
-            db, business_id, "PAYMENT", payment.amount or 0, "0",
-            order_id=payment.order_id, payment_id=payment.id,
-            debit_account="Payment Gateway", credit_account="Customer / Receivable",
-            payment_method=method or getattr(payment, "method", None),
-            reference_number=getattr(payment, "transaction_id", None),
-            idempotency_key=f"PAYMENT:{payment.id}",
-            tally_voucher_type="Receipt",
-        )
-    except Exception:
-        return None
+def record_payment_from_payment(db: Session, business_id: str, payment, method=None) -> FinancialTransaction:
+    return record_event(
+        db, business_id, "PAYMENT", payment.amount or 0, "0",
+        order_id=payment.order_id, payment_id=payment.id,
+        debit_account=ACC_GATEWAY, credit_account=ACC_RECEIVABLE,
+        payment_method=method or getattr(payment, "method", None),
+        reference_number=getattr(payment, "transaction_id", None),
+        idempotency_key=f"PAYMENT:{payment.id}",
+        tally_voucher_type="Receipt",
+    )
 
 
 def order_tax_split(db: Session, order, amount) -> tuple:

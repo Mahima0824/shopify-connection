@@ -112,6 +112,7 @@ def close_checks(db: Session, business_id: str, year: int, month: int,
     issues: dict[str, list] = {"unreconciled_payments": [], "unreconciled_bank": [],
                                "unexported_transactions": [],
                                "invalid_gst": [], "missing_cogs": [], "pending_refunds": [],
+                               "ledger_posting_failures": [],
                                "check_errors": []}
 
     def _block(check: str, exc: Exception) -> None:
@@ -222,6 +223,17 @@ def close_checks(db: Session, business_id: str, year: int, month: int,
                 issues["pending_refunds"].append(str(r.id))
     except Exception as exc:
         _block("pending_refunds", exc)
+
+    try:  # wave A §9: an unresolved posting failure is revenue that was dropped in
+        # silence. Until somebody fixes it and marks it resolved, the month is not
+        # a month whose ledger can be signed off -- for ANY month of that business,
+        # not just the one the failure landed in.
+        from app.models.ledger_posting_failure import LedgerPostingFailure
+        for f in db.query(LedgerPostingFailure).filter_by(business_id=business_id).filter(
+                LedgerPostingFailure.resolved_at.is_(None)).all():
+            issues["ledger_posting_failures"].append(str(f.id))
+    except Exception as exc:
+        _block("ledger_posting_failures", exc)
 
     total = sum(len(v) for v in issues.values())
     counts = {k: len(v) for k, v in issues.items()}

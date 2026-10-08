@@ -74,12 +74,13 @@ def _apply(db, ev) -> None:
             o.cancelled_at = _parse_dt(payload.get("cancelled_at")) or datetime.now(timezone.utc)
             o.cancel_reason = payload.get("cancel_reason")
             db.commit()
-            try:  # additive ledger hook: void marker; never break webhook
-                from app.services.ledger_service import record_cancellation
-                record_cancellation(db, business_id, o)
+            from app.services import ledger_service as ls
+            # safe_post records the failure and commits it, so a ledger rejection
+            # cannot 500 the webhook AND cannot silently drop the event.
+            with ls.safe_post(db, business_id, "SHOPIFY_WEBHOOK",
+                              str(payload.get("id", "")), "CANCELLATION"):
+                ls.record_cancellation(db, business_id, o)
                 db.commit()
-            except Exception:
-                pass
     elif topic == "refunds/create":
         from app.models.refund import Refund
         o = _find_order(db, business_id, str(payload.get("order_id", "")))
@@ -109,12 +110,12 @@ def _apply(db, ev) -> None:
         o.financial_status = "REFUNDED" if total and amount >= total else "PARTIALLY_REFUNDED"
         o.payment_status = o.financial_status
         db.commit()
-        try:  # additive ledger hook: REFUND event, idempotent; never break webhook
-            from app.services.ledger_service import record_refund_from_refund
-            record_refund_from_refund(db, business_id, r, order=o)
+        from app.services import ledger_service as ls
+        # safe_post records the failure and commits it, so a ledger rejection cannot
+        # 500 the webhook AND cannot silently drop the refund.
+        with ls.safe_post(db, business_id, "SHOPIFY_WEBHOOK", rid, "REFUND"):
+            ls.record_refund_from_refund(db, business_id, r, order=o)
             db.commit()
-        except Exception:
-            pass
     elif topic in ("fulfillments/create", "fulfillments/update"):
         o = _find_order(db, business_id, str(payload.get("order_id", "")))
         if o is not None and str(payload.get("status", "")).lower() == "success":
