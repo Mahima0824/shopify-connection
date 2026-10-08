@@ -195,6 +195,7 @@ def collect_export_rows(db: Session, business_id: str,
             "transaction_type": t.transaction_type,
             "voucher_type": vtype,
             "voucher_number": t.tally_voucher_number or t.reference_number or t.transaction_id,
+            "voucher_group_id": t.voucher_group_id,
             "date": _utc(t.transaction_date),
             "order_id": t.order_id,
             "order_ref": getattr(o, "shopify_order_name", "") or "",
@@ -272,15 +273,31 @@ def validate_export(db: Session, business_id: str,
              "GST treatment must be reviewed by the business's CA/tax professional before filing.")
 
     # tax calc + invoice total (Decimal-quantized, no float drift)
+    _invoice_checked: set[str] = set()
     for r in rows:
         if abs(_d(r["net_amount"]) + _d(r["tax_amount"]) - _d(r["amount"])) > _Q:
             err("TAX_CALC_MISMATCH",
                 f"{r['transaction_id']}: net + tax != amount "
                 f"({r['net_amount']}+{r['tax_amount']}!={r['amount']}).", r["transaction_id"])
         if r["transaction_type"] == "SALE" and r["order_total"] is not None:
-            if abs(_d(r["order_total"]) - _d(r["amount"])) > _Q:
+            # Compare the VOUCHER total, not this row: a sale is one invoice whose
+            # taxable + CGST + SGST + IGST legs each carry part of the order total,
+            # so a per-row comparison failed every leg of a split sale. A legacy
+            # pre-0020 row has voucher_group_id NULL and no group to sum, so it
+            # keeps the per-row check and is never measured against another
+            # voucher's total. One error per invoice, reported on its first leg.
+            gid = r.get("voucher_group_id")
+            if gid:
+                if gid in _invoice_checked:
+                    continue
+                _invoice_checked.add(gid)
+                ledger_total = sum((_d(x["amount"]) for x in rows
+                                    if x.get("voucher_group_id") == gid), _d(0))
+            else:
+                ledger_total = _d(r["amount"])
+            if abs(_d(r["order_total"]) - ledger_total) > _Q:
                 err("INVOICE_TOTAL_MISMATCH",
-                    f"Invoice {r['voucher_number']}: ledger {r['amount']} != order {r['order_total']}.",
+                    f"Invoice {r['voucher_number']}: ledger {ledger_total} != order {r['order_total']}.",
                     r["voucher_number"])
 
     # refund linkage

@@ -428,31 +428,46 @@ def reverse_event(db: Session, business_id: str, transaction_id: str, reason: st
 
 # --- Additive hooks from existing flows (never modify existing records) ---
 
-def record_sale_from_order(db: Session, business_id: str, order) -> FinancialTransaction | None:
-    """Gross sale leg (Revenue / GST is not yet on this ledger).
+def record_sale_from_order(db: Session, business_id: str, order) -> list:
+    """Sale as one multi-leg voucher: taxable + Output CGST/SGST/IGST (§5).
 
-    DEFERRED (Important 1 of the task-3 review, blocked): the ruled change is a
-    multi-leg voucher crediting Output CGST/SGST/IGST symmetrically with the
-    credit note. That cannot be done in this file: tally_service.validate_export
-    asserts, per SALE row, abs(order_total - amount) <= 0.01, so every leg of a
-    split sale (1000.00, 90.00, 90.00 against an 1180.00 order) fails
-    INVOICE_TOTAL_MISMATCH and can_export goes False for EVERY order. Fixing it
-    needs the check to compare the voucher total rather than each row, which is
-    tally_service (wave B) work.
+    Symmetric with record_refund_from_refund, so a credit note debits exactly the
+    ledgers this credited and the pair nets to zero. Before, the sale credited
+    Sales Revenue with the gross and no GST ledger at all, so GST payable was
+    never on this ledger and the credit note pulled from accounts nothing funded.
+
+    The invoice number rides on the taxable leg only. post_voucher applies
+    tally_voucher_number to EVERY leg and validate_export derives one
+    voucher_number per row, so naming all three legs after the order made every
+    sale fail INVOICE_NOT_UNIQUE. validate_export now compares a voucher's legs
+    together, so the three legs are one invoice with one number.
+
+    Legacy rows: a pre-0020 sale sits at key `SALE:{id}` with voucher_group_id
+    NULL, and post_voucher will not satisfy a multi-leg voucher from a legacy
+    single-leg row, so this raises VoucherKeyConflict rather than appending a
+    second sale and double-counting the revenue. That is intended and loud;
+    migrating those rows is Task 8's job.
     """
-    try:
-        return record_event(
-            db, business_id, "SALE", order.total_amount or 0, order.tax_amount or 0,
-            transaction_date=getattr(order, "order_date", None), order_id=order.id,
-            currency=getattr(order, "currency", "INR") or "INR",
-            debit_account="Customer / Receivable", credit_account="Sales Revenue",
-            reference_number=getattr(order, "shopify_order_name", None),
-            idempotency_key=f"SALE:{order.id}",
-            tally_voucher_type="Sales",
-            tally_voucher_number=getattr(order, "shopify_order_name", None),
-        )
-    except Exception:
-        return None
+    total = _d(getattr(order, "total_amount", 0) or 0)
+    cgst, sgst, igst = order_tax_split(db, order, total)
+    taxable = total - (cgst + sgst + igst)
+    name = getattr(order, "shopify_order_name", None)
+    legs = [{"debit": ACC_RECEIVABLE, "credit": ACC_SALES, "amount": taxable,
+             "reference_number": name}]
+    for acct, val in ((ACC_OUTPUT_CGST, cgst), (ACC_OUTPUT_SGST, sgst), (ACC_OUTPUT_IGST, igst)):
+        if val > 0:
+            # tax_amount = the GST itself, so net_amount is 0 and revenue_summary
+            # counts this leg as tax rather than as revenue.
+            legs.append({"debit": ACC_RECEIVABLE, "credit": acct,
+                         "amount": val, "tax_amount": val})
+    return post_voucher(
+        db, business_id, "SALE", legs,
+        order_id=order.id,
+        transaction_date=getattr(order, "order_date", None),
+        currency=getattr(order, "currency", "INR") or "INR",
+        voucher_key=f"SALE:{order.id}",
+        tally_voucher_type="Sales",
+    )
 
 
 def record_payment_from_payment(db: Session, business_id: str, payment, method=None) -> FinancialTransaction | None:
@@ -470,9 +485,12 @@ def record_payment_from_payment(db: Session, business_id: str, payment, method=N
         return None
 
 
-def refund_tax_split(db: Session, order, amount) -> tuple:
+def order_tax_split(db: Session, order, amount) -> tuple:
     """(cgst, sgst, igst) for `amount` of this order, pro-rated from the real
     OrderItem figures (wave A §5).
+
+    Shared by the sale (called with order.total_amount) and the credit note
+    (called with the refund amount) so both credit and debit identical ledgers.
 
     Replaces the old tax/2 half-split, which ignored per-line GST rates and filed
     IGST as 0 whenever the jurisdiction was unknown.
@@ -522,7 +540,7 @@ def record_refund_from_refund(db: Session, business_id: str, refund, order=None)
     amt = _d(getattr(refund, "amount", 0) or 0)
     # Refund carries no tax column, so tax comes from the order's own GST split
     # (the same one the sale credited) pro-rated to this refund.
-    cgst, sgst, igst = refund_tax_split(db, o, amt) if o is not None else (Decimal("0.00"),) * 3
+    cgst, sgst, igst = order_tax_split(db, o, amt) if o is not None else (Decimal("0.00"),) * 3
     tax = cgst + sgst + igst
     taxable = amt - tax
     # No reference_number here: one refund now writes several vouchers, and

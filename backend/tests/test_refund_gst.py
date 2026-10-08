@@ -166,6 +166,99 @@ def test_refund_legs_do_not_collide_on_one_voucher_number():
     assert ts.validate_export(db, b.id)["can_export"] is True
 
 
+def test_split_sale_voucher_passes_export_validation():
+    """The validator compares a voucher's LEGS against the order total, so any
+    multi-leg SALE failed INVOICE_TOTAL_MISMATCH on every leg."""
+    from app.services import ledger_service as ls
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    rows = ts.collect_export_rows(db, b.id)
+    assert len(rows) == 3, [(r["debit_account"], r["amount"]) for r in rows]
+    assert all(r["voucher_group_id"] for r in rows), "voucher_group_id must be projected"
+    v = ts.validate_export(db, b.id)
+    assert v["can_export"] is True, v["errors"]
+
+
+def test_split_sale_reports_a_wrong_total_once_not_per_leg():
+    """A voucher's legs are compared together, so a bad invoice is one error."""
+    from app.services import ledger_service as ls
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    from app.models.financial_transaction import FinancialTransaction
+    legs = db.query(FinancialTransaction).filter_by(transaction_type="SALE").all()
+    legs[-1].amount = _D("1.00")  # voucher's legs no longer total the order
+    db.commit()
+    v = ts.validate_export(db, b.id)
+    mism = [e for e in v["errors"] if e["code"] == "INVOICE_TOTAL_MISMATCH"]
+    assert len(mism) == 1, mism
+    assert "ledger" in mism[0]["message"] and "!=" in mism[0]["message"], mism[0]
+
+
+def test_legacy_single_leg_sale_still_uses_the_per_row_check():
+    """A NULL voucher_group_id row has no group to sum, so it keeps the old
+    per-row comparison and must not be measured against an unrelated group."""
+    from datetime import datetime, timezone
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    o.total_amount = _D("1180.00")
+    db.add(FinancialTransaction(
+        business_id=b.id, transaction_id="TXN-LEGACY-SALE", order_id=o.id,
+        transaction_type="SALE", transaction_date=datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc),
+        amount="1180.00", tax_amount="180.00", net_amount="1000.00", currency="INR",
+        debit_account="Customer / Receivable", credit_account="Sales Revenue",
+        idempotency_key=f"SALE:{o.id}", pnl_class="REVENUE", leg_index=0,
+        voucher_group_id=None))
+    db.commit()
+    rows = ts.collect_export_rows(db, b.id)
+    assert rows[0]["voucher_group_id"] is None
+    assert ts.validate_export(db, b.id)["can_export"] is True
+
+
+def test_legacy_sale_row_at_the_split_key_raises_loudly():
+    """A pre-0020 SALE row holds SALE:{id} with no group. It cannot satisfy a
+    3-leg voucher, so post_voucher must raise rather than append a second sale."""
+    from datetime import datetime, timezone
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b, o = _env()
+    o.total_amount = _D("1180.00")
+    db.add(FinancialTransaction(
+        business_id=b.id, transaction_id="TXN-LEGACY-SALE", order_id=o.id,
+        transaction_type="SALE", transaction_date=datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc),
+        amount="1180.00", tax_amount="180.00", net_amount="1000.00", currency="INR",
+        debit_account="Customer / Receivable", credit_account="Sales Revenue",
+        idempotency_key=f"SALE:{o.id}", pnl_class="REVENUE", leg_index=0,
+        voucher_group_id=None))
+    db.commit()
+    before = db.query(FinancialTransaction).count()
+    raised = False
+    try:
+        ls.record_sale_from_order(db, b.id, o)
+    except ls.VoucherKeyConflict:
+        raised = True
+    db.rollback()
+    assert raised, "a legacy single-leg holder must not silently accept a multi-leg post"
+    assert db.query(FinancialTransaction).count() == before, "no duplicate sale written"
+
+
+def test_inter_state_sale_credits_igst_and_not_cgst_sgst():
+    """An inter-state order's whole tax belongs on Output IGST."""
+    from app.services import ledger_service as ls
+    db, b, o = _env(items=((None, "1000.00", "0.00", "0.00", "180.00", 1, 18.0),),
+                    total="1180.00", tax="180.00")
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    from app.models.financial_transaction import FinancialTransaction
+    legs = db.query(FinancialTransaction).filter_by(transaction_type="SALE").all()
+    credited = {l.credit_account: str(l.amount) for l in legs}
+    assert credited == {"Sales Revenue": "1000.00", "Output IGST": "180.00"}, credited
+
+
 def test_refund_replay_is_idempotent():
     """Webhook redelivery re-posts the same refund; it must not duplicate a leg
     or drop one."""
