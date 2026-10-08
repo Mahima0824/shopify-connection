@@ -292,7 +292,12 @@ def process(uid: str, db: Session = Depends(get_db), u: dict = Depends(get_curre
                                         order_id=oid or (order_of.order_id if order_of else ""))
                 db.add(fin)
             fin.collected_amount = r.gross_amount or 0
-            fin.settled_amount = r.net_amount or 0
+            # The GROSS, not the net: settled_amount is the amount the carrier
+            # settled (report_service subtracts fees from it to reach the payout,
+            # and the ledger's net + fee + deductions must equal it). Storing the
+            # net here double-subtracted the fee and made every settlement fail to
+            # reconcile. other_deduction stays 0: StatementRow has no such column.
+            fin.settled_amount = r.gross_amount or 0
             fin.fee_amount = r.fee_amount or 0
             fin.net_settlement = float(r.net_amount or 0)
             fin.settlement_reference = r.external_reference

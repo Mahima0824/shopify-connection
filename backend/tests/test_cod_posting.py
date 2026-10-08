@@ -88,6 +88,26 @@ def test_cod_collection_skipped_before_delivery():
     assert db.query(FinancialTransaction).count() == 0
 
 
+def test_cod_collection_skipped_when_the_order_carries_no_amount():
+    """A manual COD order can be created with no cod_value and total_amount 0. Posting
+    0.00 would balance and would CONSUME the voucher key, so the real figure arriving
+    later would be dropped as a replay -- the guard must leave the key unspent."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.finance_posting import record_cod_collection_from_shipment
+    db, b, o, s = _env()
+    o.cod_value = None
+    o.total_amount = 0
+    db.commit()
+    assert record_cod_collection_from_shipment(db, b.id, s) is None
+    assert db.query(FinancialTransaction).count() == 0
+    o.cod_value = 1180.0
+    o.total_amount = 1180.0
+    db.commit()
+    rows = record_cod_collection_from_shipment(db, b.id, s)
+    db.commit()
+    assert len(rows) == 1 and str(rows[0].amount) == "1180.00"
+
+
 def test_cod_collection_is_idempotent():
     from app.models.financial_transaction import FinancialTransaction
     from app.services.finance_posting import record_cod_collection_from_shipment
@@ -101,16 +121,20 @@ def test_cod_collection_is_idempotent():
 
 
 def test_cod_remit_balances_and_classifies_legs():
-    from app.services.finance_posting import record_cod_remittance_from_shipment_financial
+    from app.services.finance_posting import (
+        record_cod_collection_from_shipment, record_cod_remittance_from_shipment_financial)
     db, b, o, s = _env()
-    f = _sf(db, b, s)
+    record_cod_collection_from_shipment(db, b.id, s)  # the remit needs this raised first
+    f = _sf(db, b, s, collected_amount=1180.0, expected_cod_amount=1180.0,
+            settled_amount=1180.0, fee_amount=40.0, other_deduction=10.0,
+            net_settlement=1130.0)
     rows = record_cod_remittance_from_shipment_financial(db, b.id, f)
     db.commit()
     by = {(r.debit_account, r.credit_account): (str(r.amount), r.pnl_class) for r in rows}
-    assert by[("Cash / Bank", "")] == ("900.00", "NONE")
+    assert by[("Cash / Bank", "")] == ("1130.00", "NONE")
     assert by[("Carrier Freight / Fees", "")] == ("40.00", "EXPENSE")
     assert by[("COD Deductions / Write-off", "")] == ("10.00", "EXPENSE")
-    assert by[("", "COD Receivable")] == ("950.00", "NONE")
+    assert by[("", "COD Receivable")] == ("1180.00", "NONE")
 
 
 def test_cod_remit_then_collection_nets_receivable_to_zero():
@@ -177,23 +201,92 @@ def test_cod_remit_refusal_names_the_settlement_and_its_three_parts():
 def test_cod_remit_accepts_a_rupee_of_carrier_rounding():
     """Carriers settle to the rupee, so a gap of up to 1.00 is a real settlement,
     not a data error; refusing it would leave the receivable open forever."""
-    from app.services.finance_posting import record_cod_remittance_from_shipment_financial
+    from app.services.finance_posting import (
+        record_cod_collection_from_shipment, record_cod_remittance_from_shipment_financial)
     db, b, o, s = _env()
+    record_cod_collection_from_shipment(db, b.id, s)
     f = _sf(db, b, s, settled_amount=951.0)  # 900 + 40 + 10 = 950, one rupee short
     rows = record_cod_remittance_from_shipment_financial(db, b.id, f)
     db.commit()
+    credited = [r for r in rows if r.credit_account == "COD Receivable"]
     assert len(rows) == 4
-    assert str(rows[-1].amount) == "950.00"
+    assert len(credited) == 1 and str(credited[0].amount) == "950.00"
 
 
 def test_cod_remit_skips_zero_fee_and_deduction_legs():
-    from app.services.finance_posting import record_cod_remittance_from_shipment_financial
+    from app.services.finance_posting import (
+        record_cod_collection_from_shipment, record_cod_remittance_from_shipment_financial)
     db, b, o, s = _env()
+    record_cod_collection_from_shipment(db, b.id, s)
     f = _sf(db, b, s, settled_amount=1000.0, fee_amount=0.0, other_deduction=0.0,
             net_settlement=1000.0)
     rows = record_cod_remittance_from_shipment_financial(db, b.id, f)
     db.commit()
     assert len(rows) == 2
+
+
+def test_cod_remit_posts_on_a_partially_settled_shipment():
+    """The statement processor writes PARTIALLY_SETTLED (statements.py), and the money
+    really moved: refusing to post it would leave the carrier's payment unbanked and
+    the receivable open forever."""
+    from app.services.finance_posting import (
+        record_cod_collection_from_shipment, record_cod_remittance_from_shipment_financial)
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o, s = _env()
+    record_cod_collection_from_shipment(db, b.id, s)
+    f = _sf(db, b, s, status="PARTIALLY_SETTLED")
+    rows = record_cod_remittance_from_shipment_financial(db, b.id, f)
+    db.commit()
+    assert len(rows) == 4
+    assert db.query(FinancialTransaction).filter_by(transaction_type="COD_REMIT").count() == 4
+
+
+def test_cod_remit_skipped_for_a_prepaid_order():
+    """The statement processor creates a ShipmentFinancial for any matched shipment,
+    COD or not. A prepaid one already paid online: posting would credit a COD
+    Receivable that was never raised and bank a remittance that never happened."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services.finance_posting import record_cod_remittance_from_shipment_financial
+    db, b, o, s = _env()
+    o.cod_mode = "PREPAID"
+    db.commit()
+    f = _sf(db, b, s)
+    assert record_cod_remittance_from_shipment_financial(db, b.id, f) is None
+    assert db.query(FinancialTransaction).count() == 0
+
+
+def test_cod_remit_refuses_when_no_collection_was_raised():
+    """Without the collection there is no receivable to clear, so the remit would be
+    two wrong entries rather than one visible gap."""
+    from app.services.finance_posting import (
+        CodCollectionMissing, record_cod_remittance_from_shipment_financial)
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o, s = _env()
+    f = _sf(db, b, s)
+    try:
+        record_cod_remittance_from_shipment_financial(db, b.id, f)
+        raise AssertionError("expected CodCollectionMissing")
+    except CodCollectionMissing as e:
+        assert "ST1" in str(e) and s.id in str(e)
+    assert db.query(FinancialTransaction).count() == 0
+
+
+def test_cod_remit_rejects_a_negative_component_by_name():
+    """A negative net is a carrier clawback. Dropping it from the debit side while
+    still netting it into `cleared` could only fail as UnbalancedVoucher, which never
+    names the figure that is wrong."""
+    from app.services.finance_posting import record_cod_remittance_from_shipment_financial
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o, s = _env()
+    from app.services.finance_posting import record_cod_collection_from_shipment
+    record_cod_collection_from_shipment(db, b.id, s)
+    f = _sf(db, b, s, net_settlement=-50.0, settled_amount=0.0)
+    try:
+        record_cod_remittance_from_shipment_financial(db, b.id, f)
+        raise AssertionError("expected a ValueError naming the negative figure")
+    except ValueError as e:
+        assert "-50.00" in str(e), str(e)
+    assert db.query(FinancialTransaction).filter_by(transaction_type="COD_REMIT").count() == 0
 
 
 def test_cod_remit_skipped_until_the_shipment_is_settled():
