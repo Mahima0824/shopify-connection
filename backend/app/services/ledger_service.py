@@ -85,7 +85,18 @@ def cogs_for_item(quantity, cost_price) -> str:
 
 
 def to_double_entry(txn: dict) -> list[dict]:
-    """Transform a ledger event into double-entry lines per #22."""
+    """Transform a ledger event into double-entry lines per #22.
+
+    LEGACY DISPLAY HELPER. It re-derives an entry from one event's amount and
+    assumes a single gross SALE, hardcoding a credit to "Output GST" -- a ledger
+    that does not exist in the chart (the real names are Output CGST / Output SGST
+    / Output IGST). It therefore does not describe a split voucher, where each leg
+    already names its own accounts.
+
+    Nothing on the write or export path uses it: post_voucher writes real legs,
+    order_timeline reports the stored leg, and tally_service exports the stored
+    accounts. It remains only for its existing callers and tests.
+    """
     t = (txn.get("transaction_type") or "").upper()
     amt = _s(_d(txn.get("amount")))
     tax = _d(txn.get("tax_amount"))
@@ -606,6 +617,14 @@ def record_cancellation(db: Session, business_id: str, order,
 
 
 def order_timeline(db: Session, business_id: str, order_id: str) -> list[dict]:
+    """The stored ledger rows for one order, oldest first.
+
+    Each row is reported as the double entry it already is: a post_voucher leg
+    names its own debit and credit accounts, so re-deriving the entry through
+    to_double_entry was wrong once a sale became multi-leg -- its legacy
+    whole-sale branch gave every GST leg a zero-value credit plus a credit to
+    "Output GST", a ledger that does not exist in the chart.
+    """
     rows = db.query(FinancialTransaction).filter_by(
         business_id=business_id, order_id=order_id).order_by(
         FinancialTransaction.transaction_date).all()
@@ -615,9 +634,9 @@ def order_timeline(db: Session, business_id: str, order_id: str) -> list[dict]:
         "currency": r.currency, "transaction_date": r.transaction_date.isoformat() if r.transaction_date else None,
         "transaction_date_ist": to_ist_iso(r.transaction_date),
         "debit_account": r.debit_account, "credit_account": r.credit_account,
-        "double_entry": to_double_entry({"transaction_type": r.transaction_type, "amount": str(r.amount),
-                                         "tax_amount": str(r.tax_amount), "debit_account": r.debit_account,
-                                         "credit_account": r.credit_account}),
+        "pnl_class": r.pnl_class,
+        "double_entry": [{"debit": r.debit_account, "credit": r.credit_account,
+                          "amount": str(r.amount)}],
     } for r in rows]
 
 

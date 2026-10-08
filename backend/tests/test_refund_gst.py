@@ -203,6 +203,8 @@ def test_legacy_single_leg_sale_still_uses_the_per_row_check():
     per-row comparison and must not be measured against an unrelated group."""
     from datetime import datetime, timezone
     from app.models.financial_transaction import FinancialTransaction
+    from app.models.order import Order
+    from app.services import ledger_service as ls
     from app.services import tally_service as ts
     db, b, o = _env()
     o.total_amount = _D("1180.00")
@@ -213,9 +215,20 @@ def test_legacy_single_leg_sale_still_uses_the_per_row_check():
         debit_account="Customer / Receivable", credit_account="Sales Revenue",
         idempotency_key=f"SALE:{o.id}", pnl_class="REVENUE", leg_index=0,
         voucher_group_id=None))
+    # A second, unrelated grouped SALE whose voucher totals 2360.00. If the legacy
+    # NULL-group row were ever measured against a group, or all rows summed, this
+    # would break the assertion below -- with a single row both paths agree.
+    other = Order(business_id=b.id, internal_order_number="ORD-2", shopify_order_id="g2",
+                  shopify_order_name="#2002", customer_id=o.customer_id, currency="INR",
+                  subtotal_amount=2000.0, discount_amount=0, shipping_amount=0,
+                  tax_amount=360.0, total_amount=2360.0, payment_status="PAID",
+                  financial_status="PAID", order_date=DT)
+    db.add(other); db.commit(); db.refresh(other)
+    ls.record_sale_from_order(db, b.id, other)
     db.commit()
     rows = ts.collect_export_rows(db, b.id)
-    assert rows[0]["voucher_group_id"] is None
+    legacy = [r for r in rows if r["transaction_id"] == "TXN-LEGACY-SALE"]
+    assert len(legacy) == 1 and legacy[0]["voucher_group_id"] is None
     assert ts.validate_export(db, b.id)["can_export"] is True
 
 
@@ -225,6 +238,7 @@ def test_legacy_sale_row_at_the_split_key_raises_loudly():
     from datetime import datetime, timezone
     from app.models.financial_transaction import FinancialTransaction
     from app.services import ledger_service as ls
+    from app.services import tally_service as ts
     db, b, o = _env()
     o.total_amount = _D("1180.00")
     db.add(FinancialTransaction(
@@ -257,6 +271,77 @@ def test_inter_state_sale_credits_igst_and_not_cgst_sgst():
     legs = db.query(FinancialTransaction).filter_by(transaction_type="SALE").all()
     credited = {l.credit_account: str(l.amount) for l in legs}
     assert credited == {"Sales Revenue": "1000.00", "Output IGST": "180.00"}, credited
+
+
+def test_order_timeline_reports_the_stored_leg_not_a_re_derivation():
+    """A stored leg IS the double entry. Re-deriving it through to_double_entry's
+    legacy whole-sale branch gave each GST leg a zero-value credit plus a credit to
+    'Output GST', a ledger that does not exist in the chart."""
+    from app.services import ledger_service as ls
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    items = ls.order_timeline(db, b.id, o.id)
+    assert len(items) == 3, items
+    chart = {ls.ACC_RECEIVABLE, ls.ACC_SALES, ls.ACC_OUTPUT_CGST,
+             ls.ACC_OUTPUT_SGST, ls.ACC_OUTPUT_IGST}
+    for it in items:
+        assert it["double_entry"] == [{
+            "debit": it["debit_account"],
+            "credit": it["credit_account"],
+            "amount": it["amount"],
+        }], it
+        for de in it["double_entry"]:
+            assert de["debit"] in chart, de
+            assert de["credit"] in chart, de
+            assert _D(de["amount"]) > 0, f"zero-value leg rendered: {it}"
+        assert it["pnl_class"] in {"REVENUE", "REVERSAL", "COGS", "EXPENSE", "NONE"}
+
+
+def test_sales_items_join_picks_the_invoice_number_not_the_first_leg():
+    """A sale is 3 rows sharing one transaction_date, so 'first row for this order'
+    is arbitrary; only the taxable leg carries the invoice number and the GST legs
+    fall back to a bare transaction_id. Fed the legs in the worst order, the item
+    rows must still be tagged with the invoice number the Sales sheet shows."""
+    import io
+    from openpyxl import load_workbook
+    from app.services import ledger_service as ls
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    rows = ts.collect_export_rows(db, b.id)
+    sales = [r for r in rows if r["voucher_type"] == "Sales"]
+    assert len(sales) == 3, sales
+    # Worst case: the bare-transaction_id GST legs are seen before the taxable leg,
+    # so a plain first-wins setdefault would tag the item rows TXN-0000000N.
+    worst = [r for r in sales if r["voucher_number"] == r["transaction_id"]]
+    worst += [r for r in sales if r["voucher_number"] != r["transaction_id"]]
+    content = ts.build_workbook(rows, ts.ledger_mapping_completeness(db, b.id)["mappings"],
+                                {"valid": 1, "error_count": 0, "warning_count": 0,
+                                 "can_export": True}, "Sep 2026", "BATCH")
+    filled = ts._fill_sales_items(db, b.id, content, worst)
+    ws = load_workbook(filename=io.BytesIO(filled))["Sales_Items"]
+    items = [r for r in ws.iter_rows(min_row=2) if r[0].value not in (None, "TOTAL")]
+    assert items, "expected item rows"
+    assert {r[0].value for r in items} == {o.shopify_order_name}, [r[0].value for r in items]
+
+
+def test_sales_items_invoice_matches_the_sales_sheet_end_to_end():
+    import io
+    from openpyxl import load_workbook
+    from app.services import ledger_service as ls
+    from app.services import tally_service as ts
+    db, b, o = _env()
+    ls.record_sale_from_order(db, b.id, o)
+    db.commit()
+    out = ts.generate_workbook_export(db, b.id, "u1")
+    wb = load_workbook(filename=io.BytesIO(out["content"]))
+    sales = [r for r in wb["Sales"].iter_rows(min_row=2) if r[0].value not in (None, "TOTAL")]
+    items = [r for r in wb["Sales_Items"].iter_rows(min_row=2) if r[0].value not in (None, "TOTAL")]
+    assert items, "expected item rows"
+    assert o.shopify_order_name in {r[1].value for r in sales}
+    assert {r[0].value for r in items} == {o.shopify_order_name}
 
 
 def test_refund_replay_is_idempotent():

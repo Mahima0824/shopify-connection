@@ -581,10 +581,23 @@ def _fill_sales_items(db: Session, business_id: str, content: bytes, rows: list[
     from app.models.order import OrderItem
     wb = load_workbook(filename=io.BytesIO(content))
     ws = wb["Sales_Items"]
-    sale_voucher: dict[str, str] = {}
+    sale_rows: dict[str, list[dict]] = {}
     for r in rows:
         if r["voucher_type"] == V_SALES and r["order_id"]:
-            sale_voucher.setdefault(str(r["order_id"]), r["voucher_number"])
+            sale_rows.setdefault(str(r["order_id"]), []).append(r)
+    # A sale is one voucher of several legs, and every leg of a voucher shares one
+    # transaction_date, so "first Sales row for this order" is arbitrary --
+    # collect_export_rows orders by transaction_date only. Only the taxable leg
+    # carries the invoice number; the GST legs fall back to their own
+    # transaction_id, so an item row tagged TXN-0000000N would not match the
+    # invoice number the Sales sheet shows. Prefer a row whose voucher_number is
+    # a real number, then break ties on transaction_id so the result never depends
+    # on query order.
+    sale_voucher: dict[str, str] = {
+        oid: min(cands, key=lambda r: (r["voucher_number"] == r["transaction_id"],
+                                       r["transaction_id"]))["voucher_number"]
+        for oid, cands in sale_rows.items()
+    }
     items = []
     if sale_voucher:
         items = db.query(OrderItem).filter_by(business_id=business_id).filter(
