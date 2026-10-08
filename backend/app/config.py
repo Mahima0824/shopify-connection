@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     shopify_access_token: str = ""
     shopify_client_secret: str = ""
 
+    # Ledger auto-posting (wave A §7). Both default ON; set either to false in .env
+    # to make that writer a no-op that still reports what it would post, so
+    # production can be dry-run before it is trusted.
+    ledger_auto_post_costs: bool = True
+    ledger_auto_post_cod: bool = True
+
     # Supabase Configuration
     supabase_url: str = ""
     supabase_anon_key: str = ""

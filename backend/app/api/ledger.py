@@ -117,6 +117,36 @@ def backfill(db: Session = Depends(get_db), u: dict = Depends(get_current_user))
     return {"success": True, "data": out}
 
 
+@router.post("/post-period-costs")
+def post_period_costs_ep(year: int = Query(...), month: int = Query(...),
+                         dry_run: bool = Query(default=False),
+                         db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
+    """Post this period's COGS, freight, packaging and gateway fees, plus the carrier
+    settlements dated in it (wave A §7). Idempotent, so re-running is safe.
+
+    `dry_run` returns the same report without writing anything.
+    """
+    if u.get("role") not in ("ADMIN", "ACCOUNTANT"):
+        return _err(403, "FORBIDDEN", "Accountant role required")
+    from app.services import accounting_service as acct
+    from app.services.finance_posting import ensure_period_postings
+    try:
+        start, end = acct.month_window(year, month)
+    except (TypeError, ValueError):
+        return _err(400, "BAD_REQUEST", "year/month must be integers")
+    try:
+        out = ensure_period_postings(db, u.get("business_id"), start, end, dry_run=dry_run)
+        db.commit()
+    except ValueError as e:
+        # ClosedPeriodError is one of these: a closed month must not be written to.
+        db.rollback()
+        return _err(400, "BAD_REQUEST", str(e))
+    except IntegrityError as e:
+        db.rollback()
+        return _err(409, "CONFLICT", f"Transaction conflict: {e.orig}"[:300])
+    return {"success": True, "data": out}
+
+
 @router.post("/reverse")
 def reverse(body: LedgerReverse, db: Session = Depends(get_db), u: dict = Depends(get_current_user)):
     if u.get("role") not in ("ADMIN", "ACCOUNTANT"):

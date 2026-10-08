@@ -621,6 +621,12 @@ def generate_workbook_export(db: Session, business_id: str, user_id: str,
     """Workflow #46: validate -> transform -> generate -> preview-ready batch."""
     from app.models.tally import TallyExportRecord
 
+    # An export must carry the period's freight and COGS, not just sales (wave A §7).
+    # With no explicit window there is no period to post, so skip rather than guess.
+    if date_from is not None and date_to is not None:
+        from app.services.finance_posting import ensure_period_postings
+        ensure_period_postings(db, business_id, date_from, date_to)
+
     rows = collect_export_rows(db, business_id, date_from, date_to)
     if not rows:
         raise TallyError("NOTHING_TO_EXPORT", "No transactions in the selected period.")

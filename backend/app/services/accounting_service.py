@@ -88,8 +88,18 @@ def assert_open_period(db: Session, business_id: str, dt, *, allow_adjustment: b
         f"Period {d.year}-{d.month:02d} is CLOSED; post an ADJUSTMENT correction instead.")
 
 
-def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
-    """The five checks from #76. Returns {total, checks{...}}."""
+def close_checks(db: Session, business_id: str, year: int, month: int,
+                 post_costs: bool = False) -> dict:
+    """The five checks from #76, plus unresolved ledger posting failures (#95, wave A §9).
+
+    `post_costs` is False by default so this stays a pure read: it is called from
+    GET /accounting/periods/{year}/{month}, which must never write to the ledger,
+    and from test_final_fixes with a deliberately broken session to prove it fails
+    closed. Only close_month -- a POST that changes state -- passes True, so the
+    period's costs and carrier settlements are on the ledger before the close is
+    judged. A failure to post is recorded in check_errors, so it blocks the close
+    rather than being treated as clean.
+    """
     from app.models.financial_transaction import FinancialTransaction
     from app.models.order import Order
     from app.models.payment import Payment
@@ -106,6 +116,17 @@ def close_checks(db: Session, business_id: str, year: int, month: int) -> dict:
 
     def _block(check: str, exc: Exception) -> None:
         issues["check_errors"].append(f"{check}: {type(exc).__name__}: {exc}")
+
+    if post_costs:
+        # Auto-post the period's costs and carrier settlements first, so
+        # missing_cogs and unexported_transactions below are judged against a
+        # complete ledger. Guarded like every other check: a failed post must
+        # block the close, not raise out of a read path.
+        try:
+            from app.services.finance_posting import ensure_period_postings
+            ensure_period_postings(db, business_id, start, end)
+        except Exception as exc:
+            _block("period_postings", exc)
 
     try:  # genuine recon state per Task 2 (#35): a payment is reconciled only when a
         # BANK_STATEMENT row links it with status MATCHED (payment_status alone is not proof).
@@ -213,7 +234,7 @@ def close_month(db: Session, business_id: str, year: int, month: int,
                 user_id: str, user_agent: str | None = None, ip: str | None = None) -> dict:
     from app.models.accounting_period import AccountingPeriod
     from app.services.audit_service import log_audit
-    checks = close_checks(db, business_id, year, month)
+    checks = close_checks(db, business_id, year, month, post_costs=True)
     if checks["total"] > 0:
         raise CloseBlocked(checks)
     p = db.query(AccountingPeriod).filter_by(
