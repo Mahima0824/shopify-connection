@@ -1,5 +1,6 @@
 """Task 3: cancellation is a marker; refunds reverse revenue AND post GST legs."""
 from datetime import datetime, timezone
+from decimal import Decimal as _D
 
 DT = datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc)
 
@@ -110,6 +111,11 @@ def test_paid_cancel_then_refund_nets_to_zero_not_negative():
     assert rev["gross_inclusive"] == "1180.00"
     assert rev["refunds_inclusive"] == "1180.00"
     assert rev["net_inclusive"] == "0.00"
+    # GST must net to zero too. The credit note's CGST/SGST legs carry the tax in
+    # tax_amount, so revenue_summary subtracts it; posting it as amount alone left
+    # gst at a full 180.00 and net_exclusive at -180.00 on a fully refunded order.
+    assert rev["gst"] == "0.00"
+    assert rev["net_exclusive"] == "0.00"
 
 
 def test_cancellation_marker_carries_no_amount():
@@ -158,3 +164,95 @@ def test_refund_legs_do_not_collide_on_one_voucher_number():
     nums = [row["voucher_number"] for row in ts.collect_export_rows(db, b.id)]
     assert len(nums) == len(set(nums)), nums
     assert ts.validate_export(db, b.id)["can_export"] is True
+
+
+def test_refund_replay_is_idempotent():
+    """Webhook redelivery re-posts the same refund; it must not duplicate a leg
+    or drop one."""
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env()
+    r = _refund(db, b, o, "1180.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    first = {(t.transaction_type, t.debit_account): t.amount
+             for t in db.query(FinancialTransaction).all()}
+    for _ in range(3):
+        ls.record_refund_from_refund(db, b.id, r, order=o)
+        db.commit()
+    rows = db.query(FinancialTransaction).all()
+    assert len(rows) == len(first), f"{len(first)} -> {len(rows)} rows"
+    after = {(t.transaction_type, t.debit_account): t.amount for t in rows}
+    assert after == first
+
+
+def test_refund_falls_back_to_half_split_without_order_items():
+    """No OrderItem rows carrying split tax: the tax still has to reach the credit
+    note, so it is halved from the order total rather than dropped to zero."""
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env(items=((None, "1000.00", "0.00", "0.00", "0.00", 1, 18.0),))
+    r = _refund(db, b, o, "1180.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    legs = db.query(FinancialTransaction).filter_by(
+        refund_id=r.id, transaction_type="REFUND").all()
+    by = {l.debit_account: l.amount for l in legs}
+    assert by["Output CGST"] == _D("90.00")
+    assert by["Output SGST"] == _D("90.00")
+    assert by["Sales Revenue"] == _D("1000.00")
+
+
+def test_refund_posts_a_negative_taxable_leg_rather_than_dropping_it():
+    """Order tax above its total makes the taxable leg negative. Dropping it left
+    the receivable funded with no matching revenue reversal."""
+    from app.services import ledger_service as ls
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, o = _env(items=((None, "1000.00", "600.00", "600.00", "0.00", 1, 120.0),),
+                    total="1000.00", tax="1200.00")
+    r = _refund(db, b, o, "1000.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    legs = db.query(FinancialTransaction).filter_by(
+        refund_id=r.id, transaction_type="REFUND").all()
+    taxable = [l for l in legs if l.debit_account == "Sales Revenue"]
+    assert len(taxable) == 1, "the taxable leg must be posted, even when negative"
+    assert taxable[0].amount == _D("-200.00")  # 1000.00 refund - 1200.00 tax
+
+
+def test_backfill_refund_counts_do_not_inflate_on_rerun():
+    """One refund now writes several vouchers keyed 'REFUND:{id}:taxable' etc., so
+    an exact-match guard never fired: every run re-entered the writer, wrote
+    nothing (post_voucher is idempotent) and still counted as created."""
+    from app.services import ledger_service as ls
+    from app.services import report_service as rs
+    db, b, o = _env()
+    r = _refund(db, b, o, "1180.00")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    first = rs.backfill_ledger(db, b.id)
+    assert first["refunds"] == {"created": 0, "skipped": 1}, first
+    second = rs.backfill_ledger(db, b.id)
+    assert second["refunds"] == {"created": 0, "skipped": 1}, second
+
+
+def test_backfill_still_skips_a_legacy_single_key_refund_row():
+    """A pre-0020 row keyed exactly 'REFUND:{id}' must still match the guard."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import report_service as rs
+    db, b, o = _env()
+    r = _refund(db, b, o, "1180.00")
+    legacy = FinancialTransaction(
+        business_id=b.id, transaction_id="TXN-LEGACY", order_id=o.id,
+        refund_id=r.id, transaction_type="REFUND", transaction_date=DT,
+        amount="1180.00", tax_amount="180.00", net_amount="1000.00", currency="INR",
+        debit_account="Sales Revenue", credit_account="Payment Gateway",
+        idempotency_key=f"REFUND:{r.id}", pnl_class="REVERSAL", leg_index=0,
+    )
+    db.add(legacy)
+    db.commit()
+    before = db.query(FinancialTransaction).filter_by(refund_id=r.id).count()
+    out = rs.backfill_ledger(db, b.id)
+    after = db.query(FinancialTransaction).filter_by(refund_id=r.id).count()
+    assert out["refunds"]["skipped"] == 1, out
+    assert after == before, f"legacy row was rewritten: {before} -> {after}"

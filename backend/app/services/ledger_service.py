@@ -429,6 +429,17 @@ def reverse_event(db: Session, business_id: str, transaction_id: str, reason: st
 # --- Additive hooks from existing flows (never modify existing records) ---
 
 def record_sale_from_order(db: Session, business_id: str, order) -> FinancialTransaction | None:
+    """Gross sale leg (Revenue / GST is not yet on this ledger).
+
+    DEFERRED (Important 1 of the task-3 review, blocked): the ruled change is a
+    multi-leg voucher crediting Output CGST/SGST/IGST symmetrically with the
+    credit note. That cannot be done in this file: tally_service.validate_export
+    asserts, per SALE row, abs(order_total - amount) <= 0.01, so every leg of a
+    split sale (1000.00, 90.00, 90.00 against an 1180.00 order) fails
+    INVOICE_TOTAL_MISMATCH and can_export goes False for EVERY order. Fixing it
+    needs the check to compare the voucher total rather than each row, which is
+    tally_service (wave B) work.
+    """
     try:
         return record_event(
             db, business_id, "SALE", order.total_amount or 0, order.tax_amount or 0,
@@ -459,36 +470,38 @@ def record_payment_from_payment(db: Session, business_id: str, payment, method=N
         return None
 
 
-def refund_tax_split(db: Session, order, refund_amount) -> tuple:
-    """(cgst, sgst, igst) for a refund, pro-rated from the order's real OrderItem
-    tax figures (wave A §5).
+def refund_tax_split(db: Session, order, amount) -> tuple:
+    """(cgst, sgst, igst) for `amount` of this order, pro-rated from the real
+    OrderItem figures (wave A §5).
 
-    Replaces the old tax/2 half-split, which ignored per-line GST rates and
-    filed IGST as 0 whenever the jurisdiction was unknown. Falls back to a
-    zero split when the order total is unusable; the caller surfaces that as a
-    CA-review flag rather than inventing tax.
+    Replaces the old tax/2 half-split, which ignored per-line GST rates and filed
+    IGST as 0 whenever the jurisdiction was unknown.
+
+    Falls back to a zero split when the order total is unusable (the caller then
+    posts a taxable-only voucher), and to a same-state half-split only when the
+    items carry no split tax at all. Neither fallback is signalled to the caller,
+    so tax inferred this way is a CA review item, not something surfaced here.
     """
     from app.models.order import OrderItem
-    from decimal import Decimal as _Dec
     total = _d(getattr(order, "total_amount", 0) or 0)
-    amt = _d(refund_amount)
+    amt = _d(amount)
     if total <= 0 or amt <= 0:
-        return _Dec("0.00"), _Dec("0.00"), _Dec("0.00")
+        return Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
     ratio = amt / total
     try:
         items = db.query(OrderItem).filter_by(order_id=order.id).all()
     except Exception:
         items = []
-    c = sum((_d(i.cgst_amount) for i in items), _Dec("0.00")) * ratio
-    s = sum((_d(i.sgst_amount) for i in items), _Dec("0.00")) * ratio
-    i = sum((_d(i.igst_amount) for i in items), _Dec("0.00")) * ratio
+    c = sum((_d(i.cgst_amount) for i in items), Decimal("0.00")) * ratio
+    s = sum((_d(i.sgst_amount) for i in items), Decimal("0.00")) * ratio
+    i = sum((_d(i.igst_amount) for i in items), Decimal("0.00")) * ratio
     if c + s + i <= 0:  # items carry no split tax; derive from the order tax
         tax = _d(getattr(order, "tax_amount", 0) or 0) * ratio
         half = (tax / 2).quantize(_Q, rounding=ROUND_HALF_UP)
-        return half, tax - half, _Dec("0.00")
+        return half, tax - half, Decimal("0.00")
     # Quantize HERE, not at post time: the caller derives the taxable leg from
     # these figures and post_voucher rounds each leg on its own, so returning
-    # unrounded values made a refund's legs miss the refund by a paisa.
+    # unrounded values made a voucher's legs miss the amount by a paisa.
     return (_d(c), _d(s), _d(i))
 
 
@@ -507,12 +520,10 @@ def record_refund_from_refund(db: Session, business_id: str, refund, order=None)
         except Exception:
             o = None
     amt = _d(getattr(refund, "amount", 0) or 0)
-    tax = _d(getattr(refund, "tax_amount", 0) or 0)
-    if tax == 0 and o is not None:
-        cgst, sgst, igst = refund_tax_split(db, o, amt)
-        tax = cgst + sgst + igst
-    else:
-        cgst, sgst, igst = tax / 2, tax - (tax / 2), Decimal("0")
+    # Refund carries no tax column, so tax comes from the order's own GST split
+    # (the same one the sale credited) pro-rated to this refund.
+    cgst, sgst, igst = refund_tax_split(db, o, amt) if o is not None else (Decimal("0.00"),) * 3
+    tax = cgst + sgst + igst
     taxable = amt - tax
     # No reference_number here: one refund now writes several vouchers, and
     # tally_service derives voucher_number from reference_number, so sharing
@@ -520,7 +531,10 @@ def record_refund_from_refund(db: Session, business_id: str, refund, order=None)
     # (VOUCHER_NOT_UNIQUE). The refund is still linked by refund_id. Wave B can
     # group these legs into one real Tally Credit Note once it owns that mapping.
     rows: list = []
-    if taxable > 0:
+    # A negative taxable (order tax above its total, or a refund above the order)
+    # still posts: dropping it left the receivable funded with no matching
+    # revenue reversal. It goes negative on the Sales side of the same account.
+    if taxable != 0:
         rows += post_voucher(
             db, business_id, "REFUND",
             [{"debit": ACC_SALES, "credit": ACC_RECEIVABLE, "amount": taxable}],
@@ -530,9 +544,12 @@ def record_refund_from_refund(db: Session, business_id: str, refund, order=None)
             tally_voucher_type="Credit Note")
     for acct, val in ((ACC_OUTPUT_CGST, cgst), (ACC_OUTPUT_SGST, sgst), (ACC_OUTPUT_IGST, igst)):
         if val > 0:
+            # tax_amount = the GST itself, so post_voucher derives net_amount 0
+            # and revenue_summary subtracts this tax instead of adding it.
             rows += post_voucher(
                 db, business_id, "REFUND",
-                [{"debit": acct, "credit": ACC_RECEIVABLE, "amount": val}],
+                [{"debit": acct, "credit": ACC_RECEIVABLE, "amount": val,
+                  "tax_amount": val}],
                 order_id=refund.order_id, refund_id=refund.id,
                 transaction_date=getattr(refund, "created_at", None),
                 voucher_key=f"REFUND:{refund.id}:{acct}",

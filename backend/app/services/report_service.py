@@ -271,12 +271,18 @@ def backfill_ledger(db, business_id: str) -> dict:
         except Exception:
             out["payments"]["skipped"] += 1
     for r in db.query(Refund).filter_by(business_id=business_id).all():
-        if f"REFUND:{r.id}" in existing:
+        # Prefix, not equality: one refund now posts several vouchers keyed
+        # 'REFUND:{id}:taxable' / ':Output CGST' / ..., so an exact match never
+        # hit and every run re-entered the writer, wrote nothing (post_voucher
+        # is idempotent) and still counted as created. A legacy 'REFUND:{id}' row
+        # is still matched, so those stay skipped.
+        prefix = f"REFUND:{r.id}"
+        if any(k == prefix or k.startswith(prefix + ":") for k in existing):
             out["refunds"]["skipped"] += 1
             continue
         try:
             _ls.record_refund_from_refund(db, business_id, r)
-            existing.add(f"REFUND:{r.id}")
+            existing.add(prefix)
             out["refunds"]["created"] += 1
         except Exception:
             out["refunds"]["skipped"] += 1
