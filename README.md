@@ -201,3 +201,15 @@ Orders are the only entry point for shipments. A synced Shopify order starts in
 tracking number the India Post worker issued. Manual orders ask for the tracking
 number immediately after they are created. Clicking a tracking number opens the
 full scan history from ShipSagar's `TrackShipment`.
+
+### Ledger remediation (migration 0021)
+
+Wave A repairs rows written by the old cancellation bug. Take a backup, then:
+
+1. `SELECT count(*) FROM financial_transactions WHERE transaction_type = 'CANCELLATION' AND amount <> 0;`
+2. `alembic upgrade head`
+3. Re-run step 1 — it must return `0`. The two numbers must match.
+
+`LEDGER_AUTO_POST_COSTS` and `LEDGER_AUTO_POST_COD` default to on. Run
+`POST /api/v1/ledger/post-period-costs?year=&month=&dry_run=true` for the
+current and prior month and review the output before leaving them on.
