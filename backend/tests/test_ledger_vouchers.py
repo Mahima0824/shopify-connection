@@ -720,6 +720,98 @@ def test_profit_summary_counts_carrier_fees_and_cod_deductions():
     assert p["operating_profit"] == "400.00"
 
 
+# --- Task 6 fix: a negative REFUND leg is a refund, never a discount ---
+
+def test_revenue_summary_nets_a_negative_refund_leg_as_a_restore():
+    """record_event whitelists a negative REFUND and record_refund_from_refund
+    writes one by design ("It goes negative on the Sales side"), so a REFUND leg can
+    be negative. It restores revenue, so it belongs in refunds -- and must not also be
+    charged as a discount, which counted the same leg twice in opposite directions."""
+    from app.services.ledger_service import revenue_summary
+    r = revenue_summary([
+        {"transaction_type": "SALE", "amount": "1000.00", "tax_amount": "0.00"},
+        {"transaction_type": "REFUND", "amount": "-200.00", "tax_amount": "0.00",
+         "pnl_class": "REVERSAL"},
+    ])
+    assert r["gross_inclusive"] == "1000.00"
+    assert r["refunds_inclusive"] == "-200.00"
+    assert r["discounts"] == "0.00"
+    assert r["net_inclusive"] == "1200.00"
+
+
+def test_negative_refund_posted_through_record_event_restores_revenue():
+    """The live path: record_event accepts a negative REFUND (it is one of the three
+    whitelisted types), post_voucher classes it REVERSAL, and it must net as a refund.
+    Route it by sign instead and revenue drops from 1200.00 to 800.00."""
+    from datetime import datetime, timezone
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    ls.record_event(db, b.id, "SALE", "1000.00", "0.00", transaction_date=dt,
+                    idempotency_key="S1")
+    neg = ls.record_event(db, b.id, "REFUND", "-200.00", "0.00", transaction_date=dt,
+                          idempotency_key="R1")
+    db.commit()
+    assert str(neg.amount) == "-200.00" and neg.pnl_class == "REVERSAL"
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    assert out["revenue"]["discounts"] == "0.00"
+    assert out["revenue"]["refunds_inclusive"] == "-200.00"
+    assert out["revenue"]["net_inclusive"] == "1200.00"
+
+
+def test_negative_taxable_refund_leg_is_not_charged_as_a_discount():
+    """record_refund_from_refund's own comment: "A negative taxable ... still posts ...
+    It goes negative on the Sales side of the same account." That leg is classed
+    REVERSAL, so the refund bucket must take it whatever its sign."""
+    from datetime import datetime, timezone
+    from app.models.order import Order
+    from app.models.refund import Refund
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    db, b = _db()
+    dt = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    # order tax above the order total, so the pro-rated tax exceeds the refund amount
+    o = Order(business_id=b.id, internal_order_number="ORD-NEG", shopify_order_id="g-neg",
+              shopify_order_name="#NEG", currency="INR", subtotal_amount=100,
+              tax_amount=180, total_amount=100, order_date=dt)
+    db.add(o); db.commit(); db.refresh(o)
+    r = Refund(business_id=b.id, order_id=o.id, shopify_refund_id="rf-neg",
+               amount="1200.00", currency="INR", status="COMPLETED")
+    db.add(r); db.commit(); db.refresh(r)
+    ls.record_event(db, b.id, "SALE", "1000.00", "0.00", order_id=o.id,
+                    transaction_date=dt, idempotency_key="S1")
+    ls.record_refund_from_refund(db, b.id, r, order=o)
+    db.commit()
+    negative = [x for x in db.query(FinancialTransaction).all() if x.amount < 0]
+    assert len(negative) == 1, [(x.transaction_type, str(x.amount)) for x in negative]
+    assert negative[0].transaction_type == "REFUND"
+    assert negative[0].pnl_class == "REVERSAL"
+    out = ls.period_summary(db, b.id, dt, dt.replace(month=10))
+    # the negative leg is inside the refund bucket, not bolted on as a discount
+    assert out["revenue"]["discounts"] == "0.00"
+    assert out["revenue"]["refunds_inclusive"] == "1200.00"
+
+
+def test_carrier_claim_leg_still_routes_by_sign():
+    """CARRIER_CLAIM is classed REVERSAL but is not a refund, so the refund bucket's
+    type branch must not swallow it: a positive claim restores value, and a negative
+    one is a mirror-image correction. This is what sign-splitting is FOR -- it governs
+    the rows the type branch cannot classify."""
+    from app.services.ledger_service import revenue_summary
+    r = revenue_summary([
+        {"transaction_type": "SALE", "amount": "1000.00", "tax_amount": "0.00"},
+        {"transaction_type": "CARRIER_CLAIM", "amount": "450.00", "tax_amount": "0.00",
+         "pnl_class": "REVERSAL"},
+        {"transaction_type": "CARRIER_CLAIM", "amount": "-50.00", "tax_amount": "0.00",
+         "pnl_class": "REVERSAL"},
+    ])
+    assert r["refunds_inclusive"] == "450.00"
+    assert r["discounts"] == "50.00"
+    # (the claim nets against revenue, which is the REVERSAL wart flagged in the
+    # task-6 report: a claim reimburses an expense and should not touch revenue)
+    assert r["net_inclusive"] == "500.00"
+
+
 def test_order_timeline_reads_stored_legs():
     from app.services import ledger_service as ls
     from app.models.financial_transaction import FinancialTransaction

@@ -159,16 +159,30 @@ def revenue_summary(txns: list[dict]) -> dict:
         if cls == "REVENUE":
             gross += a
             tax += x
+        elif typ == "REFUND":
+            # The type branch comes FIRST, ahead of any sign test, because a REFUND
+            # leg can legitimately be negative: record_event whitelists one, and
+            # record_refund_from_refund writes one by design when the pro-rated tax
+            # exceeds the refund ("It goes negative on the Sales side"). A negative
+            # refund RESTORES revenue, so it belongs here. Ruled by sign instead, it
+            # was charged as a discount as well, counting the same leg twice in
+            # opposite directions.
+            refunds += a
+            refund_tax += x
         elif cls == "REVERSAL" and a > 0:
-            # A credit note: revenue previously recognised, now given back.
+            # A credit note on a type that is not REFUND, or a writer that classed it
+            # so: revenue previously recognised, now given back.
             refunds += a
             refund_tax += x
         elif a < 0 and (cls == "REVERSAL" or typ == "ADJUSTMENT"):
-            # A correction carries the mirror-image (negative) amount, and REVERSAL is
-            # also a carrier claim's class, so the row alone cannot say which bucket it
-            # reverses. Net it as a discount, which is what a reversed SALE has always
-            # done, and never let a negative correction RAISE revenue: that would be a
-            # guess in the flattering direction.
+            # Sign-splitting, for the rows the type branch above cannot classify --
+            # today only CARRIER_CLAIM, whose REVERSAL class covers both a
+            # reimbursement (positive) and a clawback correction (negative), plus a
+            # mirror-image ADJUSTMENT correction, which is where this landed before.
+            # KNOWN LIMIT: a mirror-image REVERSAL of a COST cannot be told apart from
+            # one of a refund without joining reversal_of_id, which a pure function over
+            # dicts cannot do, so it nets as a discount. Logged for a later wave
+            # alongside giving REVERSAL separate revenue/expense vocabulary.
             disc += -a
     net_inc = gross - refunds - disc
     net_tax = tax - refund_tax
@@ -191,8 +205,9 @@ def profit_summary(net_sales_exclusive, cogs="0", shipping="0", packaging="0",
                    missing_cogs_count=0, carrier_fees="0", cod_deductions="0") -> dict:
     """Net Sales - COGS = Gross; Gross - direct exp = Operating (#24, ESTIMATED until complete).
 
-    `carrier_fees` and `cod_deductions` are appended after the existing parameters so
-    every pre-existing positional and keyword caller keeps working.
+    `carrier_fees` and `cod_deductions` sit last, after `missing_cogs_count`, so that
+    adding them could not re-bind an existing parameter for any caller that passes
+    them positionally.
     """
     net, c, s, p, g, o, cf, cd = (_d(v) for v in (
         net_sales_exclusive, cogs, shipping, packaging, gateway_fees, other,
@@ -304,11 +319,13 @@ def post_voucher(db: Session, business_id: str, event_type: str, legs: list[dict
     - A key held by a row in a *different* non-NULL group is the leg0/group key
       namespace overlap, not a race, and raises VoucherKeyConflict.
 
-    Scope of the balance check: it totals the accounts a leg *names*. A leg that
-    names neither account is a self-balancing pair, which is why record_event can keep
-    posting an amount with blank accounts as it always has. Such a row is stored with
-    blank accounts and reported blank by order_timeline and by the Tally export; it is
-    never given accounts after the fact.
+    Scope of the balance check: it totals the accounts a leg *names*, so a leg that
+    names neither account is UNCHECKED rather than balanced -- it contributes 0 to
+    both sides of the total and the check passes without the amount ever being
+    compared. That is why record_event can keep posting an amount with blank
+    accounts as it always has. Such a row is stored with blank accounts and reported
+    blank by order_timeline and by the Tally export; it is never given accounts
+    after the fact.
     """
     from sqlalchemy.exc import IntegrityError
 
@@ -708,7 +725,10 @@ def period_summary(db: Session, business_id: str, start: datetime, end: datetime
     #      they share the EXPENSE class with shipping, packaging and gateway fees and
     #      no class can tell them apart. This is the one place keying on an account
     #      name is correct, and it is exact because finance_posting posts those two
-    #      legs to the ACC_* names defined here.
+    #      legs to the ACC_* names defined here. It applies to EXPENSE-classed legs
+    #      only: a COGS-classed leg is taken by rule 1 first, so a mis-classed leg
+    #      debited to ACC_CARRIER_FEE lands in `cogs`. The class is the authority on
+    #      *whether* a leg is a direct cost; the account only splits the EXPENSE ones.
     #   3. The TYPE picks between the remaining named lines, and `other` is the
     #      RESIDUAL of every other EXPENSE leg. A partition, not a wish list: a direct
     #      cost is counted exactly once and none is silently dropped.
