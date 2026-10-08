@@ -1,5 +1,6 @@
 """Task 5: period cost postings, ensure_period_postings idempotency, kill switches."""
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 START = datetime(2026, 9, 1, tzinfo=timezone.utc)
 END = datetime(2026, 10, 1, tzinfo=timezone.utc)
@@ -70,13 +71,16 @@ def _cost_rules(db, b, shipping="70.00", packaging="15.00", gateway="20.00", cog
     db.commit()
 
 
-def _env(shipping="70.00", packaging="15.00", gateway="20.00", cogs=COGS_AMOUNT):
-    """One prepaid order, two units, one in-transit shipment, four cost rules."""
+def _env(shipping="70.00", packaging="15.00", gateway="20.00", cogs=COGS_AMOUNT,
+         two_orders=False):
+    """One prepaid order (two unless `two_orders`), one shipment, four cost rules."""
     _eng, mk = _db()
     db = mk()
     b, c = _biz(db)
-    o = _order(db, b, c, name="A", qty=2)
-    _ship(db, b, o, status="IN_TRANSIT")
+    names = ["A", "B"] if two_orders else ["A"]
+    for i, name in enumerate(names):
+        o = _order(db, b, c, name=name, qty=2)
+        _ship(db, b, o, status="IN_TRANSIT", awb=f"AWB-{name}")
     _cost_rules(db, b, shipping, packaging, gateway, cogs)
     return db, b
 
@@ -102,7 +106,24 @@ def _rows(db, **kw):
 
 # --- Step 1: the brief's seven tests ------------------------------------------
 
+def _cod_collected(db, business_id):
+    """What the ledger raised to COD Receivable, and what it credited: two queries.
+
+    Totalled rather than read off the two voucher amounts: two equal amounts is
+    the same assertion as "the account is zero", except that a collection which
+    raised nothing would net to zero against an equal remit of nothing.
+    """
+    from app.models.financial_transaction import FinancialTransaction
+    def total(**kw):
+        return sum((r.amount for r in db.query(FinancialTransaction).filter_by(
+            business_id=business_id, **kw)), Decimal("0"))
+    on_account = total(debit_account="COD Receivable")
+    to_account = total(credit_account="COD Receivable")
+    return on_account, to_account
+
+
 def test_period_costs_post_four_expense_types():
+    from app.models.financial_transaction import FinancialTransaction
     from app.services.finance_posting import post_period_costs
     db, b = _env()
     post_period_costs(db, b.id, START, END)
@@ -113,7 +134,6 @@ def test_period_costs_post_four_expense_types():
     assert got["PACKAGING_EXPENSE"] == "15.00"
     assert got["PAYMENT_GATEWAY_FEE"] == "20.00"
     assert len(got) == 4, got
-    from app.models.financial_transaction import FinancialTransaction
     assert all(r.pnl_class in ("EXPENSE", "COGS")
                for r in db.query(FinancialTransaction).all())
 
@@ -162,20 +182,22 @@ def test_a_repeat_run_reports_the_cost_rows_as_skipped_not_as_posted():
     """post_voucher already refuses to append a second voucher under a spent key, so
     the row count cannot prove the guard works: it is the REPORT that has to stop
     claiming a second run posted something."""
-    from app.services.finance_posting import ensure_period_postings
+    from app.services.finance_posting import _FLAT_COSTS, ensure_period_postings
+    keys = ["cogs", *[e[0] for e in _FLAT_COSTS]]
     db, b = _env()
     first = ensure_period_postings(db, b.id, START, END)
     db.commit()
-    assert all(first["costs"][k]["posted"] == 1 for k in first["costs"]), first
+    assert all(first["costs"][k]["posted"] == 1 for k in keys), first
     second = ensure_period_postings(db, b.id, START, END)
     db.commit()
-    assert all(second["costs"][k]["posted"] == 0 for k in second["costs"]), second
-    assert all(second["costs"][k]["skipped"] == 1 for k in second["costs"]), second
+    assert all(second["costs"][k]["posted"] == 0 for k in keys), second
+    assert all(second["costs"][k]["skipped"] == 1 for k in keys), second
+    assert {r["outcome"] for r in second["costs"]["records"]} == {"already_posted"}
 
 
 def test_dry_run_writes_nothing_but_reports_what_it_would_post():
     from app.models.financial_transaction import FinancialTransaction
-    from app.services.finance_posting import post_period_costs
+    from app.services.finance_posting import _FLAT_COSTS, post_period_costs
     db, b = _env()
     out = post_period_costs(db, b.id, START, END, dry_run=True)
     assert db.query(FinancialTransaction).count() == 0
@@ -183,7 +205,10 @@ def test_dry_run_writes_nothing_but_reports_what_it_would_post():
     assert out["shipping"]["would_post"] == 1
     assert out["packaging"]["would_post"] == 1
     assert out["gateway_fee"]["would_post"] == 1
-    assert all(s["posted"] == 0 for s in out.values()), out
+    keys = ["cogs", *[e[0] for e in _FLAT_COSTS]]
+    assert all(out[k]["posted"] == 0 for k in keys), out
+    assert all(out[k]["skipped"] == 0 for k in keys), out
+    assert {r["outcome"] for r in out["records"]} == {"would_post"}
 
 
 def test_kill_switch_off_writes_nothing_but_still_reports():
@@ -308,7 +333,7 @@ def _ensure(db, b, **kw):
 def test_missing_cod_collection_is_backfilled_then_the_remit_posts():
     """Every COD shipment delivered before Task 4 shipped has no collection voucher,
     so the first period this runs WILL hit CodCollectionMissing. It must be
-    recoverable, not merely skipped."""
+    recoverable, not merely skipped -- and it must actually close the loop."""
     db, b, ships = _cod_env()
     _sf(db, b, ships[0])
     out = _ensure(db, b)
@@ -319,6 +344,201 @@ def test_missing_cod_collection_is_backfilled_then_the_remit_posts():
                if s["outcome"] == "posted_with_backfill"]
     assert len(settled) == 1, out["cod"]["settlements"]
     assert out["cod"]["posted"] == 1, out["cod"]
+    # The two row amounts matching is not the claim under test: COD RECEIVABLE
+    # NETTING TO ZERO is. A backfill that raised nothing would net to zero against
+    # an equal remit of nothing, so both sides are asserted by figure.
+    raised, cleared = _cod_collected(db, b.id)
+    assert str(raised) == "1180.00", rows
+    assert str(cleared) == "1180.00", rows
+    assert raised == cleared
+    assert not out["cod"]["shortfalls"], out["cod"]
+
+
+def test_a_backfill_shortfall_is_reported_not_folded_into_success():
+    """A short or partial collection is the common case, and it leaves COD Receivable
+    non-zero. The remit only checks that a collection EXISTS, so without an explicit
+    reconciliation the payload would claim a clean post while the account still
+    carries the shortfall."""
+    db, b, ships = _cod_env()
+    # Collected 1180.00 at the door, but the carrier only settled 900.00
+    # (850 net + 30 fee + 20 deduction). The receivable keeps a 280.00 residual.
+    _sf(db, b, ships[0], net_settlement=850.0, fee_amount=30.0, other_deduction=20.0,
+        settled_amount=900.0, collected_amount=900.0, expected_cod_amount=1180.0)
+    out = _ensure(db, b)
+    entry = out["cod"]["settlements"][0]
+    assert entry["outcome"] == "posted_with_shortfall", entry
+    assert entry["collected_amount"] == "1180.00", entry
+    assert entry["settled_amount"] == "900.00", entry
+    assert entry["residual_amount"] == "280.00", entry
+    assert "280.00" in entry["reason"], entry
+    assert len(out["cod"]["shortfalls"]) == 1, out["cod"]
+    # Both vouchers really posted, and nothing was quietly written off.
+    assert _rows(db).get("COD_COLLECTION") == "1180.00", _rows(db)
+    raised, cleared = _cod_collected(db, b.id)
+    assert str(raised) == "1180.00" and str(cleared) == "900.00", (raised, cleared)
+    assert raised - cleared == Decimal("280.00")
+
+
+def test_a_shortfall_on_an_already_collected_shipment_is_also_reported():
+    """The same residual, reached without a backfill: the collection was raised by the
+    delivery flow and the carrier under-settled. Measured against the figure
+    actually posted, not against what the order says today."""
+    db, b, ships = _cod_env()
+    from app.services.finance_posting import record_cod_collection_from_shipment
+    record_cod_collection_from_shipment(db, b.id, ships[0])
+    db.commit()
+    _sf(db, b, ships[0], net_settlement=850.0, fee_amount=30.0, other_deduction=20.0,
+        settled_amount=900.0)
+    out = _ensure(db, b)
+    entry = out["cod"]["settlements"][0]
+    assert entry["outcome"] == "posted_with_shortfall", entry
+    assert entry["residual_amount"] == "280.00", entry
+    assert out["cod"]["shortfalls"] and out["cod"]["posted"] == 1, out["cod"]
+
+
+def test_dry_run_reports_the_shortfall_it_would_leave():
+    from app.models.financial_transaction import FinancialTransaction
+    db, b, ships = _cod_env()
+    _sf(db, b, ships[0], net_settlement=850.0, fee_amount=30.0, other_deduction=20.0,
+        settled_amount=900.0)
+    out = _ensure(db, b, dry_run=True)
+    entry = out["cod"]["settlements"][0]
+    assert entry["outcome"] == "would_post_with_shortfall", entry
+    assert entry["residual_amount"] == "280.00", entry
+    assert db.query(FinancialTransaction).count() == 0
+
+
+# --- Important 1: no single record may abort the period ------------------------
+
+def test_backfill_into_a_closed_month_does_not_abort_the_period():
+    """The ordinary legacy case: a COD shipment delivered 2026-08-20 with August
+    closed, settling 2026-09-05 with September open. The collection write is dated
+    on delivered_at, so post_voucher's closed-period guard raises ClosedPeriodError
+    from INSIDE the backfill handler. That must cost this one shipment its posting
+    -- not every other settlement's, and not the period's cost rows."""
+    from app.models.accounting_period import AccountingPeriod
+    from app.models.financial_transaction import FinancialTransaction
+    from app.models.order import Order
+    db, b, ships = _cod_env(n=2)
+    legacy_order = db.query(Order).filter_by(id=ships[0].order_id).one()
+    legacy_order.order_date = datetime(2026, 8, 20, tzinfo=timezone.utc)
+    ships[0].delivered_at = datetime(2026, 8, 20, tzinfo=timezone.utc)
+    db.add(AccountingPeriod(business_id=b.id, year=2026, month=8, status="CLOSED"))
+    db.commit()
+    _sf(db, b, ships[0], settlement_reference="LEGACY",
+        settlement_date=datetime(2026, 9, 5, tzinfo=timezone.utc))
+    _sf(db, b, ships[1], settlement_reference="SEPT")
+
+    out = _ensure(db, b)
+    by_ref = {s["settlement_reference"]: s for s in out["cod"]["settlements"]}
+    legacy = by_ref["LEGACY"]
+    # The failure is named, and reported as the BACKFILL failing -- which is what
+    # tells an operator to reopen August rather than to chase the carrier.
+    assert "ClosedPeriodError" in legacy["reason"], legacy
+    assert legacy["reason"].startswith("collection backfill failed:"), legacy
+    assert legacy["outcome"] == "skipped", legacy
+    assert by_ref["SEPT"]["outcome"] == "posted_with_backfill", by_ref["SEPT"]
+    assert out["cod"]["posted"] == 1, out["cod"]
+    assert out["cod"]["skipped"] == 1, out["cod"]
+    # Only the September settlement posted, and its cost rows are on the ledger:
+    # the endpoint's rollback never fired.
+    assert db.query(FinancialTransaction).filter_by(
+        transaction_type="COD_REMIT").count() == 4, _rows(db)
+    assert db.query(FinancialTransaction).filter_by(
+        transaction_type="COD_COLLECTION").count() == 1, _rows(db)
+    assert sorted(_rows(db)) == ["COD_COLLECTION", "COD_REMIT", "COGS",
+                                 "PACKAGING_EXPENSE", "PAYMENT_GATEWAY_FEE",
+                                 "SHIPPING_EXPENSE"], _rows(db)
+
+
+def test_a_settlement_refusal_still_does_not_abort_the_period_when_the_whole_session_fails(monkeypatch):
+    """The second line of defence: even a failure nothing anticipated is contained,
+    named, and costs only its own settlement."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import finance_posting as fp
+    db, b, ships = _cod_env(n=2)
+    _sf(db, b, ships[0], settlement_reference="FIRST")
+    _sf(db, b, ships[1], settlement_reference="SECOND")
+    real = fp.record_cod_remittance_from_shipment_financial
+    seen = {"n": 0}
+
+    def flaky(*a, **kw):
+        if seen["n"] == 0:
+            seen["n"] += 1
+            raise ZeroDivisionError("simulated driver fault")
+        seen["n"] += 1
+        return real(*a, **kw)
+
+    monkeypatch.setattr(fp, "record_cod_remittance_from_shipment_financial", flaky)
+    out = _ensure(db, b)
+    entries = out["cod"]["settlements"]
+    assert entries[0]["outcome"] == "error", entries[0]
+    assert "ZeroDivisionError" in entries[0]["reason"], entries[0]
+    assert entries[1]["outcome"] == "posted_with_backfill", entries[1]
+    assert out["cod"]["posted"] == 1 and out["cod"]["skipped"] == 1, out["cod"]
+    assert db.query(FinancialTransaction).filter_by(
+        transaction_type="COD_REMIT").count() == 4, _rows(db)
+
+
+def test_one_cost_record_failure_does_not_abort_the_period(monkeypatch):
+    """The cost loops used to have no per-record guard at all, so a get_cost or
+    database error on one order took the whole period -- and the endpoint's
+    rollback took the already-posted rows with it."""
+    from app.models.financial_transaction import FinancialTransaction
+    from app.services import ledger_service as ls
+    from app.services.finance_posting import ensure_period_postings
+    db, b = _env(two_orders=True)
+    real = ls.post_voucher
+    seen = {"n": 0}
+
+    def flaky(*a, **kw):
+        # Fail the SECOND order's COGS, so there is a sibling to lose if the
+        # isolation is not there.
+        if kw.get("voucher_key", "").startswith("COGS:") and seen["n"] == 1:
+            seen["n"] += 1
+            raise RuntimeError("simulated pricing failure")
+        seen["n"] += 1
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ls, "post_voucher", flaky)
+    out = ensure_period_postings(db, b.id, START, END)
+    db.commit()
+    failed = [r for r in out["costs"]["records"] if r["outcome"] == "error"]
+    assert len(failed) == 1, out["costs"]["records"]
+    assert "RuntimeError" in failed[0]["reason"], failed
+    assert "pricing failure" in failed[0]["reason"], failed
+    # The other order's COGS and every flat-rate row still landed.
+    assert db.query(FinancialTransaction).filter_by(
+        transaction_type="COGS").count() == 1, _rows(db)
+    assert db.query(FinancialTransaction).filter_by(
+        transaction_type="PAYMENT_GATEWAY_FEE").count() == 2, _rows(db)
+
+
+def test_a_cost_rate_lookup_failure_is_reported_not_read_as_no_cost_data():
+    """A failed rule lookup must not become a silent zero rate, which would then read
+    as "no cost configured" for every order in the period."""
+    from app.services import cost_service
+    from app.services.finance_posting import post_period_costs
+    db, b = _env()
+
+    def boom(db_, business_id, key, at, product_id=None):
+        if key == "SHIPPING":
+            raise RuntimeError("simulated rule read failure")
+        return 200.0, "MANUAL"
+
+    original = cost_service.get_cost
+    cost_service.get_cost = boom
+    try:
+        out = post_period_costs(db, b.id, START, END)
+    finally:
+        cost_service.get_cost = original
+    freight = [r for r in out["records"] if r["cost_type"] == "shipping"]
+    assert freight and freight[0]["outcome"] == "error", freight
+    assert "rule read failure" in freight[0]["reason"], freight
+    assert out["shipping"]["posted"] == 0 and out["shipping"]["skipped"] == 1, out
+    # The other three writers are untouched by the one bad rule.
+    assert out["cogs"]["posted"] == 1, out
+    assert out["packaging"]["posted"] == 1 and out["gateway_fee"]["posted"] == 1, out
 
 
 def test_missing_collection_on_an_undelivered_shipment_is_nothing_due_not_an_error():
@@ -406,7 +626,7 @@ def test_cod_kill_switch_off_writes_nothing_but_still_reports():
         out = ensure_period_postings(db, b.id, START, END)
         assert out["auto_posted"] is False
         assert out["cod"]["would_post"] == 1, out["cod"]
-        assert out["cod"]["settlements"][0]["outcome"] == "would_post_backfill", out["cod"]
+        assert out["cod"]["settlements"][0]["outcome"] == "would_post_with_backfill", out["cod"]
         # Nothing COD on the ledger; the cost switch is still on, so the period's
         # four cost rows are written -- the kill switch is scoped, not global.
         assert db.query(FinancialTransaction).filter(
@@ -427,7 +647,7 @@ def test_cod_dry_run_reports_the_collection_it_would_backfill():
     out = _ensure(db, b, dry_run=True)
     assert db.query(FinancialTransaction).count() == 0
     assert out["cod"]["would_post"] == 1, out["cod"]
-    assert out["cod"]["settlements"][0]["outcome"] == "would_post_backfill", out["cod"]
+    assert out["cod"]["settlements"][0]["outcome"] == "would_post_with_backfill", out["cod"]
 
 
 # --- Obligation 2: a corrected settlement is surfaced, not swallowed ----------
@@ -499,6 +719,89 @@ def test_cod_loop_does_not_query_orders_once_per_settlement():
     assert four == one, f"orders queries grew with settlement count: 1 -> {one}, 4 -> {four}"
 
 
+# --- Important 4: the cost side carries per-record detail ---------------------
+
+def test_cost_records_separate_the_three_skip_reasons():
+    """`skipped: 4` cannot distinguish "the period is fully posted" from "four
+    records have no cost data" -- and the second is the condition month-close's
+    missing_cogs check exists to catch."""
+    from app.services.finance_posting import post_period_costs
+    db, b = _env()
+    first = post_period_costs(db, b.id, START, END)
+    db.commit()
+    # A second run: every record is already on file.
+    second = post_period_costs(db, b.id, START, END)
+    db.commit()
+    assert {r["outcome"] for r in second["records"]} == {"already_posted"}
+    # A fresh business with no cost rules at all: nothing is due, per record.
+    db2, b2 = _db_env_no_rules()
+    third = post_period_costs(db2, b2.id, START, END)
+    assert third["cogs"]["skipped"] == 1 and third["shipping"]["skipped"] == 1, third
+    assert third["packaging"]["skipped"] == 1 and third["gateway_fee"]["skipped"] == 1
+    assert {r["outcome"] for r in third["records"]} == {"no_rate_in_force",
+                                                        "no_costed_line"}, third["records"]
+    assert first["cogs"]["posted"] == 1
+
+
+def _db_env_no_rules():
+    _eng, mk = _db()
+    db = mk()
+    b, c = _biz(db)
+    o = _order(db, b, c, name="A", qty=2)
+    _ship(db, b, o, status="IN_TRANSIT")
+    return db, b
+
+
+def test_cost_records_name_the_order_and_the_voucher_key():
+    """An operator has to be able to act on a record, which needs the order id."""
+    from app.models.order import Order
+    from app.services.finance_posting import post_period_costs
+    db, b = _env(two_orders=True)
+    out = post_period_costs(db, b.id, START, END)
+    orders = {o.id for o in db.query(Order).all()}
+    freight = [r for r in out["records"] if r["cost_type"] == "shipping"]
+    assert len(freight) == 2, freight
+    for r in freight:
+        assert r["order_id"] in orders, r
+        assert r["shipment_id"], r
+        assert r["voucher_key"].startswith("SHIPPING_EXPENSE:"), r
+        assert r["reason"] == "", r
+    for r in out["records"]:
+        assert {"cost_type", "order_id", "shipment_id", "voucher_key", "outcome",
+                "reason"} <= set(r), r
+
+
+def test_a_voucher_key_longer_than_the_column_is_matched_the_same_way_on_both_sides():
+    """_posted_groups stores fitted keys, so the lookup must fit too. Every real key
+    is TYPE:<uuid> and short, so only an oversized key exposes the mismatch -- and
+    with it, a report that claims `posted` forever while post_voucher swallows the
+    replay."""
+    from app.services import ledger_service as ls
+    from app.services import finance_posting as fp
+    key = "PAYMENT_GATEWAY_FEE:" + ("x" * 200)
+    groups = {ls._fit_key(key): [("", "Payment Gateway", Decimal("20.00"))]}
+    assert key not in groups, "the fixture must actually be oversized"
+    assert fp._on_file(groups, key) is True, "an oversized key must still be found"
+    assert fp._credited(groups, key, "Payment Gateway") == Decimal("20.00")
+
+
+# --- Minors -------------------------------------------------------------------
+
+def test_auto_posted_is_false_for_a_dry_run_that_wrote_nothing():
+    """`auto_posted` means the period WAS auto-posted, so a dry run cannot say true."""
+    from app.services.finance_posting import ensure_period_postings
+    db, b = _env()
+    live = ensure_period_postings(db, b.id, START, END)
+    db.commit()
+    assert live["auto_posted"] is True and live["dry_run"] is False, live
+    assert live["switches"] == {"costs": True, "cod": True}, live
+    db2, b2 = _env()
+    dry = ensure_period_postings(db2, b2.id, START, END, dry_run=True)
+    assert dry["auto_posted"] is False, dry
+    assert dry["switches"] == {"costs": True, "cod": True}, dry
+    assert dry["dry_run"] is True, dry
+
+
 # --- The endpoint -------------------------------------------------------------
 
 def test_post_period_costs_endpoint_posts_and_is_role_gated():
@@ -560,21 +863,29 @@ def test_post_period_costs_endpoint_posts_and_is_role_gated():
 def test_tally_export_only_posts_when_both_date_bounds_are_given():
     """A one-sided window is the real trap: read as 'from date_from until NOW' it is
     far wider than the export, so the export would post costs for months it is not
-    exporting. With no window at all there is no period to post, so skip."""
+    exporting. With no window at all there is no period to post, so skip.
+
+    Only TallyError is caught: it is the export's own refusal. Anything else -- a
+    bug in the wiring above the guard -- has to fail this test rather than be
+    swallowed, or the guard would look tested while never being reached. The guard
+    is the first statement of generate_workbook_export, so merely entering the
+    function proves it was evaluated.
+    """
     from app.models.financial_transaction import FinancialTransaction
     from app.models.order import Order
     from app.services import tally_service as ts
     from app.services.ledger_service import record_sale_from_order
-    db, b = _env()
-    record_sale_from_order(db, b.id, db.query(Order).one())
-    db.commit()
     for kwargs in ({}, {"date_from": "2026-09-01T00:00:00+00:00"},
                    {"date_to": "2026-10-01T00:00:00+00:00"}):
+        db, b = _env()  # fresh per shape, so no export state leaks between them
+        record_sale_from_order(db, b.id, db.query(Order).one())
+        db.commit()
         try:
             ts.generate_workbook_export(db, b.id, "u1", **kwargs)
-        except Exception:
-            pass  # the export itself may block on validation; the postings matter
-    assert db.query(FinancialTransaction).filter_by(transaction_type="COGS").count() == 0
+        except ts.TallyError:
+            pass
+        assert db.query(FinancialTransaction).filter_by(
+            transaction_type="COGS").count() == 0, kwargs
 
 
 def test_tally_export_posts_the_period_it_exports():
@@ -585,11 +896,10 @@ def test_tally_export_posts_the_period_it_exports():
     db, b = _env()
     record_sale_from_order(db, b.id, db.query(Order).one())
     db.commit()
-    try:
-        ts.generate_workbook_export(db, b.id, "u1",
-                                    "2026-09-01T00:00:00+00:00", "2026-10-01T00:00:00+00:00")
-    except Exception:
-        pass  # export may block on GST validation; the postings are what matter
+    # No try/except: the export must succeed, or the postings below are not proof
+    # of anything the guard did.
+    ts.generate_workbook_export(db, b.id, "u1",
+                                "2026-09-01T00:00:00+00:00", "2026-10-01T00:00:00+00:00")
     assert db.query(FinancialTransaction).filter_by(transaction_type="COGS").count() == 1
     assert db.query(FinancialTransaction).filter_by(
         transaction_type="PAYMENT_GATEWAY_FEE").count() == 1

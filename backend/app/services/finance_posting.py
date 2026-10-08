@@ -216,18 +216,35 @@ _COGS_RULE = "COGS_DEFAULT"
 _PER_ORDER = tuple(e[:5] for e in _FLAT_COSTS if e[5] == "order")
 _PER_SHIPMENT = tuple(e[:5] for e in _FLAT_COSTS if e[5] == "shipment")
 
-# Outcome names reported per settlement. "posted" and "skipped" also move the
-# counters in the same payload; the others are detail: already on file, nothing was
-# due, the settlement was corrected after it posted (a reversal is needed, which
-# the ledger cannot do yet), or the dry-run shapes of the posting outcomes.
+# Outcome names reported per record. Anything that did not write is reported by
+# WHY it did not write, because the counters alone cannot separate "already on
+# file" from "we have no cost data for this order" -- and that second one is the
+# condition month-close's missing_cogs check exists to catch.
 _OUT_POSTED = "posted"
 _OUT_BACKFILLED = "posted_with_backfill"
-_OUT_SKIPPED = "skipped"
-_OUT_REPLAY = "already_posted"
-_OUT_NOTHING_DUE = "nothing_due"
-_OUT_CORRECTION = "correction_pending"
+_OUT_SHORTFALL = "posted_with_shortfall"
 _OUT_WOULD = "would_post"
-_OUT_WOULD_BACKFILL = "would_post_backfill"
+_OUT_WOULD_BACKFILL = "would_post_with_backfill"
+_OUT_WOULD_SHORTFALL = "would_post_with_shortfall"
+_OUT_ALREADY = "already_posted"
+_OUT_NOTHING_DUE = "nothing_due"
+_OUT_NO_RATE = "no_rate_in_force"
+_OUT_NO_COSTED_LINE = "no_costed_line"
+_OUT_CORRECTION = "correction_pending"
+_OUT_SKIPPED = "skipped"
+_OUT_ERROR = "error"
+
+# Which counter each outcome moves. Written out rather than reusing the outcome
+# string as a counter key, so the reporting vocabulary and the summary counters
+# are two things that can be read apart. Everything absent counts as skipped.
+_COUNTER_FOR = {
+    _OUT_POSTED: "posted",
+    _OUT_BACKFILLED: "posted",
+    _OUT_SHORTFALL: "posted",
+    _OUT_WOULD: "would_post",
+    _OUT_WOULD_BACKFILL: "would_post",
+    _OUT_WOULD_SHORTFALL: "would_post",
+}
 
 
 def _ts(dt) -> datetime:
@@ -246,13 +263,7 @@ def _counters() -> dict:
 
 
 def _slot(bucket: dict, key: str) -> dict:
-    """The counter shape every cost report key uses: posted / skipped / would_post.
-
-    `skipped` means nothing was written and here is why -- either the voucher is
-    already on file, or no cost rule is in force for the period, or the order
-    carries no costed line. The cost payload has no per-record detail, so the
-    per-settlement detail lives in ensure_period_postings' `cod` section.
-    """
+    """The counter shape every report key uses: posted / skipped / would_post."""
     return bucket.setdefault(key, _counters())
 
 
@@ -261,8 +272,46 @@ def _blank_costs() -> dict:
     return {"cogs": _counters(), **{key: _counters() for key, *_ in _FLAT_COSTS}}
 
 
+def _why(exc: Exception) -> str:
+    """Name a failure, so an operator sees which record failed and how."""
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _attempt(work):
+    """Run one step and turn any failure into an exception to report, not to raise.
+
+    This is what keeps a step's failure from ending its siblings. A period loop is
+    exactly the place where one bad record silently costs every other record its
+    posting: the backfill call below sits inside a handler, so an exception from it
+    reaches none of that handler's siblings.
+    """
+    try:
+        return work(), None
+    except Exception as err:  # noqa: BLE001 - one step must not lose the record
+        return None, err
+
+
+def _isolated(db: Session, work, *, dry_run: bool):
+    """Run `work()` in its own SAVEPOINT so a dry run structurally writes nothing.
+
+    Returns ``(result, exc)``; `exc` is None when `work()` completed. A dry run and
+    a failure both roll the SAVEPOINT back, so nothing a dry run touched survives
+    and a failure never leaves a half-written voucher behind. On a live run the
+    SAVEPOINT is released, so work that succeeded before a later step failed keeps
+    its posting -- a raised COD collection is correct on its own even if the
+    remittance it was raised for then turns out not to post.
+    """
+    savepoint = db.begin_nested()
+    result, exc = _attempt(work)
+    if dry_run or exc is not None:
+        savepoint.rollback()
+    else:
+        savepoint.commit()
+    return result, exc
+
+
 def _posted_groups(db: Session, business_id: str, keys) -> dict:
-    """One query for the whole period: group id -> its (credit_account, amount) legs.
+    """One query for the whole period: group id -> its (debit, credit, amount) legs.
 
     The idempotency check used to be a query per posting, which in a period loop
     is a query per order and per shipment. Keys are fitted the way post_voucher
@@ -275,16 +324,95 @@ def _posted_groups(db: Session, business_id: str, keys) -> dict:
         return out
     for r in db.query(FinancialTransaction).filter_by(business_id=business_id).filter(
             FinancialTransaction.voucher_group_id.in_(wanted)).all():
-        out.setdefault(r.voucher_group_id, []).append((r.credit_account or "", _d(r.amount)))
+        out.setdefault(r.voucher_group_id, []).append(
+            (r.debit_account or "", r.credit_account or "", _d(r.amount)))
     return out
+
+
+def _legs_of(groups: dict, key: str):
+    """The legs on file for this voucher key, or None if it never posted.
+
+    Every lookup goes through ls._fit_key because that is how post_voucher stores
+    it. Testing the raw key against a dict of fitted keys works only until a key
+    passes 128 characters, at which point the report would claim `posted` forever
+    while post_voucher silently swallowed the replay.
+    """
+    return groups.get(ls._fit_key(key))
+
+
+def _on_file(groups: dict, key: str) -> bool:
+    return _legs_of(groups, key) is not None
 
 
 def _credited(groups: dict, key: str, account: str) -> Decimal | None:
     """What the voucher on file credited to `account`, or None if it never posted."""
-    legs = groups.get(ls._fit_key(key))
+    legs = _legs_of(groups, key)
     if legs is None:
         return None
-    return sum((a for cr, a in legs if cr == account), Decimal("0.00"))
+    return sum((a for _dr, cr, a in legs if cr == account), Decimal("0.00"))
+
+
+def _debited(groups: dict, key: str, account: str) -> Decimal | None:
+    """What the voucher on file debited to `account`, or None if it never posted."""
+    legs = _legs_of(groups, key)
+    if legs is None:
+        return None
+    return sum((a for dr, _cr, a in legs if dr == account), Decimal("0.00"))
+
+
+def _cod_cleared(sf) -> Decimal:
+    """The gross the carrier settled: net plus fees plus other deductions."""
+    return _d(sf.net_settlement) + _d(sf.fee_amount) + _d(sf.other_deduction)
+
+
+def _cod_collected(order) -> Decimal:
+    """What a COD_COLLECTION raises for this order: what the courier took at the door."""
+    if order is None:
+        return Decimal("0.00")
+    return _d(order.cod_value or order.total_amount)
+
+
+def _cod_residual(collected: Decimal | None, sf) -> tuple[Decimal, Decimal] | None:
+    """(collected, cleared) when the two disagree by more than carrier rounding.
+
+    The collection raises what the order was worth and the remittance credits COD
+    Receivable with what the carrier actually paid, so any short or partial
+    collection leaves a residual on the account. That is a real business signal --
+    a refusal, an RTO, a short delivery -- and not a posting error: it is reported
+    with both figures and left on the books, never silently written off.
+    """
+    if collected is None:
+        return None  # nothing was raised, which the remit writer refuses outright
+    cleared = _cod_cleared(sf)
+    return None if abs(collected - cleared) <= _TOLERANCE else (collected, cleared)
+
+
+def _one_cost_record(db: Session, business_id: str, legs_fn, *, vtype: str, key: str,
+                     order, reference, dry_run: bool,
+                     nothing_due: tuple[str, str]) -> tuple[str, str]:
+    """Price and post ONE cost voucher, isolated in its own SAVEPOINT.
+
+    `legs_fn` returns the legs, or None when nothing is due for this record --
+    which it signals as `nothing_due` rather than this function inventing a second
+    vocabulary. Everything it raises is contained here, because a get_cost or
+    database error on one record must cost that record its posting and not the
+    whole period's.
+    """
+    def work():
+        legs = legs_fn()
+        if legs is None:
+            return nothing_due
+        if dry_run:
+            return (_OUT_WOULD, "")
+        ls.post_voucher(db, business_id, vtype, legs, order_id=order.id,
+                        transaction_date=order.order_date,
+                        reference_number=reference, voucher_key=key)
+        return (_OUT_POSTED, "")
+
+    outcome, exc = _isolated(db, work, dry_run=dry_run)
+    if exc is not None:
+        return (_OUT_ERROR, _why(exc))
+    return outcome
 
 
 def post_period_costs(db: Session, business_id: str, start, end, *,
@@ -296,24 +424,29 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
     each number stays traceable and monthly_report's ESTIMATED label stays honest.
 
     Every voucher is keyed `TYPE:{record id}`, so this is idempotent per record:
-    a repeat run reports the record as skipped rather than appending a second
-    voucher. Each leg names both of its accounts -- a leg with one side empty
-    contributes 0 to that side and balances trivially, so a passing balance check
-    would not prove the accounts are right.
+    a repeat run reports the record as already_posted rather than appending a
+    second voucher. Each leg names both of its accounts -- a leg with one side
+    empty contributes 0 to that side and balances trivially, so a passing balance
+    check would not prove the accounts are right.
 
-    A dry run takes no branch that writes, so it needs no rollback. Deliberate:
-    rolling the session back would discard the caller's own uncommitted work, which
-    is not this function's to undo.
+    Returns the four counters the brief's interface fixes, plus `records`: one
+    entry per record considered, saying which record it was and why it did or did
+    not post. The counters alone cannot separate "the period is fully posted"
+    from "120 orders have no cost data", and month-close needs to tell those apart.
 
-    Raises ClosedPeriodError (from post_voucher) when the period is closed. That
-    is a whole-period condition, not a per-record one, so it is loud rather than
-    quietly reported as a skip.
+    Every record is individually isolated, so no single record can abort its
+    siblings, and nothing raises out of here for a record-level problem. Failures
+    are reported in `records` with the exception named. A dry run writes nothing
+    because each record's SAVEPOINT is rolled back, not because any branch is
+    skipped -- and not by rolling the session back, which would discard the
+    caller's own uncommitted work.
     """
     from app.models.order import Order, OrderItem
     from app.models.shipment import Shipment
     from app.services.cost_service import get_cost
 
     bucket = _blank_costs()
+    records: list[dict] = []
     start, end = _ts(start), _ts(end)
     orders = db.query(Order).filter_by(business_id=business_id).filter(
         Order.order_date >= start, Order.order_date < end).all()
@@ -324,8 +457,19 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
     # The cost rule in force at the END of the period. A rate changed mid-period is
     # therefore applied from the next run rather than being backdated into this one.
     anchor = end - timedelta(microseconds=1)
-    rates = {rule: _d(get_cost(db, business_id, rule, anchor)[0])
-             for rule in (_COGS_RULE, *(e[2] for e in _FLAT_COSTS))}
+    rates: dict[str, Decimal] = {}
+    rule_errors: dict[str, str] = {}
+    for rule in (_COGS_RULE, *(e[2] for e in _FLAT_COSTS)):
+        # A failed rule lookup is recorded, not turned into a silent zero rate that
+        # would then read as "no cost configured" for every order in the period.
+        amount, exc = _isolated(
+            db, lambda rule=rule: get_cost(db, business_id, rule, anchor)[0],
+            dry_run=True)
+        if exc is not None:
+            rates[rule] = Decimal("0.00")
+            rule_errors[rule] = _why(exc)
+        else:
+            rates[rule] = _d(amount)
     items_by_order: dict[str, list] = {}
     for it in db.query(OrderItem).filter(
             OrderItem.order_id.in_(list(by_order))).all():
@@ -337,19 +481,39 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
         *(f"COGS:{o.id}" for o in orders),
     ])
 
-    def _report(report_key: str, vtype: str, key: str, legs, order, reference=None) -> None:
-        if key in groups:
-            _slot(bucket, report_key)["skipped"] += 1
-        elif dry_run:
-            _slot(bucket, report_key)["would_post"] += 1
-        else:
-            ls.post_voucher(db, business_id, vtype, legs, order_id=order.id,
-                            transaction_date=order.order_date,
-                            reference_number=reference, voucher_key=key)
-            _slot(bucket, report_key)["posted"] += 1
+    def _record(report_key, outcome, *, order=None, shipment_id=None, key=None,
+                reason="") -> None:
+        _slot(bucket, report_key)[_COUNTER_FOR.get(outcome, "skipped")] += 1
+        records.append({
+            "cost_type": report_key,
+            "order_id": getattr(order, "id", None),
+            "shipment_id": shipment_id,
+            "voucher_key": key,
+            "outcome": outcome,
+            "reason": reason,
+        })
 
-    # COGS: priced per line, so it is not the flat rate.
-    for o in orders:
+    def _run(report_key, vtype, rule, key, order, legs_fn, *, shipment_id=None,
+             reference=None, nothing_due) -> None:
+        # A rule that could not be read is a failure of THIS record, not a statement
+        # that no cost is configured -- so it is reported as an error rather than
+        # folded into the "no rate in force" case for every order in the period.
+        if rule in rule_errors:
+            _record(report_key, _OUT_ERROR, order=order, shipment_id=shipment_id,
+                    key=key, reason=rule_errors[rule])
+            return
+        if _on_file(groups, key):
+            _record(report_key, _OUT_ALREADY, order=order, shipment_id=shipment_id,
+                    key=key, reason="voucher already on file")
+            return
+        outcome, reason = _one_cost_record(
+            db, business_id, legs_fn, vtype=vtype, key=key, order=order,
+            reference=reference, dry_run=dry_run, nothing_due=nothing_due)
+        _record(report_key, outcome, order=order, shipment_id=shipment_id,
+                key=key, reason=reason)
+
+    def _cogs_legs(o):
+        """COGS for one order from its priced lines, or None when none is costed."""
         total = Decimal("0.00")
         for it in items_by_order.get(o.id, []):
             unit, _src = get_cost(db, business_id, _COGS_RULE, anchor,
@@ -357,42 +521,134 @@ def post_period_costs(db: Session, business_id: str, start, end, *,
             total += _d(unit) * int(it.quantity or 0)  # Decimal throughout, never the float
         total = _d(total)
         if total <= 0:
-            _slot(bucket, "cogs")["skipped"] += 1  # no costed line: nothing due
-            continue
-        _report("cogs", "COGS", f"COGS:{o.id}",
-                [{"debit": ls.ACC_COGS, "credit": ls.ACC_INVENTORY,
-                  "amount": total, "pnl_class": "COGS"}], o)
+            return None
+        return [{"debit": ls.ACC_COGS, "credit": ls.ACC_INVENTORY,
+                 "amount": total, "pnl_class": "COGS"}]
+
+    def _flat_legs(rule, debit, credit):
+        """The flat-rate leg, or None when no rule is in force for this period."""
+        if rates[rule] <= 0:
+            return None
+        return [{"debit": debit, "credit": credit, "amount": rates[rule],
+                 "pnl_class": "EXPENSE"}]
+
+    # COGS: priced per line, so it is not the flat rate. The default argument binds
+    # `o` now, because legs_fn is called later, inside the isolation.
+    for o in orders:
+        _run("cogs", "COGS", _COGS_RULE, f"COGS:{o.id}", o,
+             lambda o=o: _cogs_legs(o),
+             nothing_due=(_OUT_NO_COSTED_LINE,
+                          "no line on this order has a cost in force"))
 
     # Packaging and gateway fee: a flat rate each, charged per order.
     for o in orders:
         for report_key, vtype, rule, debit, credit in _PER_ORDER:
-            if rates[rule] <= 0:
-                _slot(bucket, report_key)["skipped"] += 1  # no rate in force
-                continue
-            _report(report_key, vtype, f"{vtype}:{o.id}",
-                    [{"debit": debit, "credit": credit, "amount": rates[rule],
-                      "pnl_class": "EXPENSE"}], o)
+            _run(report_key, vtype, rule, f"{vtype}:{o.id}", o,
+                 lambda rule=rule, debit=debit, credit=credit: _flat_legs(rule, debit, credit),
+                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this period"))
 
     # Freight is per shipment, dated on its order so it lands in the same period.
     for s in ships:
         for report_key, vtype, rule, debit, credit in _PER_SHIPMENT:
-            if rates[rule] <= 0:
-                _slot(bucket, report_key)["skipped"] += 1  # no rate in force
-                continue
-            _report(report_key, vtype, f"{vtype}:{s.id}",
-                    [{"debit": debit, "credit": credit, "amount": rates[rule],
-                      "pnl_class": "EXPENSE"}], by_order[s.order_id], s.awb_number)
+            _run(report_key, vtype, rule, f"{vtype}:{s.id}", by_order[s.order_id],
+                 lambda rule=rule, debit=debit, credit=credit: _flat_legs(rule, debit, credit),
+                 shipment_id=s.id, reference=s.awb_number,
+                 nothing_due=(_OUT_NO_RATE, f"no {rule} CostRule in force for this period"))
 
-    return bucket
+    return {**bucket, "records": records}
 
 
-def _post_one_settlement(db: Session, business_id: str, sf, order, shipment, *,
-                         dry_run: bool) -> tuple[str, str]:
-    """Post (or would post) one carrier settlement. Returns (outcome, reason).
+def _backfill_collection(db: Session, business_id: str, sf, order, shipment, original, *,
+                         dry_run: bool) -> tuple[str, str, tuple | None]:
+    """OUR collection was never raised. Raise it, then post the remittance.
 
-    Never raises for a settlement-level problem. An uncaught raise here would abort
-    every other posting in the period, and the three failure conditions need
-    different actions, so each is caught by name rather than as a bare ValueError:
+    Every step is individually attempted, and that is the whole point: the
+    collection write is dated on `delivered_at`, so a shipment delivered in an
+    ALREADY-CLOSED month raises ClosedPeriodError from post_voucher's guard. That
+    call sits inside a handler, so an exception from it reaches none of that
+    handler's siblings and would abort every other settlement in the period -- and
+    the endpoint's rollback would take the cost rows down with it. It is caught
+    here, named, and reported against this one shipment.
+
+    The two steps share the caller's SAVEPOINT on purpose. A dry run rolls it back
+    once at the end, so the collection raised here is visible to the remittance
+    step that follows; a per-step rollback would hide it and the remittance would
+    refuse as though nothing had been backfilled.
+    """
+    if shipment is None:
+        return (_OUT_SKIPPED,
+                f"no COD collection and shipment {sf.shipment_id} is not on file: {original}",
+                None)
+    raised, exc = _attempt(lambda: record_cod_collection_from_shipment(
+        db, business_id, shipment, order=order))
+    if exc is not None:
+        return (_OUT_SKIPPED, f"collection backfill failed: {_why(exc)}", None)
+    if raised is None:
+        # Nothing was collectable at the door, so this is not a failure: the courier
+        # has not been handed the customer's cash yet and there is no receivable to
+        # clear. Report it and move on.
+        return (_OUT_NOTHING_DUE,
+                "shipment is not delivered, so no COD collection is due"
+                if (shipment.tracking_status or "").upper() != "DELIVERED"
+                else "the order carries no collectable amount, so no COD collection "
+                     "could be raised",
+                None)
+    _, exc = _attempt(lambda: record_cod_remittance_from_shipment_financial(
+        db, business_id, sf, order=order))
+    if exc is not None:
+        return (_OUT_SKIPPED, f"collection backfill did not clear the remit: {_why(exc)}",
+                None)
+    # The backfill raised exactly this figure, so the residual can be read off the
+    # order without touching the voucher rows -- which a dry run is about to roll
+    # back and which must not be depended on.
+    residual = _cod_residual(_cod_collected(order), sf)
+    return _settled_outcome(dry_run, residual, backfilled=True) + (residual,)
+
+
+def _settle_refusal(db: Session, business_id: str, sf, order, shipment, exc, *,
+                    dry_run: bool) -> tuple[str, str, tuple | None]:
+    """What to DO about a remittance the writer refused, told apart by type.
+
+    Never by a bare ValueError: the three conditions mean different things, and
+    one of them (a missing collection) is recoverable.
+    """
+    if isinstance(exc, CodCollectionMissing):
+        return _backfill_collection(db, business_id, sf, order, shipment, exc,
+                                    dry_run=dry_run)
+    if isinstance(exc, CodSettlementMismatch):
+        return (_OUT_SKIPPED, f"settlement does not reconcile: {exc}", None)
+    if isinstance(exc, ValueError):
+        # A negative component is a carrier clawback, which is a reversal, or the
+        # period is closed. Either way: reported, never posted.
+        return (_OUT_SKIPPED, f"not postable as a remittance: {exc}", None)
+    return (_OUT_ERROR, _why(exc), None)
+
+
+def _settled_outcome(dry_run: bool, residual, *, backfilled: bool) -> tuple[str, str]:
+    """The outcome for a remittance that did land, given any residual it leaves.
+
+    A residual is NOT success. Both vouchers posted, but COD Receivable does not
+    reach zero, so the account carries a real shortfall that an operator has to
+    see; it is reported with both figures and never written off here.
+    """
+    if residual is None:
+        if dry_run:
+            return (_OUT_WOULD_BACKFILL if backfilled else _OUT_WOULD, "")
+        return (_OUT_BACKFILLED if backfilled else _OUT_POSTED, "")
+    collected, cleared = residual
+    return (_OUT_WOULD_SHORTFALL if dry_run else _OUT_SHORTFALL,
+            f"collection raised {collected} but the carrier settled {cleared}: COD "
+            f"Receivable keeps a residual of {collected - cleared}. Nothing is written "
+            "off here; confirm the shortfall and post the difference as an ADJUSTMENT.")
+
+
+def _post_one_settlement(db: Session, business_id: str, sf, order, shipment,
+                         collected, *, dry_run: bool) -> tuple[str, str, tuple | None]:
+    """Post (or would post) one carrier settlement. Returns (outcome, reason, residual).
+
+    Never raises for a settlement-level problem. The three conditions that mean
+    different things are told apart by type in _settle_refusal, never by a bare
+    ValueError:
 
         CodCollectionMissing - OUR collection was never raised. Every COD shipment
             delivered before the collection writer shipped has none, so the first
@@ -403,59 +659,27 @@ def _post_one_settlement(db: Session, business_id: str, sf, order, shipment, *,
         ValueError - a negative component (a clawback), which is a reversal, or a
             closed period. Reported, never posted.
 
-    Everything written happens inside a SAVEPOINT that a dry run always rolls
-    back, so `dry_run` is structural rather than a promise about which branches
-    happen to be skipped.
+    `collected` is what the COD_COLLECTION already on file raised, read from the
+    ledger by _cod_report, so a residual is measured against the figure actually
+    posted rather than against what the order says today.
     """
-    savepoint = db.begin_nested()
-    try:
-        try:
-            rows = record_cod_remittance_from_shipment_financial(
-                db, business_id, sf, order=order)
-        except CodCollectionMissing as exc:
-            if shipment is None:
-                outcome = (_OUT_SKIPPED, f"no COD collection and shipment "
-                           f"{sf.shipment_id} is not on file: {exc}")
-            else:
-                # Backfill the collection, then post the remittance against it.
-                raised = record_cod_collection_from_shipment(
-                    db, business_id, shipment, order=order)
-                if raised is None:
-                    # Nothing was collectable at the door, so this is not a failure:
-                    # the courier has not handed over the customer's cash yet and
-                    # there is no receivable to clear. Report it and move on.
-                    outcome = (_OUT_NOTHING_DUE,
-                               "shipment is not delivered, so no COD collection is due"
-                               if (shipment.tracking_status or "").upper() != "DELIVERED"
-                               else "the order carries no collectable amount, so no COD "
-                                    "collection could be raised")
-                else:
-                    try:
-                        rows = record_cod_remittance_from_shipment_financial(
-                            db, business_id, sf, order=order)
-                    except CodCollectionMissing as again:
-                        outcome = (_OUT_SKIPPED,
-                                   f"collection backfill did not clear the remit: {again}")
-                    else:
-                        outcome = (_OUT_WOULD_BACKFILL if dry_run
-                                   else _OUT_BACKFILLED, "")
-        except CodSettlementMismatch as exc:
-            outcome = (_OUT_SKIPPED, f"settlement does not reconcile: {exc}")
-        except ValueError as exc:
-            outcome = (_OUT_SKIPPED, f"not postable as a remittance: {exc}")
-        except Exception as exc:  # noqa: BLE001 - one bad row must not lose the period
-            outcome = (_OUT_SKIPPED, f"{type(exc).__name__}: {exc}")
-        else:
-            if rows is None:
-                outcome = (_OUT_NOTHING_DUE,
-                           "shipment not settled yet, or its order is not COD")
-            else:
-                outcome = (_OUT_WOULD if dry_run else _OUT_POSTED, "")
-    finally:
-        if dry_run:
-            savepoint.rollback()
-        else:
-            savepoint.commit()
+    def work():
+        rows, exc = _attempt(lambda: record_cod_remittance_from_shipment_financial(
+            db, business_id, sf, order=order))
+        if exc is not None:
+            return _settle_refusal(db, business_id, sf, order, shipment, exc,
+                                   dry_run=dry_run)
+        if rows is None:
+            return (_OUT_NOTHING_DUE,
+                    "shipment not settled yet, or its order is not COD", None)
+        residual = _cod_residual(collected, sf)
+        return _settled_outcome(dry_run, residual, backfilled=False) + (residual,)
+
+    outcome, exc = _isolated(db, work, dry_run=dry_run)
+    if exc is not None:
+        # Nothing anticipated this. The settlement loses its posting, named, and
+        # the rest of the period carries on.
+        return (_OUT_ERROR, _why(exc), None)
     return outcome
 
 
@@ -463,12 +687,16 @@ def _cod_report(db: Session, business_id: str, start, end, *, dry_run: bool) -> 
     """Post every carrier settlement dated in the period, and report each outcome.
 
     Loads the settlements, their orders and their shipments in three queries and
-    one query for the vouchers already on file, so a period with hundreds of
-    settlements does not issue a query per shipment.
+    one query for the vouchers already on file -- both the remittances and the
+    collections, so a residual can be measured without a query per shipment.
 
     Invariant: posted + skipped + would_post always equals the number of
     settlements in the period. Anything that did not write lands in `skipped`,
-    and the `settlements` list says which and why.
+    and the `settlements` list says which and why. Two conditions are also
+    collected separately because they need an operator's decision rather than a
+    retry: `corrections_pending` (a settlement changed after it posted) and
+    `shortfalls` (the collection and the remittance disagree, so COD Receivable
+    does not reach zero).
     """
     from app.models.order import Order
     from app.models.shipment import Shipment
@@ -477,6 +705,7 @@ def _cod_report(db: Session, business_id: str, start, end, *, dry_run: bool) -> 
     cod = _counters()
     cod["settlements"] = []
     cod["corrections_pending"] = []
+    cod["shortfalls"] = []
     rows = db.query(ShipmentFinancial).filter_by(business_id=business_id).filter(
         ShipmentFinancial.settlement_date >= start,
         ShipmentFinancial.settlement_date < end).all()
@@ -486,44 +715,46 @@ def _cod_report(db: Session, business_id: str, start, end, *, dry_run: bool) -> 
         Order.id.in_([sf.order_id for sf in rows])).all()}
     ships = {s.id: s for s in db.query(Shipment).filter(
         Shipment.id.in_([sf.shipment_id for sf in rows])).all()}
-    groups = _posted_groups(db, business_id, [f"COD_REMIT:{sf.id}" for sf in rows])
+    groups = _posted_groups(db, business_id, [
+        *(f"COD_REMIT:{sf.id}" for sf in rows),
+        *(f"COD_COLLECTION:{sf.shipment_id}" for sf in rows),
+    ])
 
     for sf in rows:
-        key = f"COD_REMIT:{sf.id}"
         entry = {"shipment_financial_id": sf.id, "shipment_id": sf.shipment_id,
                  "order_id": sf.order_id,
                  "settlement_reference": sf.settlement_reference,
                  "outcome": _OUT_SKIPPED, "reason": ""}
-        posted = _credited(groups, key, ls.ACC_COD_RECEIVABLE)
+        posted = _credited(groups, f"COD_REMIT:{sf.id}", ls.ACC_COD_RECEIVABLE)
         if posted is not None:
             # Already on file. A settlement corrected after it posted keeps the
             # FIRST figure: the key is spent and post_voucher would swallow the
             # re-post as a replay, so the disagreement is reported, not "fixed".
             entry["posted_amount"] = str(posted)
-            current = _d(sf.net_settlement) + _d(sf.fee_amount) + _d(sf.other_deduction)
-            if abs(posted - current) > _TOLERANCE:
+            if abs(posted - _cod_cleared(sf)) > _TOLERANCE:
                 entry["outcome"] = _OUT_CORRECTION
-                entry["current_amount"] = str(_d(current))
+                entry["current_amount"] = str(_cod_cleared(sf))
                 entry["reason"] = (
                     f"settlement corrected after it posted: COD Receivable was credited "
-                    f"{posted} but the settlement now totals {current}. Correcting it "
-                    "needs a reversal of the original COD_REMIT voucher, which does not "
-                    "exist yet; post the difference as an ADJUSTMENT.")
+                    f"{posted} but the settlement now totals {_cod_cleared(sf)}. "
+                    "Correcting it needs a reversal of the original COD_REMIT voucher, "
+                    "which does not exist yet; post the difference as an ADJUSTMENT.")
                 cod["corrections_pending"].append(entry)
             else:
-                entry["outcome"] = _OUT_REPLAY
+                entry["outcome"] = _OUT_ALREADY
                 entry["reason"] = "already posted"
-            cod[_OUT_SKIPPED] += 1
         else:
-            entry["outcome"], entry["reason"] = _post_one_settlement(
-                db, business_id, sf, orders.get(sf.order_id),
-                ships.get(sf.shipment_id), dry_run=dry_run)
-            if entry["outcome"] in (_OUT_POSTED, _OUT_BACKFILLED):
-                cod[_OUT_POSTED] += 1
-            elif entry["outcome"] in (_OUT_WOULD, _OUT_WOULD_BACKFILL):
-                cod[_OUT_WOULD] += 1
-            else:
-                cod[_OUT_SKIPPED] += 1
+            entry["outcome"], entry["reason"], residual = _post_one_settlement(
+                db, business_id, sf, orders.get(sf.order_id), ships.get(sf.shipment_id),
+                _debited(groups, f"COD_COLLECTION:{sf.shipment_id}",
+                         ls.ACC_COD_RECEIVABLE),
+                dry_run=dry_run)
+            if residual is not None:
+                entry["collected_amount"] = str(residual[0])
+                entry["settled_amount"] = str(residual[1])
+                entry["residual_amount"] = str(residual[0] - residual[1])
+                cod["shortfalls"].append(entry)
+        cod[_COUNTER_FOR.get(entry["outcome"], "skipped")] += 1
         cod["settlements"].append(entry)
     return cod
 
@@ -535,12 +766,18 @@ def ensure_period_postings(db: Session, business_id: str, start, end, *,
     Called from the Tally export, from month-close, and from
     POST /api/v1/ledger/post-period-costs. Voucher keys make repeat calls no-ops,
     so calling it on every export is safe. It never commits: the caller owns the
-    transaction.
+    transaction. It never raises for a record-level problem either: costs and
+    carrier settlements are posted one record at a time, each in its own
+    SAVEPOINT, and every failure is reported with its exception named.
 
-    A kill switch does not switch the writer off, it switches its writing off. With
-    LEDGER_AUTO_POST_COSTS or _COD false the affected writer reports what it would
-    have posted and the ledger is untouched, so production can be dry-run before it
-    is trusted. `auto_posted` is true only when both writers actually wrote.
+    A kill switch does not switch the writer off, it switches its writing off.
+    With LEDGER_AUTO_POST_COSTS or _COD false the affected writer still evaluates
+    every record and reports what it would have posted, and the ledger is
+    untouched, so production can be dry-run before it is trusted.
+
+    `auto_posted` is true only when both writers were enabled AND this was not a
+    dry run; `switches` and `dry_run` carry the three inputs separately, so
+    "switched off" and "asked for a dry run" are never reported as the same thing.
     """
     from app.config import settings
 
@@ -555,7 +792,7 @@ def ensure_period_postings(db: Session, business_id: str, start, end, *,
         "period": {"from": start.isoformat(), "to": end.isoformat()},
         "costs": costs,
         "cod": cod,
-        "auto_posted": auto_costs and auto_cod,
+        "auto_posted": auto_costs and auto_cod and not dry_run,
         "switches": {"costs": auto_costs, "cod": auto_cod},
         "dry_run": bool(dry_run),
     }
