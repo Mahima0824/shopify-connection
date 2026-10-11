@@ -244,6 +244,19 @@ def fy_bounds(dt: datetime, fy_start_month: int = 4) -> tuple[datetime, datetime
 
 def _next_txn_id(db: Session, business_id: str, prefix: str = "TXN") -> str:
     from sqlalchemy import func as sa_func
+    last = (
+        db.query(FinancialTransaction.transaction_id)
+        .filter_by(business_id=business_id)
+        .filter(FinancialTransaction.transaction_id.like(f"{prefix}-%"))
+        .order_by(FinancialTransaction.transaction_id.desc())
+        .first()
+    )
+    if last and last[0]:
+        try:
+            curr_num = int(last[0].split("-")[1])
+            return f"{prefix}-{curr_num + 1:08d}"
+        except Exception:
+            pass
     n = db.query(sa_func.count(FinancialTransaction.id)).filter_by(business_id=business_id).scalar() or 0
     return f"{prefix}-{int(n) + 1:08d}"
 

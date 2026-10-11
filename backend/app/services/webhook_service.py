@@ -121,6 +121,41 @@ def _apply(db, ev) -> None:
         if o is not None and str(payload.get("status", "")).lower() == "success":
             o.fulfillment_status = "FULFILLED"
             db.commit()
+    elif topic in ("products/create", "products/update"):
+        from app.models.product import Product
+        from app.models.order import OrderItem
+
+        shopify_product_id = str(payload.get("id", "")) if payload.get("id") else ""
+        title = str(payload.get("title", "") or "")
+        img_src = None
+        img_obj = payload.get("image") or (payload.get("images", [{}])[0] if payload.get("images") else None)
+        if isinstance(img_obj, dict):
+            img_src = img_obj.get("src")
+        elif isinstance(img_obj, str) and img_obj.startswith("http"):
+            img_src = img_obj
+
+        if (shopify_product_id or title) and img_src:
+            conds = []
+            if shopify_product_id:
+                conds.append(Product.shopify_product_id == shopify_product_id)
+            if title:
+                conds.append(Product.title == title)
+            from sqlalchemy import or_
+            products = db.query(Product).filter(Product.business_id == business_id, or_(*conds)).all()
+            for p in products:
+                p.image_url = img_src
+
+            p_ids = [p.id for p in products]
+            oi_conds = []
+            if title:
+                oi_conds.append(OrderItem.title == title)
+            if p_ids:
+                oi_conds.append(OrderItem.product_id.in_(p_ids))
+            if oi_conds:
+                items = db.query(OrderItem).filter(OrderItem.business_id == business_id, or_(*oi_conds)).all()
+                for item in items:
+                    item.image_url = img_src
+            db.commit()
     else:
         pass  # unknown topic -> no-op
 

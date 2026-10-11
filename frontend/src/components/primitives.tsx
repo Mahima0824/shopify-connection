@@ -176,7 +176,7 @@ function Table({ className, containerClassName, bare, ...props }: TableProps) {
     <div
       data-slot="table-container"
       className={cn(
-        "w-full overflow-x-auto",
+        "w-full overflow-x-auto no-scrollbar",
         bare ? "" : "rounded-xl border border-border/80 bg-card shadow-xs",
         containerClassName,
       )}
@@ -213,7 +213,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <ShadcnTableHead
       className={cn(
-        "h-11 px-4 py-3 text-left align-middle text-[11px] font-bold uppercase tracking-wider text-muted-foreground font-heading select-none whitespace-nowrap",
+        "h-10 px-2.5 py-2.5 text-left align-middle text-[11px] font-bold uppercase tracking-wider text-muted-foreground font-heading select-none whitespace-nowrap",
         className,
       )}
       {...props}
@@ -224,7 +224,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <ShadcnTableCell
-      className={cn("px-4 py-3 text-sm text-foreground align-middle whitespace-nowrap", className)}
+      className={cn("px-2.5 py-2.5 text-xs sm:text-sm text-foreground align-middle whitespace-nowrap", className)}
       {...props}
     />
   );

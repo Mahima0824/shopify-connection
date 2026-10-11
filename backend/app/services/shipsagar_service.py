@@ -527,6 +527,21 @@ def record_push_verdict(db, shipment, *, pushed: bool, courier: str,
               {"message": message, "courier": courier,
                "tracking_number": tracking_number,
                "shipsagar_tracking_id": tracking_id})
+    if pushed and shipment.order_id:
+        try:
+            from app.models.order import Order
+            from app.services.whatsapp_service import send_order_dispatched_whatsapp
+            order = db.query(Order).filter(Order.id == shipment.order_id).first()
+            if order:
+                send_order_dispatched_whatsapp(
+                    db=db,
+                    order=order,
+                    shipment=shipment,
+                    carrier_name=courier,
+                    awb_number=tracking_number
+                )
+        except Exception as wa_err:
+            log.warning(f"WhatsApp dispatch trigger notice: {wa_err}")
 
 
 # ShipSagar sends English month names ('16-May-2023'). strptime's %b/%B resolve

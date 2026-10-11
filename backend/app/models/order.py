@@ -87,4 +87,5 @@ class OrderItem(Base):
     sgst_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     igst_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     tax_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -34,6 +34,10 @@ export default function EditOrderDialog({
         receiver_city: order.receiver_city || "",
         receiver_state: order.receiver_state || "",
         receiver_pincode: order.receiver_pincode || "",
+        weight_grams: order.weight_grams ?? 930,
+        length_cm: order.length_cm ?? 30,
+        breadth_cm: order.breadth_cm ?? 20,
+        height_cm: order.height_cm ?? 5,
       });
       setError(null);
     }
@@ -249,6 +253,66 @@ export default function EditOrderDialog({
                   onChange={(e) => handleChange("receiver_pincode", e.target.value)}
                   placeholder="394210"
                   className="h-9"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border/60 pt-3 flex flex-col gap-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-heading flex items-center gap-1.5">
+              <span>🇮🇳</span> Weight &amp; Parcel Dimensions (India Post)
+            </h3>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  Weight (g)
+                </Label>
+                <Input
+                  type="number"
+                  value={form.weight_grams ?? ""}
+                  onChange={(e) => handleChange("weight_grams", e.target.value)}
+                  placeholder="930"
+                  className="h-9 font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  Length (cm)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.length_cm ?? ""}
+                  onChange={(e) => handleChange("length_cm", e.target.value)}
+                  placeholder="30"
+                  className="h-9 font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  Width (cm)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.breadth_cm ?? ""}
+                  onChange={(e) => handleChange("breadth_cm", e.target.value)}
+                  placeholder="20"
+                  className="h-9 font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  Height (cm)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.height_cm ?? ""}
+                  onChange={(e) => handleChange("height_cm", e.target.value)}
+                  placeholder="5"
+                  className="h-9 font-mono"
                 />
               </div>
             </div>

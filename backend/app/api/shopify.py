@@ -46,52 +46,78 @@ def _resolve_business_id(db: Session, business_id: str | None) -> str:
 
 
 def _fetch_live_orders(days: int, shop_domain: str, token: str) -> tuple[list[dict] | None, str | None]:
-    """Fetch live orders; single retry on transient 429/5xx. Returns (orders, error) on failure."""
+    """Fetch live orders from Shopify REST API, supporting pagination across all pages."""
     import httpx
+    import re
 
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     url = f"https://{shop_domain}/admin/api/{settings.shopify_api_version}/orders.json"
-    params = {"status": "any", "created_at_min": since, "limit": 100}
+    params: dict = {"status": "any", "limit": 100}
+    if days and days > 0:
+        params["created_at_min"] = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
     headers = {"X-Shopify-Access-Token": token}
-    last_err = None
-    for attempt in range(2):  # initial + single retry
+    all_orders: list[dict] = []
+    current_url: str | None = url
+    current_params: dict | None = params
+
+    while current_url:
+        last_err = None
+        resp = None
+        for attempt in range(2):
+            try:
+                resp = httpx.get(current_url, params=current_params, headers=headers, timeout=45.0)
+            except Exception as e:
+                last_err = f"Connection error: {e}"
+                if attempt == 0:
+                    time.sleep(1.0)
+                    continue
+                return (all_orders if all_orders else None), last_err
+            if resp.status_code in (429,) or 500 <= resp.status_code < 600:
+                last_err = f"Shopify HTTP {resp.status_code}"
+                if attempt == 0:
+                    time.sleep(1.0)
+                    continue
+                return (all_orders if all_orders else None), last_err
+            if resp.status_code != 200:
+                if resp.status_code == 401:
+                    return None, f"Invalid Shopify Access Token (401 Unauthorized) for {shop_domain}"
+                return (all_orders if all_orders else None), f"Shopify API HTTP {resp.status_code}"
+            break
+
+        if not resp or resp.status_code != 200:
+            break
+
         try:
-            r = httpx.get(url, params=params, headers=headers, timeout=20.0)
+            body = resp.json()
         except Exception as e:
-            last_err = f"Connection error: {e}"
-            if attempt == 0:
-                time.sleep(1.0)
-                continue
-            return None, last_err
-        if r.status_code in (429,) or 500 <= r.status_code < 600:
-            last_err = f"Shopify HTTP {r.status_code}"
-            if attempt == 0:
-                time.sleep(1.0)
-                continue
-            return None, last_err
-        if r.status_code != 200:
-            if r.status_code == 401:
-                return None, f"Invalid Shopify Access Token (401 Unauthorized) for {shop_domain}"
-            return None, f"Shopify API HTTP {r.status_code}"
-        try:
-            body = r.json()
-        except Exception as e:
-            return None, f"Failed to parse Shopify response: {e}"
-        if isinstance(body, dict) and "orders" in body:
-            return body["orders"], None
-        return (body if isinstance(body, list) else []), None
-    return None, last_err or "Unknown sync error"
+            return (all_orders if all_orders else None), f"Failed to parse Shopify response: {e}"
+
+        batch = body.get("orders", []) if isinstance(body, dict) else (body if isinstance(body, list) else [])
+        all_orders.extend(batch)
+
+        # Parse Link header for next page
+        link_hdr = resp.headers.get("Link") or resp.headers.get("link")
+        next_match = re.search(r'<([^>]+)>;\s*rel=["\']next["\']', link_hdr) if link_hdr else None
+        if next_match:
+            current_url = next_match.group(1)
+            current_params = None
+        else:
+            break
+
+    return all_orders, None
 
 
 @router.post("/sync")
 def sync_orders(
-    days: int = 30,
+    days: int = 0,
     business_id: str | None = None,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
+    from dotenv import load_dotenv
     from app.models.shopify_store import ShopifyStore
 
+    load_dotenv(override=True)
     bid = _resolve_business_id(db, business_id)
     env_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "") or settings.shopify_access_token
     shop_domain = os.getenv("SHOPIFY_SHOP_DOMAIN", "") or settings.shopify_shop_domain
@@ -126,11 +152,19 @@ def sync_orders(
     synced = 0
     for payload in orders:
         try:
-            upsert_order(db, bid, payload)
+            upsert_order(db, bid, payload, is_bulk_sync=True)
             synced += 1
         except Exception:
             db.rollback()
+
+    try:
+        from app.services.shopify_service import backfill_missing_product_images
+        backfill_missing_product_images(db, bid)
+    except Exception:
+        pass
+
     now = datetime.now(timezone.utc)
+
     store = db.query(ShopifyStore).filter_by(business_id=bid).first()
     if store is None:
         store = ShopifyStore(

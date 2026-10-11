@@ -658,3 +658,164 @@ export type ShipmentHistory = {
 export function getShipmentHistory(id: string, token?: string): Promise<ShipmentHistory> {
   return api<ShipmentHistory>(`/api/v1/shipments/${id}/history`, {}, token);
 }
+
+export type OrderStockVerification = {
+  stock_available: boolean;
+  stock_status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
+  items: Array<{
+    item_id: string;
+    title: string;
+    sku: string | null;
+    quantity_required: number;
+    stock_available: number;
+    is_in_stock: boolean;
+    product_id: string | null;
+  }>;
+};
+
+export function checkOrderStock(orderId: string, token?: string): Promise<OrderStockVerification> {
+  return api<OrderStockVerification>(`/api/v1/orders/${orderId}/stock-check`, {}, token);
+}
+
+export function getInvoicePdfUrl(orderId: string): string {
+  return `${API}/api/v1/orders/${orderId}/invoice.pdf`;
+}
+
+export async function downloadInvoicePdf(orderId: string, filename?: string): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const url = getInvoicePdfUrl(orderId);
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    throw new Error(`Failed to download PDF invoice (${response.status})`);
+  }
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename || `GST_Tax_Invoice_${orderId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+export async function getWhatsAppHistory(orderId: string) {
+  return api<{
+    order_id: string;
+    customer_mobile: string | null;
+    normalized_phone: string | null;
+    quick_wa_me_url: string | null;
+    dispatch_preview: string;
+    history: Array<{
+      id: string;
+      notification_type: string;
+      phone_number: string;
+      message_text: string;
+      status: string;
+      provider_message_id: string | null;
+      error_message: string | null;
+      created_at: string | null;
+      wa_me_url: string | null;
+    }>;
+  }>(`/api/v1/whatsapp/orders/${orderId}/history`);
+}
+
+export async function sendWhatsAppAlert(orderId: string, type: "order_confirmation" | "order_dispatched" = "order_dispatched") {
+  return api<{
+    success: boolean;
+    message: string;
+    data: {
+      status: string;
+      phone_number: string;
+      wa_me_url: string;
+      message_text: string;
+    };
+  }>(`/api/v1/whatsapp/orders/${orderId}/send`, {
+    method: "POST",
+    body: JSON.stringify({ notification_type: type }),
+  });
+}
+
+export async function getRtoSummary() {
+  return api<{
+    total_orders: number;
+    total_rto_orders: number;
+    rto_rate_pct: number;
+    total_rto_value: number;
+    cod_rto_value: number;
+    restocked_count: number;
+    damaged_count: number;
+    reason_breakdown: Array<{ reason: string; count: number; percentage: number }>;
+    carrier_breakdown: Array<{ carrier_code: string; carrier_name: string; total_shipments: number; rto_count: number; rto_rate: number }>;
+  }>("/api/v1/rto/summary");
+}
+
+export async function getRtoShipments(params?: { q?: string; carrier?: string; status?: string; page?: number; page_size?: number }) {
+  const query = new URLSearchParams();
+  if (params?.q) query.set("q", params.q);
+  if (params?.carrier) query.set("carrier", params.carrier);
+  if (params?.status) query.set("status", params.status);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.page_size) query.set("page_size", String(params.page_size));
+
+  const path = `/api/v1/rto/shipments${query.toString() ? `?${query.toString()}` : ""}`;
+  return api<{
+    items: Array<{
+      order_id: string;
+      order_name: string;
+      internal_order_number: string;
+      customer_name: string;
+      customer_mobile: string;
+      city: string;
+      pincode: string;
+      order_date: string | null;
+      total_amount: number;
+      cod_mode: string;
+      cod_value: number;
+      operational_status: string;
+      carrier_code: string;
+      awb_number: string;
+      tracking_status: string;
+      current_location: string;
+      return_record_id: string | null;
+      return_status: string;
+      rto_reason: string;
+      condition: string;
+      item_title: string;
+      image_url: string | null;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+  }>(path);
+}
+
+export async function processRtoRecord(payload: {
+  order_id: string;
+  rto_reason: string;
+  item_condition: string;
+  restock_inventory: boolean;
+  reverse_freight_charge?: number;
+  notes?: string;
+}) {
+  return api<{ success: boolean; message: string; data: any }>("/api/v1/rto/process", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function reconcileRtoCod(payload: {
+  order_id: string;
+  reverse_freight_charge?: number;
+  notes?: string;
+}) {
+  return api<{ success: boolean; message: string; data: any }>("/api/v1/rto/cod-reconcile", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+

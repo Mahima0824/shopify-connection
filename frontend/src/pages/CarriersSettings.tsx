@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { Badge, Button, Card } from "../components/primitives";
+import { Badge, Button, Card, Input } from "../components/primitives";
 
-const KNOWN = ["DTDC", "TIRUPATI", "INDIA_POST", "MANUAL"];
+const KNOWN = ["SHIPSAGAR", "INDIA_POST", "MANUAL"];
 
 type Health = {
   code: string;
@@ -15,24 +15,35 @@ type Health = {
 };
 
 export default function CarriersPage() {
-  const [code, setCode] = useState("DTDC");
+  const [code, setCode] = useState("SHIPSAGAR");
+  const [apiKey, setApiKey] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [health, setHealth] = useState<Health[]>([]);
   const [healthError, setHealthError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadHealth = React.useCallback(() => {
     const token = localStorage.getItem("token") ?? undefined;
     api<{ items: Health[] }>(`/api/v1/carriers/health`, {}, token)
       .then((d) => setHealth(d.items ?? []))
       .catch((e) => setHealthError(e?.message ?? "Failed to load carrier health"));
   }, []);
 
+  useEffect(() => {
+    loadHealth();
+  }, [loadHealth]);
+
   async function connect() {
     const token = localStorage.getItem("token") ?? undefined;
     setMsg(null);
     try {
-      await api(`/api/v1/carriers/${code}/connect`, { method: "POST", body: JSON.stringify({}) }, token);
-      setMsg(`${code} connected (keys encrypted, never displayed).`);
+      const credentials = apiKey.trim() ? { api_key: apiKey.trim() } : {};
+      await api(`/api/v1/carriers/${code}/connect`, {
+        method: "POST",
+        body: JSON.stringify({ credentials }),
+      }, token);
+      setMsg(`${code} connected successfully (credentials encrypted at rest).`);
+      setApiKey("");
+      loadHealth();
     } catch (e: any) {
       setMsg(e?.message ?? "Connect failed");
     }
@@ -52,7 +63,7 @@ export default function CarriersPage() {
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Live API adapters activate when you save real account credentials. Until then, use MANUAL checkpoints.
+            ShipSagar handles all courier logistics API integrations (DTDC, Delhivery, Blue Dart, etc.) directly. Separate direct provider APIs are replaced by ShipSagar.
           </p>
         </div>
       </div>
@@ -62,13 +73,20 @@ export default function CarriersPage() {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           aria-label="Carrier"
-          className="min-h-11 w-full max-w-[240px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="min-h-11 w-full max-w-[200px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           {KNOWN.map((c) => (
             <option key={c}>{c}</option>
           ))}
         </select>
-        <Button onClick={connect}>Connect</Button>
+        <Input
+          type="password"
+          placeholder="API Key / Token (optional)"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          className="min-h-11 w-full max-w-[280px]"
+        />
+        <Button onClick={connect}>Connect Carrier</Button>
       </Card>
 
       {msg && (

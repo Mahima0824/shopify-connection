@@ -131,3 +131,58 @@ def test_export_bulk_xlsx(client):
     assert r.status_code == 200, r.text
     assert "spreadsheetml" in r.headers.get("content-type", "")
     assert r.content[:2] == b"PK"
+
+
+def test_delete_order_with_reconciliation_and_children(client):
+    from app.models.reconciliation import Reconciliation
+    from app.models.payment import Payment
+    from app.models.refund import Refund
+    from app.models.order import Order
+    from app.database import get_db
+
+    h = {"Authorization": f"Bearer {_token(client)}"}
+    payload = {"receiver_name": "KIRAN", "receiver_mobile": "9100312162", "receiver_add1": "HYDERABAD", "receiver_city": "HYDERABAD", "receiver_state": "TELANGANA", "receiver_pincode": "500018", "weight_grams": 930, "cod_mode": "COD", "cod_value": 1350}
+    r = client.post("/api/v1/orders", json=payload, headers=h)
+    assert r.status_code == 200, r.text
+    order_id = r.json()["data"]["id"]
+
+    db_gen = client.app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    o = db.query(Order).filter_by(id=order_id).first()
+    recon = Reconciliation(business_id=o.business_id, order_id=o.id, issue_code="TEST_ISSUE", severity="HIGH", issue_message="Test recon issue")
+    pmt = Payment(business_id=o.business_id, order_id=o.id, amount=100.0)
+    ref = Refund(business_id=o.business_id, order_id=o.id, shopify_refund_id="REF123", amount=50.0)
+    db.add_all([recon, pmt, ref])
+    db.commit()
+
+    r_del = client.delete(f"/api/v1/orders/{order_id}", headers=h)
+    assert r_del.status_code == 200, r_del.text
+    assert r_del.json()["success"] is True
+
+    r_get = client.get(f"/api/v1/orders/{order_id}", headers=h)
+    assert r_get.status_code == 404
+
+
+def test_delete_order_without_parcels(client):
+    from app.models.order import Order, OrderItem
+    from app.models.parcel_item import ParcelItem
+    from app.database import get_db
+
+    h = {"Authorization": f"Bearer {_token(client)}"}
+    payload = {"receiver_name": "TEST", "receiver_mobile": "9999999999", "receiver_add1": "HYDERABAD", "receiver_city": "HYDERABAD", "receiver_state": "TELANGANA", "receiver_pincode": "500018", "weight_grams": 500, "cod_mode": "PREPAID", "cod_value": 0}
+    r = client.post("/api/v1/orders", json=payload, headers=h)
+    assert r.status_code == 200, r.text
+    order_id = r.json()["data"]["id"]
+
+    db_gen = client.app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    o = db.query(Order).filter_by(id=order_id).first()
+    item = OrderItem(order_id=o.id, business_id=o.business_id, title="Test Item", quantity=1, price=100.0)
+    db.add(item)
+    db.commit()
+
+    r_del = client.delete(f"/api/v1/orders/{order_id}", headers=h)
+    assert r_del.status_code == 200, r_del.text
+    assert r_del.json()["success"] is True
+
+

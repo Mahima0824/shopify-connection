@@ -1,45 +1,34 @@
 import React, { useEffect, useState } from "react";
 import {
   CourierOption,
+  OrderStockVerification,
   PushShipmentResult,
+  checkOrderStock,
   getShipmentCouriers,
   pushShipment,
 } from "../lib/api";
 import { IconAlert, IconTruck } from "./icons";
+import ProductAvatar from "./ProductAvatar";
 
 export type AddShipmentDialogProps = {
   open: boolean;
   orderId: string | null;
   orderLabel?: string;
+  order?: any;
+  initialCourier?: string;
   onClose: () => void;
   onPushed: (result: PushShipmentResult) => void;
-  /**
-   * Called when the shipment was saved but ShipSagar could not be reached.
-   *
-   * The backend commits the AWB before it contacts ShipSagar, so a 502 leaves a
-   * real shipment on the order that the retry queue will register later. Without
-   * a refresh the Orders row keeps rendering Add Shipment (push_state is still
-   * "awaiting") and retrying from there 400s SHIPMENT_EXISTS. This is the
-   * refresh the deleted PushShipmentDialog used to do on the same path.
-   */
   onRecovered?: () => void;
 };
 
-// Shown until the live catalogue loads, and kept for good if it never does:
-// getShipmentCouriers resolves to [] on failure, and a push the user cannot
-// make because a dropdown was empty is worse than a two-option guess.
+// Shown until the live catalogue loads from ShipSagar:
 const FALLBACK_COURIERS: CourierOption[] = [
-  { courier_code: "IP", courier_name: "India Post" },
-  { courier_code: "DTDC", courier_name: "DTDC" },
+  { courier_code: "IP", courier_name: "India Post Speed Post 🇮🇳" },
+  { courier_code: "DELHIVERY", courier_name: "Delhivery Surface / Express 🔴" },
+  { courier_code: "DTDC", courier_name: "DTDC Express & D2C 📦" },
+  { courier_code: "BLUEDART", courier_name: "BlueDart Express Air ✈️" },
 ];
 
-/**
- * True for the push route's queued-retry 502.
- *
- * `api()` puts the structured `status` on the thrown Error; the message text is
- * not matched, so a genuine outage whose wording happens to mention a retry is
- * not mistaken for one. A queued retry means the shipment was committed.
- */
 function isQueuedRetry(err: unknown): boolean {
   const e = err as { status?: number } | null;
   return e?.status === 502;
@@ -54,30 +43,64 @@ export default function AddShipmentDialog({
   open,
   orderId,
   orderLabel,
+  order,
+  initialCourier,
   onClose,
   onPushed,
   onRecovered,
 }: AddShipmentDialogProps) {
+  const defaultCode = (initialCourier === "INDIA_POST" ? "IP" : initialCourier) || "IP";
   const [couriers, setCouriers] = useState<CourierOption[]>(FALLBACK_COURIERS);
   const [trackingNo, setTrackingNo] = useState("");
-  const [courier, setCourier] = useState("IP");
+  const [courier, setCourier] = useState(defaultCode);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [stockInfo, setStockInfo] = useState<OrderStockVerification | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    const selected = (initialCourier === "INDIA_POST" ? "IP" : initialCourier) || "IP";
     setTrackingNo("");
-    setCourier("IP");
+    setCourier(selected);
     setError(null);
     setNotice(null);
     setSubmitError(null);
     setSubmitting(false);
+    setStockInfo(null);
     void getShipmentCouriers().then((rows) => {
-      if (rows.length > 0) setCouriers(rows);
+      if (rows.length > 0) {
+        const priorityCodes = ["IP", "DELHIVERY", "BLUEDART", "DTDC"];
+        const priorityCouriers: CourierOption[] = [];
+        const otherCouriers: CourierOption[] = [];
+        rows.forEach((c) => {
+          if (priorityCodes.includes(c.courier_code.toUpperCase())) {
+            priorityCouriers.push(c);
+          } else {
+            otherCouriers.push(c);
+          }
+        });
+        priorityCouriers.sort(
+          (a, b) =>
+            priorityCodes.indexOf(a.courier_code.toUpperCase()) -
+            priorityCodes.indexOf(b.courier_code.toUpperCase())
+        );
+        setCouriers([...priorityCouriers, ...otherCouriers]);
+      }
     });
-  }, [open]);
+
+    if (orderId) {
+      setLoadingStock(true);
+      void checkOrderStock(orderId)
+        .then((res) => {
+          if (res) setStockInfo(res);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingStock(false));
+    }
+  }, [open, orderId]);
 
   if (!open) return null;
 
@@ -90,9 +113,6 @@ export default function AddShipmentDialog({
       setError("Tracking number is required.");
       return;
     }
-    // A null orderId would post order_id: "" and earn a guaranteed 404/400 with
-    // no idea which side was at fault. The Orders table only opens this dialog
-    // for a real row, so reaching here means a caller passed nothing.
     if (!orderId) {
       setError("No order was selected, so the tracking number cannot be attached.");
       return;
@@ -105,19 +125,11 @@ export default function AddShipmentDialog({
         courier_code: courier,
       });
       setTrackingNo("");
-      // pushed: false is a 200, not a failure: the Shipment row was committed
-      // either way and only the provider's registration was refused. So it
-      // renders as a non-blocking notice and onPushed still fires, otherwise
-      // the Orders table would not refresh and the new row would be invisible.
       if (!result.pushed) {
         setNotice(result.message || "ShipSagar did not accept this shipment.");
       }
       onPushed(result);
     } catch (err: unknown) {
-      // A 502 is the transport-failure path: the shipment IS saved and a retry
-      // job is queued, so the caller refreshes rather than treating it as a
-      // lost attempt. Anything else (a validation code, a duplicate) really did
-      // fail and keeps the alert.
       if (isQueuedRetry(err)) {
         setNotice(
           "The tracking number was saved, but ShipSagar could not be reached. " +
@@ -134,6 +146,16 @@ export default function AddShipmentDialog({
       setSubmitting(false);
     }
   };
+
+  const customerName = order?.receiver_name || "Customer";
+  const customerMobile = order?.receiver_mobile || "";
+  const customerAddress = [
+    order?.receiver_add1,
+    order?.receiver_city,
+    order?.receiver_state,
+    order?.receiver_pincode,
+  ].filter(Boolean).join(", ");
+  const items = Array.isArray(order?.items) ? order.items : [];
 
   return (
     <div
@@ -167,7 +189,50 @@ export default function AddShipmentDialog({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-5 no-scrollbar">
+          {/* Customer & Order Summary Box */}
+          {order && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-xs text-slate-700 flex flex-col gap-3">
+              <div className="flex items-start justify-between border-b border-slate-200 pb-2">
+                <div>
+                  <span className="font-bold text-slate-900 text-sm block">{customerName}</span>
+                  {customerMobile && <span className="text-slate-500 font-mono">📱 {customerMobile}</span>}
+                  {customerAddress && <p className="text-slate-600 mt-0.5">📍 {customerAddress}</p>}
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-bold text-slate-900 text-sm block">₹{Number(order.total_amount || 0).toLocaleString()}</span>
+                  <span className="inline-block bg-slate-200 text-slate-800 font-semibold px-2 py-0.5 rounded text-[10px] mt-0.5">
+                    {order.cod_mode || "PREPAID"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Items & Product Photos & Stock count */}
+              {items.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Ordered Items ({items.length})</span>
+                  <div className="flex flex-col gap-2 max-h-36 overflow-y-auto pr-1 no-scrollbar">
+                    {items.map((it: any, idx: number) => (
+                      <div key={it.id || idx} className="flex items-center gap-3 bg-white p-2 rounded-lg border border-slate-200">
+                        <ProductAvatar imageUrl={it.image_url} title={it.title} className="size-10" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 truncate">{it.title || "Product"}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">
+                            {it.sku ? `SKU: ${it.sku} · ` : ""}Qty: {it.quantity || 1}
+                          </p>
+                        </div>
+                        <span className="font-mono font-medium text-slate-800 text-xs shrink-0">
+                          ₹{Number(it.price || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
           <form
             id="add-shipment-form"
             onSubmit={handleSubmit}
@@ -230,11 +295,17 @@ export default function AddShipmentDialog({
                 value={courier}
                 onChange={(e) => setCourier(e.target.value)}
               >
-                {couriers.map((c) => (
-                  <option key={c.courier_code} value={c.courier_code}>
-                    {c.courier_name} ({c.courier_code})
-                  </option>
-                ))}
+                {couriers.map((c) => {
+                  const nameUpper = c.courier_name.toUpperCase();
+                  const codeUpper = c.courier_code.toUpperCase();
+                  const hasCode = nameUpper.includes(`(${codeUpper})`);
+                  const label = hasCode ? c.courier_name : `${c.courier_name} (${c.courier_code})`;
+                  return (
+                    <option key={c.courier_code} value={c.courier_code}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
               <p className="text-xs text-slate-500 mt-1">
                 Loaded from ShipSagar. Defaults to India Post.

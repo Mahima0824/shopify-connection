@@ -333,6 +333,13 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         db.add(shipment)
         db.flush()
 
+    try:
+        from app.services.order_service import deduct_order_stock
+        deduct_order_stock(db, bid, order.id)
+    except Exception:
+        pass
+
+
     if not ss.is_configured():
         shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
         db.commit()

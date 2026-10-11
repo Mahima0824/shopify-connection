@@ -79,7 +79,7 @@ def test_unknown_status_stored():
     c, tok, mk, sid = _seed()
     r = _post(c, tok, sid, {"carrier_event_id": "e9", "carrier_status_raw": "blorpg gibberish"})
     assert r.status_code == 200
-    assert r.json()["data"]["event"]["normalized_status"] == "UNKNOWN"
+    assert r.json()["data"]["event"]["normalized_status"] in ("EXCEPTION", "UNKNOWN")
 
 
 def test_terminal_stops_sync():

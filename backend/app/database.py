@@ -15,8 +15,12 @@ if "[PROJECT-REF]" in db_url or "[PASSWORD]" in db_url or not db_url:
     logger.warning("Supabase placeholder detected in DATABASE_URL. Using local SQLite database (recon_dev.db).")
     db_url = "sqlite:///./recon_dev.db"
 
-connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
-engine_kwargs = {"pool_pre_ping": True} if not db_url.startswith("sqlite") else {"connect_args": connect_args}
+connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {"sslmode": "require"}
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+    "connect_args": connect_args,
+}
 
 engine = create_engine(db_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

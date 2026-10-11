@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./recon_dev.db"
     jwt_secret: str = "dev-jwt-secret-change-me"
     encryption_key: str = ""  # Fernet key, generated if empty in docs
-    app_env: str = "dev"
+    app_env: str = "production"
     frontend_origin: str = "*"
     shopify_api_version: str = "2026-01"
     shopify_shop_domain: str = ""
@@ -56,6 +56,18 @@ class Settings(BaseSettings):
     dtdc_account_code: str = ""
     dtdc_customer_code: str = ""
 
+    delhivery_enabled: bool = True
+    delhivery_api_base_url: str = "https://track.delhivery.com/api/v1"
+    delhivery_api_key: str = ""
+    delhivery_client_id: str = ""
+
+    bluedart_enabled: bool = True
+    bluedart_api_base_url: str = "https://api.bluedart.com/v1"
+    bluedart_api_key: str = ""
+    bluedart_client_id: str = ""
+    bluedart_login_id: str = ""
+    bluedart_licence_key: str = ""
+
     # ShipSagar Aggregation Provider (India Post + DTDC tracking via ShipSagar).
     # Credentials come from the ShipSagar client profile page: "api key" -> token,
     # "client code" -> client code. Both travel in the JSON body, not as headers.
@@ -69,6 +81,12 @@ class Settings(BaseSettings):
     # always receives one known contact address for this account.
     shipsagar_email: str = ""
     shipsagar_company: str = ""
+
+    # Meta WhatsApp Business API Configuration
+    whatsapp_enabled: bool = True
+    whatsapp_phone_number_id: str = ""
+    whatsapp_access_token: str = ""
+    whatsapp_business_account_id: str = ""
 
 
 settings = Settings()

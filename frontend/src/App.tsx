@@ -7,6 +7,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
+import CreateOrder from "./pages/CreateOrder";
 import Exceptions from "./pages/Exceptions";
 import Parcels from "./pages/Parcels";
 import ParcelDetail from "./pages/ParcelDetail";
@@ -25,6 +26,8 @@ import FinanceClose from "./pages/FinanceClose";
 import FinanceLedger from "./pages/FinanceLedger";
 import Tracking from "./pages/Tracking";
 import ShipmentsTracking from "./pages/ShipmentsTracking";
+import RtoManagement from "./pages/RtoManagement";
+import CodRemittance from "./pages/CodRemittance";
 
 import Footer from "./components/Footer";
 
@@ -50,6 +53,10 @@ export function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/new" element={<CreateOrder />} />
+        <Route path="/create-order" element={<CreateOrder />} />
+        <Route path="/rto" element={<RtoManagement />} />
+        <Route path="/cod-remittance" element={<CodRemittance />} />
         <Route path="/orders/:id" element={<Navigate to="/orders" replace />} />
         <Route path="/parcels" element={<Parcels />} />
         <Route path="/parcels/labels" element={<ParcelLabels />} />

@@ -93,7 +93,6 @@ test("an unreachable courier catalogue still offers a usable dropdown", async ()
   const codes = Array.from(courier.options).map((o) => o.value);
   expect(codes.length).toBeGreaterThan(0);
   expect(codes).toContain("IP");
-  expect(codes).toContain("DTDC");
   // Falling back is only useful if the user can still push.
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));

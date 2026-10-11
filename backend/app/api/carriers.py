@@ -57,6 +57,12 @@ def connect(code: str, body: ConnectIn, db: Session = Depends(get_db), u: dict =
     except CarrierError:
         raise HTTPException(404, "Unknown carrier")
     try:
+        valid = provider.validate_credentials(body.credentials or {})
+        if not valid and not (body.credentials or {}).get("sandbox"):
+            raise HTTPException(400, f"Credential validation failed for {provider.code}")
+    except CarrierError as exc:
+        raise HTTPException(400, exc.message)
+    try:
         from app.services.shopify_service import encrypt_token
         enc = encrypt_token(_json.dumps(body.credentials or {}))
     except Exception:

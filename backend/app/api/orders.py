@@ -159,7 +159,61 @@ def _shipment_map(db, business_id, order_ids) -> dict:
     return {oid: _shipment_dict(s, refused) for oid, s in by_order.items()}
 
 
-def _to_dict(o, shipment=None) -> dict:
+def _items_map(db, business_id, order_ids) -> dict:
+    from app.models.order import OrderItem
+    ids = [oid for oid in order_ids if oid]
+    if not ids:
+        return {}
+    try:
+        rows = db.query(OrderItem).filter(OrderItem.business_id == business_id, OrderItem.order_id.in_(ids)).all()
+    except Exception:
+        db.rollback()
+        from sqlalchemy import text
+        try:
+            # Fallback if image_url column doesn't exist yet on PostgreSQL
+            rows_raw = db.execute(
+                text("SELECT id, order_id, title, sku, quantity, price FROM order_items WHERE business_id = :bid AND order_id IN :ids"),
+                {"bid": business_id, "ids": tuple(ids)}
+            ).fetchall()
+            by_order: dict = {}
+            for r in rows_raw:
+                by_order.setdefault(r[1], []).append({
+                    "id": r[0],
+                    "title": r[2],
+                    "sku": r[3],
+                    "quantity": r[4],
+                    "price": float(r[5] or 0),
+                    "image_url": None,
+                })
+            return by_order
+        except Exception:
+            return {}
+
+    from app.models.product import Product
+    prod_ids = [it.product_id for it in rows if it.product_id]
+    prod_map = {}
+    if prod_ids:
+        prods = db.query(Product).filter(Product.id.in_(prod_ids)).all()
+        for p in prods:
+            prod_map[p.id] = getattr(p, "stock_quantity", 50) if getattr(p, "stock_quantity", 50) is not None else 50
+
+    by_order: dict = {}
+    for item in rows:
+        stk = prod_map.get(item.product_id, 50) if item.product_id else 50
+        by_order.setdefault(item.order_id, []).append({
+            "id": item.id,
+            "title": item.title,
+            "sku": item.sku,
+            "quantity": item.quantity,
+            "price": float(item.price or 0),
+            "image_url": getattr(item, "image_url", None),
+            "stock_available": stk,
+        })
+    return by_order
+
+
+
+def _to_dict(o, shipment=None, items=None) -> dict:
     def num(v):
         try:
             return float(v) if v is not None else 0.0
@@ -171,6 +225,28 @@ def _to_dict(o, shipment=None) -> dict:
             return v.isoformat() if v is not None else None
         except Exception:
             return None
+
+    # Calculate simple stock status from items
+    stock_avail = True
+    has_out = False
+    has_low = False
+    for it in (items or []):
+        qty = it.get("quantity", 1) or 1
+        stock = it.get("stock_available", 50)
+        if stock is None:
+            stock = 50
+        if stock < qty:
+            stock_avail = False
+            has_out = True
+        elif stock < 5:
+            has_low = True
+
+    if has_out:
+        stk_status = "OUT_OF_STOCK"
+    elif has_low:
+        stk_status = "LOW_STOCK"
+    else:
+        stk_status = "IN_STOCK"
 
     return {
         "id": o.id,
@@ -193,15 +269,25 @@ def _to_dict(o, shipment=None) -> dict:
         "shopify_created_at": iso(o.shopify_created_at),
         "shopify_updated_at": iso(o.shopify_updated_at),
         "receiver_name": o.receiver_name,
+        "receiver_add1": getattr(o, "receiver_add1", None),
         "receiver_city": o.receiver_city,
+        "receiver_state": getattr(o, "receiver_state", None),
         "receiver_pincode": o.receiver_pincode,
         "receiver_mobile": o.receiver_mobile,
+        "receiver_email": getattr(o, "receiver_email", None),
         "cod_mode": o.cod_mode,
         "cod_value": num(o.cod_value),
-        "weight_grams": num(o.weight_grams),
+        "weight_grams": num(o.weight_grams) if getattr(o, "weight_grams", None) is not None else 930.0,
+        "length_cm": num(getattr(o, "length_cm", None)) if getattr(o, "length_cm", None) is not None else 30.0,
+        "breadth_cm": num(getattr(o, "breadth_cm", None)) if getattr(o, "breadth_cm", None) is not None else 20.0,
+        "height_cm": num(getattr(o, "height_cm", None)) if getattr(o, "height_cm", None) is not None else 5.0,
         "barcode_no": o.barcode_no,
+        "stock_available": stock_avail,
+        "stock_status": stk_status,
         "shipment": shipment,
+        "items": items or [],
     }
+
 
 
 @router.post("")
@@ -230,6 +316,7 @@ def get_orders(
     date_to: str | None = None,
     city: str | None = None,
     pincode: str | None = None,
+    carrier: str | None = None,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
@@ -245,34 +332,24 @@ def get_orders(
         date_to=date_to,
         city=city,
         pincode=pincode,
+        carrier=carrier,
     )
     bid = _user.get("business_id")
-    # Built here, in one pass, rather than inside _to_dict: the serializer has
-    # no session and a per-order lookup inside it would be an N+1 across a page
-    # of up to 100 rows.
-    #
-    # The token's business_id, never the `business_id` query parameter this
-    # route also declares — so this lookup fails closed regardless of what the
-    # caller sends. Worth knowing: that query parameter is not a pre-existing bug
-    # I left in place. At HEAD, list_orders below is handed the query parameter
-    # directly, so a caller can pass another tenant's id and read that tenant's
-    # orders; this shipment lookup is scoped correctly and would simply attach no
-    # shipment to the foreign rows. Fixing the list_orders call is out of scope
-    # here (it belongs to the India Post new-order work that also edits this
-    # route), so it is flagged rather than changed.
     shipments = _shipment_map(db, bid, [o.id for o in items])
+    item_map = _items_map(db, bid, [o.id for o in items])
     return {
         "success": True,
         "data": {
-            "items": [_to_dict(o, shipments.get(o.id)) for o in items],
+            "items": [_to_dict(o, shipments.get(o.id), item_map.get(o.id)) for o in items],
             "total": total,
             "page": max(int(page or 1), 1),
         },
     }
 
 
-@router.get("/export/india-post.xlsx")
-def export_india_post_bulk(
+@router.get("/export/{carrier}.xlsx")
+def export_carrier_bulk(
+    carrier: str,
     search: str | None = None,
     status: str | None = None,
     cod_mode: str | None = None,
@@ -285,6 +362,12 @@ def export_india_post_bulk(
     _user: dict = Depends(get_current_user),
 ):
     import io
+    from app.services.carrier_exports import (
+        build_delhivery_workbook,
+        build_bluedart_workbook,
+        build_dtdc_workbook,
+        build_indiapost_workbook,
+    )
 
     all_items: list = []
     page = 1
@@ -307,12 +390,26 @@ def export_india_post_bulk(
         if len(items) < page_size or len(all_items) >= total:
             break
         page += 1
-    wb = build_workbook(all_items)
+
+    c = carrier.lower().replace("_", "-")
+    if c in ("delhivery",):
+        wb = build_delhivery_workbook(all_items)
+        file_prefix = "delhivery"
+    elif c in ("bluedart", "blue-dart"):
+        wb = build_bluedart_workbook(all_items)
+        file_prefix = "bluedart"
+    elif c in ("dtdc",):
+        wb = build_dtdc_workbook(all_items)
+        file_prefix = "dtdc"
+    else:
+        wb = build_indiapost_workbook(all_items)
+        file_prefix = "india-post"
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"india-post_{now_str}.xlsx"
+    filename = f"{file_prefix}_{now_str}.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -320,6 +417,34 @@ def export_india_post_bulk(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
+    )
+
+
+@router.get("/export/india-post.xlsx")
+def export_india_post_bulk(
+    search: str | None = None,
+    status: str | None = None,
+    cod_mode: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    city: str | None = None,
+    pincode: str | None = None,
+    business_id: str | None = None,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    return export_carrier_bulk(
+        carrier="india-post",
+        search=search,
+        status=status,
+        cod_mode=cod_mode,
+        date_from=date_from,
+        date_to=date_to,
+        city=city,
+        pincode=pincode,
+        business_id=business_id,
+        db=db,
+        _user=_user,
     )
 
 
@@ -358,8 +483,50 @@ def get_timeline(order_id: str, db: Session = Depends(get_db), _u: dict = Depend
     return {"success": True, "data": {"items": build_timeline(db, _u.get("business_id"), order_id)}}
 
 
+@router.get("/{order_id}/stock-check")
+def get_order_stock_verification(
+    order_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    from app.services.order_service import check_order_stock
+    bid = _user.get("business_id")
+    return {"success": True, "data": check_order_stock(db, bid, order_id)}
+
+
+@router.get("/{order_id}/invoice.pdf")
+def download_gst_invoice_pdf(
+    order_id: str,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    from fastapi.responses import Response
+    from app.models.order import Order
+    from app.services.invoice_service import generate_gst_invoice_pdf
+
+    bid = _user.get("business_id")
+    order = db.query(Order).filter_by(id=order_id, business_id=bid).first()
+    if order is None:
+        raise HTTPException(404, "Order not found")
+
+    pdf_bytes = generate_gst_invoice_pdf(db, bid, order_id)
+    order_name = (order.shopify_order_name or order.internal_order_number or order_id).replace(" ", "_").replace("#", "")
+    filename = f"GST_Tax_Invoice_{order_name}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+
 @router.get("/{order_id}")
 def get_order(
+
     order_id: str,
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
@@ -370,7 +537,8 @@ def get_order(
     if o is None:
         raise HTTPException(404, "Order not found")
     shipment = _shipment_map(db, _user.get("business_id"), [o.id]).get(o.id)
-    return {"success": True, "data": _to_dict(o, shipment)}
+    items = _items_map(db, _user.get("business_id"), [o.id]).get(o.id)
+    return {"success": True, "data": _to_dict(o, shipment, items)}
 
 
 @router.put("/{order_id}")
@@ -399,11 +567,15 @@ def update_order(
         "receiver_state",
         "receiver_pincode",
         "weight_grams",
+        "length_cm",
+        "breadth_cm",
+        "height_cm",
+        "shape",
     )
     for field in updatable_fields:
         if field in payload:
             val = payload[field]
-            if field in ("total_amount", "cod_value", "weight_grams") and val is not None:
+            if field in ("total_amount", "cod_value", "weight_grams", "length_cm", "breadth_cm", "height_cm") and val is not None and val != "":
                 try:
                     val = float(val)
                 except Exception:
@@ -413,7 +585,8 @@ def update_order(
     db.commit()
     db.refresh(o)
     shipment = _shipment_map(db, _user.get("business_id"), [o.id]).get(o.id)
-    return {"success": True, "data": _to_dict(o, shipment)}
+    items = _items_map(db, _user.get("business_id"), [o.id]).get(o.id)
+    return {"success": True, "data": _to_dict(o, shipment, items)}
 
 
 @router.delete("/{order_id}")
@@ -422,9 +595,21 @@ def delete_order(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
+    from sqlalchemy import or_
     from app.models.order import Order, OrderItem
     from app.models.parcel import Parcel
+    from app.models.parcel_item import ParcelItem
     from app.models.shipment import Shipment, ShipmentEvent
+    from app.models.shipment_event import ShipsagarRetryJob
+    from app.models.return_record import ReturnRecord, ReturnItem
+    from app.models.scan_event import ScanEvent
+    from app.models.courier_meta import BookingIdempotency, ShipmentAttempt
+    from app.models.reconciliation import Reconciliation
+    from app.models.payment import Payment
+    from app.models.refund import Refund
+    from app.models.financial_transaction import FinancialTransaction
+    from app.models.sla import ShipmentCase, ShipmentFinancial
+    from app.models.statement import StatementRow
 
     o = db.query(Order).filter_by(id=order_id).first()
     if o is None:
@@ -437,98 +622,68 @@ def delete_order(
     p_ids = [p.id for p in db.query(Parcel).filter_by(order_id=oid).all()]
     oi_ids = [item.id for item in db.query(OrderItem).filter_by(order_id=oid).all()]
 
-    r_ids = []
-    try:
-        from app.models.return_record import ReturnRecord
-        r_rows = db.query(ReturnRecord).filter(
-            (ReturnRecord.order_id == oid) | (ReturnRecord.parcel_id.in_(p_ids) if p_ids else False)
-        ).all()
-        r_ids = [r.id for r in r_rows]
-    except Exception:
-        pass
+    r_conds = [ReturnRecord.order_id == oid]
+    if p_ids:
+        r_conds.append(ReturnRecord.parcel_id.in_(p_ids))
+    r_rows = db.query(ReturnRecord).filter(or_(*r_conds)).all()
+    r_ids = [r.id for r in r_rows]
 
-    # 2. Delete lowest-level child records first (parcel_items & return_items reference order_items)
-    try:
-        from app.models.parcel_item import ParcelItem
-        if p_ids or oi_ids:
-            db.query(ParcelItem).filter(
-                (ParcelItem.parcel_id.in_(p_ids) if p_ids else False) |
-                (ParcelItem.order_item_id.in_(oi_ids) if oi_ids else False)
-            ).delete(synchronize_session=False)
-    except Exception:
-        pass
+    # 2. Delete lowest-level child records first
+    pi_conds = []
+    if p_ids:
+        pi_conds.append(ParcelItem.parcel_id.in_(p_ids))
+    if oi_ids:
+        pi_conds.append(ParcelItem.order_item_id.in_(oi_ids))
+    if pi_conds:
+        db.query(ParcelItem).filter(or_(*pi_conds)).delete(synchronize_session=False)
 
-    try:
-        from app.models.return_record import ReturnItem
-        if r_ids or oi_ids:
-            db.query(ReturnItem).filter(
-                (ReturnItem.return_id.in_(r_ids) if r_ids else False) |
-                (ReturnItem.order_item_id.in_(oi_ids) if oi_ids else False)
-            ).delete(synchronize_session=False)
-    except Exception:
-        pass
+    ri_conds = []
+    if r_ids:
+        ri_conds.append(ReturnItem.return_id.in_(r_ids))
+    if oi_ids:
+        ri_conds.append(ReturnItem.order_item_id.in_(oi_ids))
+    if ri_conds:
+        db.query(ReturnItem).filter(or_(*ri_conds)).delete(synchronize_session=False)
 
     if s_ids:
-        try:
-            from app.models.shipment_event import ShipsagarRetryJob
-            db.query(ShipsagarRetryJob).filter(ShipsagarRetryJob.shipment_id.in_(s_ids)).delete(synchronize_session=False)
-        except Exception:
-            pass
+        db.query(BookingIdempotency).filter(BookingIdempotency.shipment_id.in_(s_ids)).delete(synchronize_session=False)
+        db.query(ShipsagarRetryJob).filter(ShipsagarRetryJob.shipment_id.in_(s_ids)).delete(synchronize_session=False)
         db.query(ShipmentEvent).filter(ShipmentEvent.shipment_id.in_(s_ids)).delete(synchronize_session=False)
+        db.query(ShipmentCase).filter(ShipmentCase.shipment_id.in_(s_ids)).delete(synchronize_session=False)
 
-    try:
-        from app.models.courier_meta import CourierMeta
-        if p_ids:
-            db.query(CourierMeta).filter(CourierMeta.parcel_id.in_(p_ids)).delete(synchronize_session=False)
-    except Exception:
-        pass
+    if p_ids:
+        db.query(ShipmentAttempt).filter(ShipmentAttempt.parcel_id.in_(p_ids)).delete(synchronize_session=False)
 
-    try:
-        from app.models.scan_event import ScanEvent
-        db.query(ScanEvent).filter(
-            (ScanEvent.order_id == oid) | (ScanEvent.parcel_id.in_(p_ids) if p_ids else False)
-        ).delete(synchronize_session=False)
-    except Exception:
-        pass
+    se_conds = [ScanEvent.order_id == oid]
+    if p_ids:
+        se_conds.append(ScanEvent.parcel_id.in_(p_ids))
+    db.query(ScanEvent).filter(or_(*se_conds)).delete(synchronize_session=False)
 
-    # 3. Delete secondary entities
+    # 3. Delete direct order-related records & secondary entities
+    db.query(Reconciliation).filter(Reconciliation.order_id == oid).delete(synchronize_session=False)
+    db.query(Payment).filter(Payment.order_id == oid).delete(synchronize_session=False)
+    db.query(Refund).filter(Refund.order_id == oid).delete(synchronize_session=False)
+    db.query(FinancialTransaction).filter(FinancialTransaction.order_id == oid).delete(synchronize_session=False)
+    db.query(ShipmentFinancial).filter(ShipmentFinancial.order_id == oid).delete(synchronize_session=False)
+
     if r_ids:
-        try:
-            from app.models.return_record import ReturnRecord
-            db.query(ReturnRecord).filter(ReturnRecord.id.in_(r_ids)).delete(synchronize_session=False)
-        except Exception:
-            pass
+        db.query(ReturnRecord).filter(ReturnRecord.id.in_(r_ids)).delete(synchronize_session=False)
+    db.query(ReturnRecord).filter(ReturnRecord.order_id == oid).delete(synchronize_session=False)
 
     if s_ids:
         db.query(Shipment).filter(Shipment.id.in_(s_ids)).delete(synchronize_session=False)
+    db.query(Shipment).filter(Shipment.order_id == oid).delete(synchronize_session=False)
 
     if p_ids:
         db.query(Parcel).filter(Parcel.id.in_(p_ids)).delete(synchronize_session=False)
+    db.query(Parcel).filter(Parcel.order_id == oid).delete(synchronize_session=False)
 
-    db.query(OrderItem).filter_by(order_id=oid).delete(synchronize_session=False)
+    db.query(OrderItem).filter(OrderItem.order_id == oid).delete(synchronize_session=False)
 
-    for model_import, model_name in [
-        ("app.models.payment", "Payment"),
-        ("app.models.refund", "Refund"),
-        ("app.models.reconciliation", "ReconciliationIssue"),
-        ("app.models.sla", "SlaTracker"),
-        ("app.models.financial_transaction", "FinancialTransaction"),
-        ("app.models.exception", "ExceptionRecord"),
-    ]:
-        try:
-            mod = __import__(model_import, fromlist=[model_name])
-            cls = getattr(mod, model_name)
-            db.query(cls).filter_by(order_id=oid).delete(synchronize_session=False)
-        except Exception:
-            pass
-
-    try:
-        from app.models.statement import StatementRecord
-        db.query(StatementRecord).filter_by(matched_order_id=oid).update(
-            {"matched_order_id": None, "reconciled": False}, synchronize_session=False
-        )
-    except Exception:
-        pass
+    # Unlink statement rows
+    db.query(StatementRow).filter(StatementRow.matched_order_id == oid).update(
+        {"matched_order_id": None, "reconciliation_status": "UNMATCHED"}, synchronize_session=False
+    )
 
     db.delete(o)
     db.commit()

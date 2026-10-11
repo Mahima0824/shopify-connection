@@ -3,13 +3,15 @@ import { api, pushShipment } from "../lib/api";
 import { INDIA_POST_HELP, newOrderDefaults, validateNewOrder } from "../lib/india-post";
 import { IconAlert, IconBox, IconTag, IconTruck } from "./icons";
 
+import ProductAvatar from "./ProductAvatar";
+
 export type NewOrderDialogProps = {
   open: boolean;
   onClose: () => void;
   onSaved: (order: unknown) => void;
 };
 
-type FormState = Record<string, string | number | boolean>;
+type FormState = Record<string, any>;
 
 function initialForm(): FormState {
   return {
@@ -22,6 +24,7 @@ function initialForm(): FormState {
     receiver_pincode: "",
     cod_value: "",
     barcode_no: "",
+    line_items: [],
   };
 }
 
@@ -32,10 +35,10 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSenderDetails, setShowSenderDetails] = useState(false);
 
-  // Two steps: the manual-order form, then a tracking-number prompt. The
-  // tracking step is deliberately skippable — making it mandatory would let a
-  // ShipSagar outage block order creation entirely, which is worse than an
-  // order that exists and whose shipment is added a moment later.
+  const [products, setProducts] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+
   const [step, setStep] = useState<"form" | "tracking">("form");
   const [savedOrder, setSavedOrder] = useState<any | null>(null);
   const [trackingNo, setTrackingNo] = useState("");
@@ -43,8 +46,6 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
   const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
   const [trackingSubmitting, setTrackingSubmitting] = useState(false);
 
-  // `open` is a boolean prop, so this dependency is stable: an abandoned
-  // half-filled attempt resets on reopen instead of leaking into a fresh order.
   useEffect(() => {
     if (!open) return;
     setStep("form");
@@ -53,7 +54,35 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
     setTrackingError(null);
     setTrackingNotice(null);
     setTrackingSubmitting(false);
+
+    setLoadingProducts(true);
+    api<any>("/api/v1/products")
+      .then((res) => {
+        const items = Array.isArray(res) ? res : (res?.data?.items ?? res?.items ?? []);
+        setProducts(items);
+      })
+      .catch(() => setProducts([]))
+      .finally(() => setLoadingProducts(false));
   }, [open]);
+
+  const handleSelectProduct = (prod: any) => {
+    setSelectedProduct(prod);
+    setForm((f) => ({
+      ...f,
+      cod_value: prod.price ? prod.price : f.cod_value,
+      total_amount: prod.price ? prod.price : f.total_amount,
+      line_items: [
+        {
+          id: prod.shopify_product_id || prod.id,
+          title: prod.title,
+          sku: prod.sku,
+          price: prod.price,
+          quantity: 1,
+          image_url: prod.image_url,
+        },
+      ],
+    }));
+  };
 
   if (!open) return null;
 
@@ -234,6 +263,88 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                 </div>
               )}
             </div>
+
+            {/* Shopify Product Selector */}
+            <div className="border border-emerald-500/30 rounded-xl p-5 bg-emerald-50/40 flex flex-col gap-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-emerald-200/60 pb-3">
+                <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  🛍️ Select Shopify Product (Catalog)
+                </span>
+                {selectedProduct && (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                    Product Selected
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-600">
+                Pick a product from your full Shopify catalog to automatically attach item photo, title, SKU, and price to this order.
+              </p>
+
+              {loadingProducts ? (
+                <div className="text-xs text-slate-500 py-2 flex items-center gap-2">
+                  <div className="size-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                  Loading Shopify products...
+                </div>
+              ) : products.length === 0 ? (
+                <div className="text-xs text-slate-500 py-2">
+                  No products found in catalog. You can type order details manually below.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {products.map((p, idx) => {
+                    const isSelected = selectedProduct && (
+                      (p.id != null && selectedProduct.id === p.id) ||
+                      (p.shopify_product_id != null && selectedProduct.shopify_product_id === p.shopify_product_id) ||
+                      (Boolean(p.sku) && selectedProduct.sku === p.sku) ||
+                      (selectedProduct.title === p.title)
+                    );
+                    return (
+                      <div
+                        key={p.id || p.shopify_product_id || p.sku || `prod-${idx}`}
+                        onClick={() => handleSelectProduct(p)}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? "border-emerald-600 bg-emerald-100/70 shadow-xs ring-1 ring-emerald-500"
+                            : "border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/20"
+                        }`}
+                      >
+                        <ProductAvatar
+                          imageUrl={p.image_url}
+                          title={p.title}
+                          className="size-10 rounded-lg border border-slate-200 shrink-0 object-cover"
+                        />
+                        <div className="flex-1 min-w-0 text-xs">
+                          <span className="font-semibold text-slate-900 block truncate" title={p.title}>
+                            {p.title}
+                          </span>
+                          <div className="flex items-center gap-2 text-slate-500 font-mono text-[11px]">
+                            <span>{p.sku ? `SKU: ${p.sku}` : "No SKU"} • ₹{Number(p.price || 0).toLocaleString()}</span>
+                            {p.stock_quantity !== undefined && (
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
+                                  p.stock_quantity <= 0
+                                    ? "bg-red-100 text-red-800"
+                                    : p.stock_quantity < 5
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                                }`}
+                              >
+                                Stock: {p.stock_quantity}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <span className="text-emerald-700 font-bold text-xs shrink-0">✓</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
 
             {/* Receiver Section */}
             <div className="border border-slate-200 rounded-xl p-5 bg-white flex flex-col gap-4 shadow-xs">

@@ -4641,8 +4641,8 @@ def test_orders_list_shipment_query_count_is_flat(monkeypatch):
         assert all(i["shipment"]["push_state"] == "pushed" for i in large_items)
         assert small_clean == large_clean, \
             f"{small_clean} statements at 5 rows, {large_clean} at 25"
-        # 2 from list_orders (count + page), 1 shipments, 1 refusal probe.
-        assert large_clean == 4, f"expected 4 statements, got {large_clean}"
+        # 2 from list_orders (count + page), 1 shipments, 1 refusal probe, 1 order items.
+        assert large_clean == 5, f"expected 5 statements, got {large_clean}"
 
         # --- scenario 2: every shipment refused, so the resolution arms run ---
         db = mk()
@@ -4664,7 +4664,7 @@ def test_orders_list_shipment_query_count_is_flat(monkeypatch):
         assert small_ref == large_ref, \
             f"{small_ref} statements at 5 rows, {large_ref} at 25"
         # The two resolution arms add exactly two queries, still per page.
-        assert large_ref == 6, f"expected 6 statements, got {large_ref}"
+        assert large_ref == 7, f"expected 7 statements, got {large_ref}"
     finally:
         sa_event.remove(Engine, "before_cursor_execute", _count)
         app.dependency_overrides.clear()

@@ -224,7 +224,7 @@ export default function GeneralTrackingPage() {
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Real-time multi-carrier shipment status, India Post &amp; DTDC tracking events, and exception monitoring
+            Real-time multi-carrier shipment status, India Post &amp; ShipSagar tracking events, and exception monitoring
           </p>
         </div>
         <Button onClick={runSweep} disabled={sweeping} variant="outline" className="gap-1.5 font-semibold text-xs">
@@ -278,12 +278,11 @@ export default function GeneralTrackingPage() {
           aria-label="Carrier Filter"
         >
           <option value="">All Carriers</option>
+          <option value="SHIPSAGAR">ShipSagar</option>
           <option value="INDIA_POST">India Post</option>
-          <option value="DTDC">DTDC</option>
-          <option value="TIRUPATI">Tirupati</option>
           <option value="MANUAL">Manual</option>
           {carriers.map((c) => (
-            !["INDIA_POST", "DTDC", "TIRUPATI", "MANUAL"].includes(c) && <option key={c}>{c}</option>
+            !["SHIPSAGAR", "INDIA_POST", "MANUAL"].includes(c) && <option key={c} value={c}>{c}</option>
           ))}
         </select>
         <select

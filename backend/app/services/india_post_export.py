@@ -109,6 +109,20 @@ def order_to_row(o, serial: int) -> list:
 
     dropoff = to_int_or_none(_get(o, "dropoff_pincode")) or SENDER_DEFAULTS["DROP OFF PINCODE"]
 
+    is_cod = str(_get(o, "cod_mode") or "").strip().upper() == "COD"
+    cod_flag = "COD" if is_cod else None
+    if is_cod:
+        total_amt = float(to_num_or_none(_get(o, "total_amount")) or 0.0)
+        # Business Rule: Customer pays ₹300 advance online.
+        # Remaining balance + ₹50 COD charge is collected on delivery.
+        if total_amt > 0:
+            remaining = max(0.0, total_amt - 300.0)
+            cod_amount = round(remaining + 50.0, 2)
+        else:
+            cod_amount = float(to_num_or_none(_get(o, "cod_value")) or 50.0)
+    else:
+        cod_amount = None
+
     return [
         serial,                                                          # 1. SERIAL NUMBER
         _get(o, "barcode_no"),                                          # 2. BARCODE NO
@@ -150,8 +164,8 @@ def order_to_row(o, serial: int) -> list:
         to_int_or_none(_get(o, "receiver_mobile")),                     # 38. RECEIVER MOBILE NO
         None,                                                            # 39. PREPAYMENT CODE
         None,                                                            # 40. VALUE OF PREPAYMENT
-        _get(o, "cod_mode") or "COD",                                   # 41. CODR/COD
-        to_num_or_none(_get(o, "cod_value")) or to_num_or_none(_get(o, "total_amount")), # 42. VALUE FOR CODR/COD
+        cod_flag,                                                        # 41. CODR/COD
+        cod_amount,                                                      # 42. VALUE FOR CODR/COD
         None,                                                            # 43. INSURANCE TYPE
         None,                                                            # 44. VALUE OF INSURANCE
         False,                                                           # 45. ACK

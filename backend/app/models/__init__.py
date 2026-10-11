@@ -32,3 +32,5 @@ from app.models.courier_meta import (  # noqa: F401
     CourierStatusMapping,
     CarrierFeature,
 )
+from app.models.whatsapp_notification import WhatsAppNotification  # noqa: F401
+

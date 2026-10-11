@@ -3,10 +3,12 @@ export type NavEntry = { label: string; href?: string; children?: NavChild[] };
 export const APP_NAV_GROUPS: NavEntry[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Orders", href: "/orders" },
+  { label: "RTO Management", href: "/rto" },
   { label: "Tracking", href: "/tracking" },
   {
     label: "Finance",
     children: [
+      { label: "COD Remittance", href: "/cod-remittance" },
       { label: "Statements", href: "/statements" },
       { label: "Reconciliation", href: "/statements#reconciliation" },
       { label: "Ledger", href: "/finance/ledger" },

@@ -4,21 +4,25 @@ from .dtdc import DtdcProvider
 from .tirupati import TirupatiProvider
 from .india_post import IndiaPostProvider
 from .shipsagar import ShipsagarProvider
+from .delhivery import DelhiveryProvider
+from .bluedart import BlueDartProvider
 
 PROVIDERS: dict[str, CarrierProvider] = {
-    "MANUAL": ManualProvider(),
-    "DTDC": DtdcProvider(),
-    "TIRUPATI": TirupatiProvider(),
-    "INDIA_POST": IndiaPostProvider(),
     "SHIPSAGAR": ShipsagarProvider(),
+    "INDIA_POST": IndiaPostProvider(),
+    "MANUAL": ManualProvider(),
 }
 
 
 def get_provider(code: str) -> CarrierProvider:
-    p = PROVIDERS.get((code or "").upper())
-    if p is None:
-        raise CarrierError("CARRIER_NOT_CONNECTED", f"Unknown carrier '{code}'.")
-    return p
+    c = (code or "").upper()
+    p = PROVIDERS.get(c)
+    if p is not None:
+        return p
+    # Any courier like DTDC, DELHIVERY, BLUEDART routes through direct ShipSagar provider
+    if c in ("DTDC", "DELHIVERY", "BLUEDART", "TIRUPATI", "IP", "FEDEX", "ARAMEX", "ATS"):
+        return ShipsagarProvider(courier=c)
+    raise CarrierError("CARRIER_NOT_CONNECTED", f"Unknown carrier '{code}'.")
 
 
 def provider_code_for_shipment(shipment) -> str:
