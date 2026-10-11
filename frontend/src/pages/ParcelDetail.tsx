@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, API } from "../lib/api";
-import { IconAlert } from "../components/icons";
+import { IconAlert, IconChevronLeft } from "../components/icons";
 import ParcelBarcode from "../components/barcode/ParcelBarcode";
 import { Badge, Button, Card } from "../components/primitives";
 
@@ -75,7 +75,7 @@ export default function ParcelPage() {
 
   if (err) {
     return (
-      <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 bg-background px-6 max-[480px]:px-4">
+      <main className="page-shell flex flex-col gap-4 bg-background">
         <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <IconAlert size={16} /> {err}
         </p>
@@ -85,22 +85,22 @@ export default function ParcelPage() {
 
   if (!data) {
     return (
-      <main className="mx-auto w-full max-w-[1280px] bg-background px-6 max-[480px]:px-4">
+      <main className="page-shell bg-background">
         <p className="p-10 text-center text-muted-foreground">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <main className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <Link to="/orders" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            ← Back to Orders Directory
+          <Link to="/orders" className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <IconChevronLeft size={14} /> Back to Orders Directory
           </Link>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Parcel {data.parcel.barcode_value}
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -154,7 +154,7 @@ export default function ParcelPage() {
 
       {returns.length > 0 && (
         <Card className="p-6 border-border/80 shadow-xs">
-          <h2 className="mb-3 text-lg font-bold tracking-tight text-foreground">Returns on this parcel</h2>
+          <h2 className="mb-3 text-lg font-medium tracking-tight text-foreground">Returns on this parcel</h2>
           <div className="flex flex-col divide-y divide-border">
             {returns.map((r: any) => (
               <div key={r.id} className="flex items-center justify-between py-3">

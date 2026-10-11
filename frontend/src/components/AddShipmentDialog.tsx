@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import SelectField from "./SelectField";
+import { Button, Input } from "./primitives";
 import {
   CourierOption,
   OrderStockVerification,
@@ -7,7 +9,7 @@ import {
   getShipmentCouriers,
   pushShipment,
 } from "../lib/api";
-import { IconAlert, IconTruck } from "./icons";
+import { IconAlert, IconClose, IconMapPin, IconPhone, IconTruck, IconUpload } from "./icons";
 import ProductAvatar from "./ProductAvatar";
 
 export type AddShipmentDialogProps = {
@@ -23,10 +25,10 @@ export type AddShipmentDialogProps = {
 
 // Shown until the live catalogue loads from ShipSagar:
 const FALLBACK_COURIERS: CourierOption[] = [
-  { courier_code: "IP", courier_name: "India Post Speed Post 🇮🇳" },
-  { courier_code: "DELHIVERY", courier_name: "Delhivery Surface / Express 🔴" },
-  { courier_code: "DTDC", courier_name: "DTDC Express & D2C 📦" },
-  { courier_code: "BLUEDART", courier_name: "BlueDart Express Air ✈️" },
+  { courier_code: "IP", courier_name: "India Post Speed Post" },
+  { courier_code: "DELHIVERY", courier_name: "Delhivery Surface / Express" },
+  { courier_code: "DTDC", courier_name: "DTDC Express & D2C" },
+  { courier_code: "BLUEDART", courier_name: "BlueDart Express Air" },
 ];
 
 function isQueuedRetry(err: unknown): boolean {
@@ -167,7 +169,7 @@ export default function AddShipmentDialog({
       <div className="w-full max-w-lg max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-medium text-slate-900 flex items-center gap-2">
               <IconTruck size={20} /> Add Shipment
               <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
                 ShipSagar
@@ -185,7 +187,7 @@ export default function AddShipmentDialog({
             aria-label="Close dialog"
             className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full w-8 h-8 flex items-center justify-center transition"
           >
-            ✕
+            <IconClose size={16} />
           </button>
         </div>
 
@@ -196,8 +198,18 @@ export default function AddShipmentDialog({
               <div className="flex items-start justify-between border-b border-slate-200 pb-2">
                 <div>
                   <span className="font-bold text-slate-900 text-sm block">{customerName}</span>
-                  {customerMobile && <span className="text-slate-500 font-mono">📱 {customerMobile}</span>}
-                  {customerAddress && <p className="text-slate-600 mt-0.5">📍 {customerAddress}</p>}
+                  {customerMobile && (
+                    <span className="text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                      <IconPhone size={12} className="inline mr-1 text-slate-400" />
+                      {customerMobile}
+                    </span>
+                  )}
+                  {customerAddress && (
+                    <p className="text-slate-600 mt-0.5 flex items-start gap-1">
+                      <IconMapPin size={12} className="inline mr-1 text-slate-400 shrink-0 mt-0.5" />
+                      <span>{customerAddress}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-bold text-slate-900 text-sm block">₹{Number(order.total_amount || 0).toLocaleString()}</span>
@@ -263,7 +275,7 @@ export default function AddShipmentDialog({
               <label htmlFor="add-tracking" className={labelClass}>
                 Tracking No
               </label>
-              <input
+              <Input
                 id="add-tracking"
                 className={inputClass}
                 placeholder="e.g. EG080960145IN"
@@ -289,24 +301,23 @@ export default function AddShipmentDialog({
               <label htmlFor="add-courier" className={labelClass}>
                 Courier
               </label>
-              <select
+              <SelectField
                 id="add-courier"
-                className={inputClass}
+                ariaLabel="Courier"
                 value={courier}
-                onChange={(e) => setCourier(e.target.value)}
-              >
-                {couriers.map((c) => {
+                includeAll={false}
+                onChange={setCourier}
+                triggerClassName={inputClass}
+                options={couriers.map((c) => {
                   const nameUpper = c.courier_name.toUpperCase();
                   const codeUpper = c.courier_code.toUpperCase();
                   const hasCode = nameUpper.includes(`(${codeUpper})`);
-                  const label = hasCode ? c.courier_name : `${c.courier_name} (${c.courier_code})`;
-                  return (
-                    <option key={c.courier_code} value={c.courier_code}>
-                      {label}
-                    </option>
-                  );
+                  return {
+                    value: c.courier_code,
+                    label: hasCode ? c.courier_name : `${c.courier_name} (${c.courier_code})`,
+                  };
                 })}
-              </select>
+              />
               <p className="text-xs text-slate-500 mt-1">
                 Loaded from ShipSagar. Defaults to India Post.
               </p>
@@ -315,22 +326,25 @@ export default function AddShipmentDialog({
         </div>
 
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            size="sm"
             form="add-shipment-form"
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 shadow-xs transition disabled:opacity-60"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
           >
+            <IconUpload size={14} />
             {submitting ? "Pushing…" : "Push shipment"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

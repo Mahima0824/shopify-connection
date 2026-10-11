@@ -1,9 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
+import SelectField from "../components/SelectField";
 import { Link, useNavigate } from "react-router-dom";
 import { api, pushShipment } from "../lib/api";
 import { newOrderDefaults } from "../lib/india-post";
-import { Button, Card, Badge } from "../components/primitives";
-import { IconBox, IconTruck, IconAlert } from "../components/icons";
+import { Button, Card, Badge, Input, Textarea } from "../components/primitives";
+import { CarrierIcon } from "../components/CarrierIcon";
+import {
+  IconAlert,
+  IconBox,
+  IconCheck,
+  IconChevronLeft,
+  IconClose,
+  IconCoin,
+  IconMapPin,
+  IconPackage,
+  IconSearch,
+  IconTruck,
+} from "../components/icons";
 
 interface SareeProduct {
   id: string;
@@ -256,7 +269,7 @@ export default function CreateOrder() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-6">
+    <div className="page-shell py-6 space-y-6">
       {/* Top Breadcrumb & Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div>
@@ -267,7 +280,7 @@ export default function CreateOrder() {
             <span>/</span>
             <span className="text-foreground font-semibold">New Order</span>
           </div>
-          <h1 className="text-2xl font-extrabold font-heading text-foreground tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-medium font-heading text-foreground tracking-tight flex items-center gap-2">
             <IconBox size={26} className="text-primary" /> Create New Order
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -277,7 +290,8 @@ export default function CreateOrder() {
 
         <Link to="/orders">
           <Button variant="outline" size="sm" className="gap-2">
-            ← Back to Orders
+            <IconChevronLeft size={14} />
+            Back to Orders
           </Button>
         </Link>
       </div>
@@ -292,8 +306,8 @@ export default function CreateOrder() {
           <Card className="p-6 border-border/80 shadow-xs space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
               <div>
-                <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
-                  <span>👗</span> Select Sarees for Order
+                <h2 className="text-lg font-medium font-heading text-foreground flex items-center gap-2">
+                  <IconPackage size={18} className="text-primary" /> Select Sarees for Order
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Browse or search through your live store collection. Click to add sarees.
@@ -301,32 +315,35 @@ export default function CreateOrder() {
               </div>
 
               {selectedItems.length > 0 && (
-                <Badge variant="secondary" className="bg-primary/10 text-primary font-bold text-xs px-3 py-1">
-                  ✓ {totalSareeCount} Saree{totalSareeCount > 1 ? "s" : ""} Added
+                <Badge variant="secondary" className="bg-primary/10 text-primary font-bold text-xs px-3 py-1 flex items-center gap-1">
+                  <IconCheck size={12} />
+                  <span>{totalSareeCount} Saree{totalSareeCount > 1 ? "s" : ""} Added</span>
                 </Badge>
               )}
             </div>
 
             {/* Saree Search & Filter Bar */}
             <div className="space-y-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="🔍 Search sarees by title, colour, design, or SKU..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2.5 bg-background border border-border/80 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary shadow-2xs transition"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-2.5 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+                <div className="relative flex items-center">
+                  <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Search sarees by title, colour, design, or SKU..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2.5 bg-background border border-border/80 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary shadow-2xs transition"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center p-1"
+                      aria-label="Clear search"
+                    >
+                      <IconClose size={14} />
+                    </button>
+                  )}
+                </div>
 
               {/* Category Filter Chips */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
@@ -373,47 +390,49 @@ export default function CreateOrder() {
                     <div
                       key={prod.id}
                       onClick={() => !isSelected && handleAddProduct(prod)}
-                      className={`flex items-center gap-4 p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-3.5 rounded-2xl border transition-all cursor-pointer ${
                         isSelected
                           ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary/40"
                           : "border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
                       }`}
                     >
-                      {/* Large Product Image */}
-                      <div className="size-24 sm:size-28 rounded-xl overflow-hidden bg-muted/40 shrink-0 border border-border/60 shadow-2xs">
-                        {prod.image_url ? (
-                          <img
-                            src={prod.image_url}
-                            alt={prod.title}
-                            className="size-full object-cover object-center transition hover:scale-105 duration-300"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="size-full flex items-center justify-center text-2xl bg-muted/60">
-                            👗
-                          </div>
-                        )}
-                      </div>
+                      {/* Product Image & Information */}
+                      <div className="flex items-center gap-3.5 flex-1 min-w-0 w-full sm:w-auto">
+                        <div className="size-20 sm:size-24 rounded-xl overflow-hidden bg-muted/40 shrink-0 border border-border/60 shadow-2xs">
+                          {prod.image_url ? (
+                            <img
+                              src={prod.image_url}
+                              alt={prod.title}
+                              className="size-full object-cover object-center transition hover:scale-105 duration-300"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="size-full flex items-center justify-center text-muted-foreground/60 bg-muted/60">
+                              <IconPackage size={24} />
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Saree Information & Large Typography */}
-                      <div className="flex-1 min-w-0 pr-2">
-                        <h3 className="text-base sm:text-lg font-bold font-heading text-foreground leading-snug line-clamp-2">
-                          {prod.title}
-                        </h3>
-                        {prod.sku && (
-                          <span className="font-mono text-xs text-muted-foreground mt-0.5 block">
-                            SKU: {prod.sku}
-                          </span>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="font-mono text-base font-extrabold text-primary">
-                            ₹{Number(prod.price || 0).toLocaleString()}
-                          </span>
+                        {/* Saree Information & Large Typography */}
+                        <div className="flex-1 min-w-0 pr-2">
+                          <h3 className="text-sm sm:text-base font-medium font-heading text-foreground leading-snug line-clamp-2">
+                            {prod.title}
+                          </h3>
+                          {prod.sku && (
+                            <span className="font-mono text-xs text-muted-foreground mt-0.5 block truncate">
+                              SKU: {prod.sku}
+                            </span>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <span className="font-mono text-sm sm:text-base font-extrabold text-primary">
+                              ₹{Number(prod.price || 0).toLocaleString()}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
                       {/* Add Button or Quantity Controls */}
-                      <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="shrink-0 flex items-center self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
                         {isSelected ? (
                           <div className="flex items-center gap-2 bg-background border border-primary/40 rounded-xl p-1 shadow-2xs">
                             <button
@@ -456,8 +475,8 @@ export default function CreateOrder() {
           {/* Section 2: Customer Shipping Address */}
           <Card className="p-6 border-border/80 shadow-xs space-y-5">
             <div className="border-b border-border/60 pb-3">
-              <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
-                <span>📍</span> Customer & Delivery Address
+              <h2 className="text-lg font-medium font-heading text-foreground flex items-center gap-2">
+                <IconMapPin size={18} className="text-primary" /> Customer & Delivery Address
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Exact shipping details where the saree parcel will be delivered.
@@ -468,7 +487,7 @@ export default function CreateOrder() {
               {/* Customer Name */}
               <div className="sm:col-span-2 space-y-1.5">
                 <label className="text-xs font-bold text-foreground">Customer Full Name *</label>
-                <input
+                <Input
                   type="text"
                   placeholder="e.g. Sonal Sharma"
                   value={customerName}
@@ -490,7 +509,7 @@ export default function CreateOrder() {
                   <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-mono">
                     +91
                   </span>
-                  <input
+                  <Input
                     type="tel"
                     placeholder="9016822651"
                     maxLength={10}
@@ -510,7 +529,7 @@ export default function CreateOrder() {
               {/* Email */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">Email Address (Optional)</label>
-                <input
+                <Input
                   type="email"
                   placeholder="customer@gmail.com"
                   value={customerEmail}
@@ -524,7 +543,7 @@ export default function CreateOrder() {
                 <label className="text-xs font-bold text-foreground">
                   Address Line 1 (Flat / House No, Building, Road) *
                 </label>
-                <input
+                <Input
                   type="text"
                   placeholder="e.g. Flat 402, Royal Residency, Station Road"
                   value={addressLine1}
@@ -544,7 +563,7 @@ export default function CreateOrder() {
                 <label className="text-xs font-bold text-foreground">
                   Address Line 2 (Area, Colony, Landmark)
                 </label>
-                <input
+                <Input
                   type="text"
                   placeholder="e.g. Near Shreyas School, Opp. City Mall"
                   value={addressLine2}
@@ -556,7 +575,7 @@ export default function CreateOrder() {
               {/* City */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">City *</label>
-                <input
+                <Input
                   type="text"
                   placeholder="e.g. Surat"
                   value={city}
@@ -574,7 +593,7 @@ export default function CreateOrder() {
               {/* State */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">State *</label>
-                <input
+                <Input
                   type="text"
                   placeholder="e.g. Gujarat"
                   value={state}
@@ -592,7 +611,7 @@ export default function CreateOrder() {
               {/* PIN Code */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">PIN Code (6 Digits) *</label>
-                <input
+                <Input
                   type="text"
                   placeholder="395002"
                   maxLength={6}
@@ -611,16 +630,19 @@ export default function CreateOrder() {
               {/* Preferred Courier */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground">Preferred Delivery Partner</label>
-                <select
+                <SelectField
+                  ariaLabel="Preferred Delivery Partner"
                   value={carrierCode}
-                  onChange={(e) => setCarrierCode(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary shadow-2xs"
-                >
-                  <option value="IP">🇮🇳 India Post (Speed Post)</option>
-                  <option value="DELHIVERY">🔴 Delhivery (Surface/Express)</option>
-                  <option value="BLUEDART">✈️ Blue Dart Express</option>
-                  <option value="DTDC">📦 DTDC Express</option>
-                </select>
+                  includeAll={false}
+                  onChange={setCarrierCode}
+                  triggerClassName="w-full px-3.5 py-2.5 rounded-xl bg-background"
+                  options={[
+                    { value: "IP", label: "India Post (Speed Post)", icon: <CarrierIcon code="INDIA_POST" /> },
+                    { value: "DELHIVERY", label: "Delhivery (Surface/Express)", icon: <CarrierIcon code="DELHIVERY" /> },
+                    { value: "BLUEDART", label: "Blue Dart Express", icon: <CarrierIcon code="BLUEDART" /> },
+                    { value: "DTDC", label: "DTDC Express", icon: <CarrierIcon code="DTDC" /> },
+                  ]}
+                />
               </div>
             </div>
           </Card>
@@ -628,7 +650,7 @@ export default function CreateOrder() {
           {/* Section 3: Parcel Dimensions */}
           <Card className="p-6 border-border/80 shadow-xs space-y-4">
             <div className="border-b border-border/60 pb-3">
-              <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
+              <h2 className="text-lg font-medium font-heading text-foreground flex items-center gap-2">
                 <IconTruck size={18} /> Parcel Package Specifications
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -639,7 +661,7 @@ export default function CreateOrder() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground">Weight (Grams)</label>
-                <input
+                <Input
                   type="number"
                   value={weightGrams}
                   onChange={(e) => setWeightGrams(Number(e.target.value))}
@@ -648,7 +670,7 @@ export default function CreateOrder() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground">Length (cm)</label>
-                <input
+                <Input
                   type="number"
                   value={lengthCm}
                   onChange={(e) => setLengthCm(Number(e.target.value))}
@@ -657,7 +679,7 @@ export default function CreateOrder() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground">Breadth (cm)</label>
-                <input
+                <Input
                   type="number"
                   value={breadthCm}
                   onChange={(e) => setBreadthCm(Number(e.target.value))}
@@ -666,7 +688,7 @@ export default function CreateOrder() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground">Height (cm)</label>
-                <input
+                <Input
                   type="number"
                   value={heightCm}
                   onChange={(e) => setHeightCm(Number(e.target.value))}
@@ -684,7 +706,7 @@ export default function CreateOrder() {
             {/* Order Summary & Pricing Breakdown Card */}
             <Card className="p-6 border-primary/30 bg-card shadow-md space-y-5">
               <div className="border-b border-border/80 pb-3">
-                <h3 className="text-base font-bold font-heading text-foreground flex items-center justify-between">
+                <h3 className="text-base font-medium font-heading text-foreground flex items-center justify-between">
                   <span>Order Summary</span>
                   <Badge variant="outline" className="font-mono text-xs">
                     {totalSareeCount} Item{totalSareeCount > 1 ? "s" : ""}
@@ -726,7 +748,7 @@ export default function CreateOrder() {
                         className="text-muted-foreground hover:text-destructive p-1 rounded transition"
                         title="Remove"
                       >
-                        ✕
+                        <IconClose size={14} />
                       </button>
                     </div>
                   ))}
@@ -738,7 +760,7 @@ export default function CreateOrder() {
                 <label className="text-xs font-bold text-foreground uppercase tracking-wider block">
                   Payment Mode
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setPaymentMode("COD")}
@@ -748,7 +770,7 @@ export default function CreateOrder() {
                         : "border-border bg-background hover:bg-muted text-muted-foreground"
                     }`}
                   >
-                    <span className="font-bold text-sm block">📦 COD Order</span>
+                    <span className="font-bold text-sm flex items-center gap-1.5"><IconPackage size={14} /> COD Order</span>
                     <span className="text-[11px] text-muted-foreground block mt-0.5">
                       ₹300 Advance + Remainder on Delivery
                     </span>
@@ -763,7 +785,7 @@ export default function CreateOrder() {
                         : "border-border bg-background hover:bg-muted text-muted-foreground"
                     }`}
                   >
-                    <span className="font-bold text-sm block">💳 Prepaid</span>
+                    <span className="font-bold text-sm flex items-center gap-1.5"><IconCoin size={14} /> Prepaid</span>
                     <span className="text-[11px] text-muted-foreground block mt-0.5">
                       Full Payment Collected Online
                     </span>
@@ -832,9 +854,10 @@ export default function CreateOrder() {
                 <Button
                   type="submit"
                   disabled={submitting || selectedItems.length === 0}
-                  className="w-full h-11 text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition disabled:opacity-50"
+                  className="w-full h-11 text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition disabled:opacity-50 gap-2"
                 >
-                  {submitting ? "Creating Order..." : "✓ Create & Confirm Order"}
+                  <IconCheck size={16} />
+                  {submitting ? "Creating Order..." : "Create & Confirm Order"}
                 </Button>
 
                 <Button
@@ -858,9 +881,9 @@ export default function CreateOrder() {
           <Card className="w-full max-w-md p-6 bg-card border-border shadow-2xl space-y-5">
             <div className="text-center space-y-1.5">
               <span className="size-12 rounded-full bg-emerald-500/10 text-emerald-600 text-2xl flex items-center justify-center mx-auto">
-                ✓
+                <IconCheck size={24} />
               </span>
-              <h3 className="text-lg font-bold font-heading text-foreground">
+              <h3 className="text-lg font-medium font-heading text-foreground">
                 Order Created Successfully!
               </h3>
               <p className="font-mono text-xs text-primary font-bold">
@@ -880,7 +903,7 @@ export default function CreateOrder() {
               <label className="text-xs font-semibold text-foreground block">
                 Have the AWB / Tracking Number now? (Optional)
               </label>
-              <input
+              <Input
                 type="text"
                 placeholder="e.g. EG080960145IN or 123456789"
                 value={trackingNo}

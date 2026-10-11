@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import MetricCard from "../components/MetricCard";
@@ -17,7 +17,20 @@ import {
   IconTruck,
   IconArrowUpRight,
 } from "../components/icons";
+import SelectField from "../components/SelectField";
+import DateRangePicker from "../components/DateRangePicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import "../styles/shopify-dashboard.css";
+
+/* Matches the other filter controls in this header row. */
+const DASH_TRIGGER =
+  "w-full h-9 px-3 bg-card border border-border/80 rounded-lg text-xs font-semibold text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors";
 
 interface SparklineProps {
   type: "gross" | "rto" | "pending" | "orders" | "shipping";
@@ -411,12 +424,12 @@ export default function DashboardPage() {
     "w-full h-9 px-3 bg-card border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition shadow-xs";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Top Controls Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-foreground text-2xl sm:text-3xl">
+            <h1 className="font-heading font-medium tracking-tight text-foreground text-2xl sm:text-3xl">
               Dashboard
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -431,40 +444,37 @@ export default function DashboardPage() {
         {/* Right-aligned Filter Controls */}
         <div className="flex flex-wrap items-end gap-2.5 sm:gap-3">
           {/* Payment Mode Filter: ALL, PREPAID, COD */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-heading">
-              Payment Mode
-            </span>
-            <select
-              className="h-9 px-3 bg-card border border-border/80 rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-xs transition"
-              aria-label="Payment Mode"
-              value={codMode}
-              onChange={(e) => setCodMode(e.target.value)}
-            >
-              <option value="">ALL</option>
-              <option value="PREPAID">PREPAID</option>
-              <option value="COD">COD</option>
-            </select>
-          </div>
+          <SelectField
+            label="Payment Mode"
+            ariaLabel="Payment Mode"
+            value={codMode}
+            allLabel="ALL"
+            onChange={setCodMode}
+            options={[
+              { value: "PREPAID", label: "PREPAID" },
+              { value: "COD", label: "COD" },
+            ]}
+          />
 
-          {/* Date Range Preset Filter */}
+          {/* Date Range Preset Filter. Uses a raw Select because "ALL" is a real
+              preset here, not an empty-string sentinel. */}
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-heading">
+            <span className="font-heading text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Date Range
             </span>
-            <select
-              className="h-9 px-3 bg-card border border-border/80 rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-xs transition"
-              aria-label="Date Range"
-              value={datePreset}
-              onChange={(e) => handleDatePresetChange(e.target.value)}
-            >
-              <option value="ALL">All Dates</option>
-              <option value="TODAY">Today</option>
-              <option value="YESTERDAY">Yesterday</option>
-              <option value="THIS_MONTH">This Month</option>
-              <option value="LAST_MONTH">Last Month</option>
-              <option value="CUSTOM">Custom Date</option>
-            </select>
+            <Select value={datePreset} onValueChange={handleDatePresetChange}>
+              <SelectTrigger className={DASH_TRIGGER} aria-label="Date Range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                <SelectItem value="TODAY">Today</SelectItem>
+                <SelectItem value="YESTERDAY">Yesterday</SelectItem>
+                <SelectItem value="THIS_MONTH">This Month</SelectItem>
+                <SelectItem value="LAST_MONTH">Last Month</SelectItem>
+                <SelectItem value="CUSTOM">Custom Date</SelectItem>
+                <SelectItem value="ALL">All Dates</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Clear button if active */}
@@ -487,7 +497,7 @@ export default function DashboardPage() {
             <Label className="cursor-pointer gap-2 h-9 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap flex items-center">
               <Checkbox checked={live} onCheckedChange={(v) => setLive(v === true)} aria-label="Live updates" />
               <span className="flex items-center gap-1.5">
-                <span className={`size-2 rounded-full ${live ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+                <span className={`size-2 rounded-full ${live ? "bg-status-success animate-pulse" : "bg-muted-foreground"}`} />
                 Live{updatedAt ? ` · ${updatedAt}` : ""}
               </span>
             </Label>
@@ -498,29 +508,18 @@ export default function DashboardPage() {
       {/* Custom Date Pickers - shown only when 'Custom Date' is selected */}
       {datePreset === "CUSTOM" && (
         <div className="flex flex-wrap items-center justify-end gap-3 -mt-3 bg-muted/20 px-4 py-2.5 rounded-lg border border-border/60 animate-in fade-in-50 duration-200">
-          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading flex items-center gap-1.5">
-            <span>📅</span> Custom Date Range:
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">
+            Custom Date Range:
           </span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium">From:</span>
-            <Input
-              className="h-8.5 w-38 text-xs bg-card"
-              type="date"
-              aria-label="Date from"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium">To:</span>
-            <Input
-              className="h-8.5 w-38 text-xs bg-card"
-              type="date"
-              aria-label="Date to"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={({ from, to }) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+            className="w-[280px] max-w-full"
+          />
         </div>
       )}
 
@@ -532,10 +531,10 @@ export default function DashboardPage() {
               Gross sales
             </span>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xl font-bold font-heading text-foreground tabular-nums">
+              <span className="text-xl font-semibold font-heading text-foreground tabular-nums">
                 {formattedGrossSales}
               </span>
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-status-success bg-status-success/10 px-1.5 py-0.5 rounded border border-status-success/20">
                 <IconArrowUpRight size={11} /> Live
               </span>
             </div>
@@ -549,7 +548,7 @@ export default function DashboardPage() {
               Total Orders
             </span>
             <div className="mt-1">
-              <span className="text-xl font-bold font-heading text-foreground tabular-nums">
+              <span className="text-xl font-semibold font-heading text-foreground tabular-nums">
                 {totalOrdersVal}
               </span>
             </div>
@@ -563,7 +562,7 @@ export default function DashboardPage() {
               Pending Orders
             </span>
             <div className="mt-1">
-              <span className="text-xl font-bold font-heading text-foreground tabular-nums">
+              <span className="text-xl font-semibold font-heading text-foreground tabular-nums">
                 {pendingOrdersVal}
               </span>
             </div>
@@ -577,7 +576,7 @@ export default function DashboardPage() {
               In RTO
             </span>
             <div className="mt-1">
-              <span className="text-xl font-bold font-heading text-foreground tabular-nums">
+              <span className="text-xl font-semibold font-heading text-foreground tabular-nums">
                 {inRtoVal}
               </span>
             </div>
@@ -592,7 +591,7 @@ export default function DashboardPage() {
         <Card className="p-5 shadow-xs border-border/80 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold font-heading text-foreground uppercase tracking-wider">
+              <h3 className="text-sm font-medium font-heading text-foreground uppercase tracking-wider">
                 Total sales over time
               </h3>
               <Badge variant="outline" className="text-[11px]">
@@ -600,10 +599,10 @@ export default function DashboardPage() {
               </Badge>
             </div>
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-2xl font-bold font-heading text-foreground tabular-nums">
+              <span className="text-2xl font-semibold font-heading text-foreground tabular-nums">
                 {formattedGrossSales}
               </span>
-              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-status-success bg-status-success/10 px-1.5 py-0.5 rounded border border-status-success/20">
                 <IconArrowUpRight size={12} /> Active
               </span>
             </div>
@@ -615,7 +614,7 @@ export default function DashboardPage() {
         <Card className="p-5 shadow-xs border-border/80 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold font-heading text-foreground uppercase tracking-wider">
+              <h3 className="text-sm font-medium font-heading text-foreground uppercase tracking-wider">
                 Total sales breakdown
               </h3>
               <Badge variant="outline" className="text-[11px]">
@@ -626,37 +625,37 @@ export default function DashboardPage() {
             <div className="flex flex-col divide-y divide-border/60 text-sm">
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-muted-foreground">Gross sales</span>
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                   {formattedGrossSales}
                 </span>
               </div>
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-muted-foreground">Discounts</span>
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                   {currencySymbol}0.00
                 </span>
               </div>
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-muted-foreground">Sales reversals</span>
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                   {currencySymbol}0.00
                 </span>
               </div>
               <div className="py-2.5 flex items-center justify-between bg-primary/5 px-2 rounded-md">
                 <span className="font-semibold text-primary">Net sales</span>
-                <span className="font-bold tabular-nums text-primary">
+                <span className="font-semibold tabular-nums text-primary">
                   {formattedGrossSales}
                 </span>
               </div>
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-muted-foreground">Shipping charges</span>
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                   {formattedTotalShipping}
                 </span>
               </div>
               <div className="py-2.5 flex items-center justify-between">
                 <span className="text-muted-foreground">Taxes</span>
-                <span className="font-semibold tabular-nums text-foreground">
+                <span className="font-medium tabular-nums text-foreground">
                   {currencySymbol}
                   {(financials?.total_tax ?? 0).toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
@@ -665,8 +664,8 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="pt-3 pb-1 flex items-center justify-between border-t-2 border-border">
-                <span className="font-bold font-heading text-foreground">Total sales</span>
-                <span className="text-base font-bold font-heading tabular-nums text-foreground">
+                <span className="font-semibold font-heading text-foreground">Total sales</span>
+                <span className="text-base font-semibold font-heading tabular-nums text-foreground">
                   {formattedGrossSales}
                 </span>
               </div>
@@ -679,7 +678,7 @@ export default function DashboardPage() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-heading font-bold tracking-tight text-lg text-foreground">
+            <h2 className="font-heading font-medium tracking-tight text-lg text-foreground">
               Operational Health
             </h2>
             <p className="text-xs text-muted-foreground">

@@ -1,10 +1,47 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import AddShipmentDialog from "../src/components/AddShipmentDialog";
 
 afterEach(() => { cleanup(); });
-beforeEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
+beforeEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  // Radix Select needs pointer capture + scrollIntoView, which jsdom lacks.
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+  window.HTMLElement.prototype.releasePointerCapture = () => {};
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+});
+
+/* The courier picker is a shadcn Select (a button + listbox), not a native
+   <select>, so .value / .options / fireEvent.change do not apply. These read
+   the selected text and pick an option the way a user would. Both are
+   synchronous so they compose inside waitFor callbacks. */
+function selectedText(name: string) {
+  const el = screen.queryByRole("combobox", { name });
+  return el?.textContent?.trim() ?? "";
+}
+
+async function chooseOption(name: string, optionText: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("combobox", { name }));
+  await screen.findByRole("listbox");
+  await user.click(screen.getByRole("option", { name: optionText }));
+}
+
+async function optionNames(name: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("combobox", { name }));
+  const listbox = await screen.findByRole("listbox");
+  const names = Array.from(listbox.querySelectorAll('[role="option"]')).map(
+    (o) => o.textContent?.trim() ?? ""
+  );
+  await user.keyboard("{Escape}");
+  return names;
+}
 
 const COURIERS = [
   { courier_code: "IP", courier_name: "India Post" },
@@ -33,9 +70,9 @@ test("loads couriers, defaults to India Post, and pushes the tracking number", a
   const onPushed = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} />);
-  const courier = await screen.findByLabelText("Courier") as HTMLSelectElement;
-  await waitFor(() => expect(courier.options.length).toBeGreaterThan(1));
-  expect(courier.value).toBe("IP");
+  await screen.findByRole("combobox", { name: "Courier" });
+  await waitFor(() => expect(selectedText("Courier")).toMatch(/India Post/));
+  expect((await optionNames("Courier")).length).toBeGreaterThan(1);
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG080960145IN" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() => expect(onPushed).toHaveBeenCalled());
@@ -51,7 +88,7 @@ test("a blank tracking number is refused before any request", async () => {
   const onPushed = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() => expect(screen.getByText("Tracking number is required.")).toBeTruthy());
   expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("/push"))).toBe(false);
@@ -66,7 +103,7 @@ test("a ShipSagar refusal is shown without pretending the push failed", async ()
   const onPushed = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() => expect(screen.getByText("please try again later")).toBeTruthy());
@@ -88,11 +125,10 @@ test("an unreachable courier catalogue still offers a usable dropdown", async ()
   const onPushed = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} />);
-  const courier = await screen.findByLabelText("Courier") as HTMLSelectElement;
-  await waitFor(() => expect(courier.value).toBe("IP"));
-  const codes = Array.from(courier.options).map((o) => o.value);
+  await waitFor(() => expect(selectedText("Courier")).toMatch(/India Post/));
+  const codes = await optionNames("Courier");
   expect(codes.length).toBeGreaterThan(0);
-  expect(codes).toContain("IP");
+  expect(codes.join(" ")).toContain("India Post");
   // Falling back is only useful if the user can still push.
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
@@ -121,7 +157,7 @@ test("a ShipSagar outage refreshes the order instead of inviting a doomed retry"
   const onRecovered = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} onRecovered={onRecovered} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() => expect(onRecovered).toHaveBeenCalled());
@@ -140,7 +176,7 @@ test("a null order id is refused before any request", async () => {
   vi.stubGlobal("fetch", fetchMock);
   render(<AddShipmentDialog open orderId={null} orderLabel="MAN-1"
     onClose={() => {}} onPushed={() => {}} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() =>
@@ -168,7 +204,7 @@ test("a backend validation code shows the server message in an alert", async () 
   const onPushed = vi.fn();
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={onPushed} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() =>
@@ -200,9 +236,9 @@ test("reopening the dialog resets every field from the previous attempt", async 
     <AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
       onClose={() => {}} onPushed={onPushed} />,
   );
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
-  fireEvent.change(screen.getByLabelText("Courier"), { target: { value: "FEDEX" } });
+  await chooseOption("Courier", "FedEx (FEDEX)");
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() =>
     expect(screen.getByText("Tracking number EG1 is already used for IP.")).toBeTruthy(),
@@ -216,7 +252,8 @@ test("reopening the dialog resets every field from the previous attempt", async 
     onClose={() => {}} onPushed={onPushed} />);
   await waitFor(() => expect(screen.getByLabelText("Tracking No")).toBeTruthy());
   expect((screen.getByLabelText("Tracking No") as HTMLInputElement).value).toBe("");
-  expect((screen.getByLabelText("Courier") as HTMLSelectElement).value).toBe("IP");
+  // Reopening must reset the courier back to India Post, not keep the last pick.
+  await waitFor(() => expect(selectedText("Courier")).toMatch(/India Post/));
   expect(screen.queryAllByRole("alert")).toHaveLength(0);
   expect(screen.queryAllByRole("status")).toHaveLength(0);
   expect(onPushed).not.toHaveBeenCalled();
@@ -236,7 +273,7 @@ test("the submit button is disabled while the push is in flight", async () => {
   }));
   render(<AddShipmentDialog open orderId="o1" orderLabel="MAN-1"
     onClose={() => {}} onPushed={() => {}} />);
-  await screen.findByLabelText("Courier");
+  await screen.findByRole("combobox", { name: "Courier" });
   fireEvent.change(screen.getByLabelText("Tracking No"), { target: { value: "EG1" } });
   fireEvent.click(screen.getByText("Push shipment", { selector: "button" }));
   await waitFor(() => expect(screen.getByText("Pushing…")).toBeTruthy());

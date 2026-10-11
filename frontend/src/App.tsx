@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import Loading from "./components/Loading";
 import NotFound from "./pages/NotFound";
 import TopNav from "./components/TopNav";
@@ -28,20 +28,35 @@ import Tracking from "./pages/Tracking";
 import ShipmentsTracking from "./pages/ShipmentsTracking";
 import RtoManagement from "./pages/RtoManagement";
 import CodRemittance from "./pages/CodRemittance";
+import ServerError from "./pages/ServerError";
+import Maintenance from "./pages/Maintenance";
+import { ThemeProvider } from "./context/ThemeContext";
 
 import Footer from "./components/Footer";
+import ScrollToTop from "./components/ScrollToTop";
+
+/* Auth routes stand alone: no nav, no footer, no shell padding. Signing in is
+   a focused task and the app nav only offers destinations that still need a
+   session. Paths live in one place so a new /signup is a one-line change. */
+const BARE_ROUTES = ["/login", "/signup"];
 
 export function AppShell() {
+  const { pathname } = useLocation();
+  const bare = BARE_ROUTES.includes(pathname);
+
   return (
-    <div className="min-h-screen bg-background text-foreground antialiased flex flex-col">
-      <TopNav />
-      <main className="flex-1 pb-16 pt-6">
-        <Suspense fallback={<Loading />}>
-          <Outlet />
-        </Suspense>
-      </main>
-      <Footer />
-    </div>
+    <ThemeProvider>
+      <div className="min-h-screen bg-background text-foreground antialiased flex flex-col">
+        <ScrollToTop />
+        {!bare && <TopNav />}
+        <main className={bare ? "flex-1" : "flex-1 pb-16 pt-6"}>
+          <Suspense fallback={<Loading />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        {!bare && <Footer />}
+      </div>
+    </ThemeProvider>
   );
 }
 
@@ -76,6 +91,9 @@ export function AppRoutes() {
         <Route path="/settings/costs" element={<CostsSettings />} />
         <Route path="/settings/carriers" element={<CarriersSettings />} />
         <Route path="/settings/sla" element={<SlaSettings />} />
+        <Route path="/maintenance" element={<Maintenance />} />
+        <Route path="/503" element={<Maintenance />} />
+        <Route path="/500" element={<ServerError />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
@@ -84,8 +102,10 @@ export function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

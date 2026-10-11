@@ -7,14 +7,72 @@ import EditOrderDialog from "../components/EditOrderDialog";
 import OrderDetailDialog from "../components/OrderDetailDialog";
 import OrderTable from "../components/OrderTable";
 import ImportResult, { ImportSummary } from "../components/ImportResult";
+import DateRangePicker from "../components/DateRangePicker";
+import SelectField from "../components/SelectField";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+
+/* Shared trigger styling so the shadcn Selects on this page match the native
+   inputs in the same filter row (h-9, text-sm, card surface). */
+const DATE_TRIGGER_CLASS =
+  "w-full h-9 px-3 bg-card border border-border/80 rounded-md text-sm font-normal text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors";
 import { Button, Card, Checkbox, Input, Label, Badge } from "../components/primitives";
+import { CarrierIcon, CARRIER_OPTIONS } from "../components/CarrierIcon";
 import {
   IconAlert,
   IconBox,
+  IconCalendar,
+  IconChevronLeft,
+  IconChevronRight,
   IconReceipt,
   IconRefund,
   IconTag,
 } from "../components/icons";
+
+const DEFAULT_DATE_PRESET = "TODAY";
+
+const fmt = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+/* Kept pure and at module scope so the initial state and the dropdown handler
+   cannot drift: the default preset's dates come from this same function rather
+   than being duplicated. */
+function resolvePresetRange(preset: string, now = new Date()): { from: string; to: string } {
+  if (preset === "TODAY") {
+    const t = fmt(now);
+    return { from: t, to: t };
+  }
+  if (preset === "YESTERDAY") {
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    const s = fmt(y);
+    return { from: s, to: s };
+  }
+  if (preset === "THIS_MONTH") {
+    return {
+      from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+      to: fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  if (preset === "LAST_MONTH") {
+    const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return {
+      from: `${lm.getFullYear()}-${String(lm.getMonth() + 1).padStart(2, "0")}-01`,
+      to: fmt(new Date(lm.getFullYear(), lm.getMonth() + 1, 0)),
+    };
+  }
+  // "ALL" and "CUSTOM" both leave the bounds to the user (or unset).
+  return { from: "", to: "" };
+}
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -33,9 +91,14 @@ export default function OrdersPage() {
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
   const [codMode, setCodMode] = useState("");
-  const [datePreset, setDatePreset] = useState("ALL");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  /* The date filter defaults to Today so the list opens on the current day's
+     orders rather than the whole history. */
+  const [datePreset, setDatePreset] = useState(DEFAULT_DATE_PRESET);
+  const [{ from: defaultFrom, to: defaultTo }] = useState(() =>
+    resolvePresetRange(DEFAULT_DATE_PRESET)
+  );
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(defaultTo);
   const [status, setStatus] = useState("");
   const [city, setCity] = useState("");
   const [pincode, setPincode] = useState("");
@@ -48,39 +111,9 @@ export default function OrdersPage() {
   const handleDatePresetChange = (preset: string) => {
     setDatePreset(preset);
     setPage(1);
-    const now = new Date();
-    const fmt = (d: Date) => {
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      return `${yyyy}-${mm}-${dd}`;
-    };
-
-    if (preset === "TODAY") {
-      const todayStr = fmt(now);
-      setDateFrom(todayStr);
-      setDateTo(todayStr);
-    } else if (preset === "YESTERDAY") {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      const yStr = fmt(y);
-      setDateFrom(yStr);
-      setDateTo(yStr);
-    } else if (preset === "THIS_MONTH") {
-      const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const lastDay = fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-      setDateFrom(firstDay);
-      setDateTo(lastDay);
-    } else if (preset === "LAST_MONTH") {
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const firstDay = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
-      const lastDay = fmt(new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0));
-      setDateFrom(firstDay);
-      setDateTo(lastDay);
-    } else if (preset === "ALL") {
-      setDateFrom("");
-      setDateTo("");
-    }
+    const { from, to } = resolvePresetRange(preset);
+    setDateFrom(from);
+    setDateTo(to);
   };
 
   const query = buildOrderQuery({
@@ -197,16 +230,14 @@ export default function OrdersPage() {
     city,
     pincode,
   ].filter(Boolean).length;
-  const selectClass =
-    "w-full h-9 px-3 bg-card border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition shadow-xs";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 bg-background px-3 sm:px-5">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Orders Directory
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -235,7 +266,7 @@ export default function OrdersPage() {
               className="shadow-xs gap-1.5 font-medium"
               aria-label="Export options"
             >
-              <IconReceipt size={15} /> Export (.xlsx) ▾
+              <IconReceipt size={15} /> Export (.xlsx)
             </Button>
 
             {showExportMenu && (
@@ -256,7 +287,7 @@ export default function OrdersPage() {
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-foreground hover:bg-muted font-medium transition text-left cursor-pointer"
                   >
-                    <span className="text-base">🇮🇳</span>
+                    <CarrierIcon code="INDIA_POST" size={16} />
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">India Post</span>
                       <span className="text-[10px] text-muted-foreground">Speed Post 48-col format</span>
@@ -273,7 +304,7 @@ export default function OrdersPage() {
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-foreground hover:bg-muted font-medium transition text-left cursor-pointer"
                   >
-                    <span className="text-base">🔴</span>
+                    <CarrierIcon code="DELHIVERY" size={16} />
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">Delhivery</span>
                       <span className="text-[10px] text-muted-foreground">B2C Surface &amp; Express client format</span>
@@ -290,7 +321,7 @@ export default function OrdersPage() {
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-foreground hover:bg-muted font-medium transition text-left cursor-pointer"
                   >
-                    <span className="text-base">✈️</span>
+                    <CarrierIcon code="BLUEDART" size={16} />
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">Blue Dart</span>
                       <span className="text-[10px] text-muted-foreground">Express Air &amp; Surface manifest</span>
@@ -307,7 +338,7 @@ export default function OrdersPage() {
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg text-foreground hover:bg-muted font-medium transition text-left cursor-pointer"
                   >
-                    <span className="text-base">📦</span>
+                    <CarrierIcon code="DTDC" size={16} />
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground">DTDC</span>
                       <span className="text-[10px] text-muted-foreground">B2C Consignments Excel format</span>
@@ -366,77 +397,70 @@ export default function OrdersPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end pt-2 border-t border-border/60">
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading">Payment Mode</span>
-            <select
-              className={selectClass}
-              aria-label="COD mode"
-              value={codMode}
-              onChange={(e) => {
-                setCodMode(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">ALL</option>
-              <option value="COD">COD</option>
-              <option value="PREPAID">PREPAID</option>
-            </select>
-          </div>
+          <SelectField
+            label="Payment Mode"
+            ariaLabel="COD mode"
+            value={codMode}
+            allLabel="ALL"
+            onChange={(v) => {
+              setCodMode(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "COD", label: "COD" },
+              { value: "PREPAID", label: "PREPAID" },
+            ]}
+          />
 
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading">Status</span>
-            <select
-              className={selectClass}
-              aria-label="Status"
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All Statuses</option>
-              <option value="NEW">NEW</option>
-              <option value="PACKED">PACKED</option>
-              <option value="DISPATCHED">DISPATCHED</option>
-              <option value="DELIVERED">DELIVERED</option>
-              <option value="RTO">RTO</option>
-            </select>
-          </div>
+          <SelectField
+            label="Status"
+            ariaLabel="Status"
+            value={status}
+            allLabel="All Statuses"
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "NEW", label: "NEW" },
+              { value: "PACKED", label: "PACKED" },
+              { value: "DISPATCHED", label: "DISPATCHED" },
+              { value: "DELIVERED", label: "DELIVERED" },
+              { value: "RTO", label: "RTO" },
+            ]}
+          />
 
+          <SelectField
+            label="Delivery Partner"
+            ariaLabel="Delivery Partner"
+            value={carrier}
+            allLabel="All Partners"
+            onChange={(v) => {
+              setCarrier(v);
+              setPage(1);
+            }}
+            options={CARRIER_OPTIONS}
+          />
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading">Delivery Partner</span>
-            <select
-              className={selectClass}
-              aria-label="Delivery Partner"
-              value={carrier}
-              onChange={(e) => {
-                setCarrier(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All Partners</option>
-              <option value="INDIA_POST">🇮🇳 India Post</option>
-              <option value="DELHIVERY">🔴 Delhivery</option>
-              <option value="BLUEDART">✈️ Blue Dart</option>
-              <option value="DTDC">📦 DTDC</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading">Date Range</span>
-            <select
-              className={selectClass}
-              aria-label="Date range"
+            <span className="font-heading text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Date Range
+            </span>
+            <Select
               value={datePreset}
-              onChange={(e) => handleDatePresetChange(e.target.value)}
+              onValueChange={(v) => handleDatePresetChange(v)}
             >
-              <option value="ALL">All Dates</option>
-              <option value="TODAY">Today</option>
-              <option value="YESTERDAY">Yesterday</option>
-              <option value="THIS_MONTH">This Month</option>
-              <option value="LAST_MONTH">Last Month</option>
-              <option value="CUSTOM">Custom Date</option>
-            </select>
+              <SelectTrigger className={DATE_TRIGGER_CLASS} aria-label="Date range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                <SelectItem value="TODAY">Today</SelectItem>
+                <SelectItem value="YESTERDAY">Yesterday</SelectItem>
+                <SelectItem value="THIS_MONTH">This Month</SelectItem>
+                <SelectItem value="LAST_MONTH">Last Month</SelectItem>
+                <SelectItem value="CUSTOM">Custom Date</SelectItem>
+                <SelectItem value="ALL">All Dates</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -491,34 +515,19 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Custom Date Pickers - shown only when 'Custom Date' is selected */}
+        {/* Custom Date Range picker - shown only when 'Custom Date' is selected */}
         {datePreset === "CUSTOM" && (
-          <div className="flex flex-wrap items-center gap-3 pt-3 mt-1 border-t border-border/50 bg-muted/20 px-3.5 py-2.5 rounded-lg animate-in fade-in-50 duration-200">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading flex items-center gap-1.5">
-              <span>📅</span> Custom Date Range:
+          <div className="flex flex-wrap items-end gap-3 pt-3 mt-1 border-t border-border/50 bg-muted/20 px-3.5 py-3 rounded-lg animate-in fade-in-50 duration-200">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-heading flex items-center gap-1.5 pb-2.5">
+              <IconCalendar size={13} className="text-muted-foreground" /> Custom Date Range:
             </span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">From:</span>
-              <Input
-                className="h-8.5 w-38 text-xs bg-card"
-                type="date"
-                aria-label="Date from"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">To:</span>
-              <Input
-                className="h-8.5 w-38 text-xs bg-card"
-                type="date"
-                aria-label="Date to"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
+            <div className="flex flex-col gap-1 min-w-[260px] flex-1 sm:max-w-[320px]">
+              <DateRangePicker
+                from={dateFrom}
+                to={dateTo}
+                onChange={({ from, to }) => {
+                  setDateFrom(from);
+                  setDateTo(to);
                   setPage(1);
                 }}
               />
@@ -527,7 +536,7 @@ export default function OrdersPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 text-xs text-muted-foreground hover:text-foreground ml-auto"
+                className="h-9 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   setDateFrom("");
                   setDateTo("");
@@ -566,7 +575,7 @@ export default function OrdersPage() {
             <div className="size-12 rounded-full bg-muted/60 flex items-center justify-center text-muted-foreground mb-3">
               <IconBox size={24} />
             </div>
-            <h3 className="text-base font-bold font-heading text-foreground mb-1">No orders found</h3>
+            <h3 className="text-base font-medium font-heading text-foreground mb-1">No orders found</h3>
             <p className="text-xs text-muted-foreground max-w-sm mb-5">
               No orders matched your active filters or directory is empty. Sync Shopify or create a manual order.
             </p>
@@ -607,20 +616,17 @@ export default function OrdersPage() {
                 {/* Page Size Selector */}
                 <div className="flex items-center gap-1.5 ml-2 border-l border-border/80 pl-3">
                   <span className="text-[11px] text-muted-foreground">Per page:</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
+                  <SelectField
+                    ariaLabel="Rows per page"
+                    value={String(pageSize)}
+                    includeAll={false}
+                    onChange={(v) => {
+                      setPageSize(Number(v));
                       setPage(1);
                     }}
-                    className="h-7 px-2 bg-background border border-border rounded-md text-xs font-mono font-bold text-foreground focus:outline-none"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={15}>15</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
+                    triggerClassName="h-7 w-auto px-2 text-xs font-mono font-bold"
+                    options={[5, 10, 15, 25, 50].map((n) => ({ value: String(n), label: String(n) }))}
+                  />
                 </div>
               </div>
 
@@ -632,7 +638,8 @@ export default function OrdersPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   className="h-8 text-xs font-semibold px-3 gap-1"
                 >
-                  <span>◀ Previous</span>
+                  <IconChevronLeft size={14} />
+                  <span>Previous</span>
                 </Button>
 
                 <div className="flex items-center gap-1 text-xs font-bold font-mono px-3 py-1 rounded-lg bg-background border border-border">
@@ -650,7 +657,8 @@ export default function OrdersPage() {
                       onClick={() => setPage((p) => Math.min(Math.ceil(totalOrders / pageSize), p + 1))}
                       className="h-8 text-xs font-semibold px-3 gap-1"
                     >
-                      <span>Next {nextBatch > 0 ? nextBatch : pageSize} ▶</span>
+                      <IconChevronRight size={14} />
+                      <span>Next {nextBatch > 0 ? nextBatch : pageSize}</span>
                     </Button>
                   );
                 })()}

@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
+import SelectField from "../components/SelectField";
 import {
   Badge,
   Button,
@@ -158,12 +159,12 @@ export default function StatementsPage() {
   const selEligible = selected ? isPotential(selected) : false;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Settlement Statements
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -177,17 +178,19 @@ export default function StatementsPage() {
       </div>
 
       <Card className="flex flex-wrap items-center gap-3 p-5 border-border/80 shadow-xs">
-        <select
+        <SelectField
+          ariaLabel="Type"
           value={stype}
-          onChange={(e) => setStype(e.target.value)}
-          aria-label="Type"
-          className="min-h-11 w-full max-w-[260px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-        >
-          <option value="COURIER_SETTLEMENT">COURIER_SETTLEMENT</option>
-          <option value="BANK_STATEMENT">BANK_STATEMENT</option>
-          <option value="PAYMENT_GATEWAY_STATEMENT">PAYMENT_GATEWAY_STATEMENT</option>
-          <option value="COURIER_SHIPMENT_REPORT">COURIER_SHIPMENT_REPORT</option>
-        </select>
+          includeAll={false}
+          onChange={setStype}
+          triggerClassName="w-full max-w-[260px]"
+          options={[
+            { value: "COURIER_SETTLEMENT", label: "COURIER_SETTLEMENT" },
+            { value: "BANK_STATEMENT", label: "BANK_STATEMENT" },
+            { value: "PAYMENT_GATEWAY_STATEMENT", label: "PAYMENT_GATEWAY_STATEMENT" },
+            { value: "COURIER_SHIPMENT_REPORT", label: "COURIER_SHIPMENT_REPORT" },
+          ]}
+        />
         <Input
           type="file"
           accept=".csv,.xlsx"
@@ -243,7 +246,7 @@ export default function StatementsPage() {
       <div id="reconciliation" className="scroll-mt-20 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4 pt-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h2 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h2 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Reconciliation
             </h2>
             <Badge variant="secondary" className="text-xs">
@@ -394,7 +397,7 @@ export default function StatementsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4"
         >
           <Card className="w-full max-w-lg p-6">
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Drill-down</h2>
+            <h2 className="text-xl font-medium tracking-tight text-foreground">Drill-down</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Order &rarr; payment &rarr; settlement &rarr; bank reference &middot; {selStatus}
             </p>

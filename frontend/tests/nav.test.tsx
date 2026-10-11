@@ -62,6 +62,59 @@ test("clicking outside topnav closes open dropdown menu", () => {
   expect(screen.queryByText("Statements")).toBeNull();
 });
 
+test("hovering a submenu opens it and leaving closes it", async () => {
+  const { container } = renderNav();
+  // The hover handlers sit on the wrapper that holds both the trigger and the
+  // panel, which is the parent of the aria-haspopup trigger.
+  const group = screen
+    .getByLabelText("Finance submenu")
+    .parentElement as HTMLElement;
+  expect(group).toBeTruthy();
+
+  fireEvent.mouseEnter(group);
+  await new Promise((r) => setTimeout(r, 200));
+  expect(screen.getByText("Statements")).toBeTruthy();
+
+  fireEvent.mouseLeave(group);
+  await new Promise((r) => setTimeout(r, 300));
+  expect(screen.queryByText("Statements")).toBeNull();
+});
+
+test("an open submenu parent matches the hover treatment of plain items", () => {
+  const { container } = renderNav();
+  const parent = screen.getByLabelText("Finance submenu");
+  // No underline anywhere in the nav: an underline competed with the active
+  // item's bottom rule and read as a second, conflicting indicator.
+  expect(parent.className).not.toMatch(/underline/);
+
+  fireEvent.click(parent);
+  expect(parent.className).not.toMatch(/underline/);
+  expect(parent.className).not.toMatch(/hover:bg-/);
+});
+
+test("idle nav items signal hover by colour, with no underline", () => {
+  const { container } = renderNav();
+  const idle = [...container.querySelectorAll('nav[aria-label="Primary"] a')].find(
+    (a) => a.getAttribute("aria-current") !== "page"
+  ) as HTMLElement;
+  expect(idle.className).toMatch(/hover:text-foreground/);
+  expect(idle.className).not.toMatch(/underline/);
+  expect(idle.className).not.toMatch(/hover:bg-/);
+});
+
+test("active nav item uses the primary colour plus an after-rule, never black", () => {
+  const { container } = renderNav();
+  const active = container.querySelector('[aria-current="page"]') as HTMLElement;
+  expect(active.className).toMatch(/text-primary/);
+  expect(active.className).toMatch(/after:bg-primary/);
+  // No heavy black capsule and no tint fill: the active route is marked by
+  // colour plus the bottom rule only, with nothing painted behind the label.
+  expect(active.className).not.toMatch(/\bbg-foreground\b/);
+  expect(active.className).not.toMatch(/\btext-background\b/);
+  expect(active.className).not.toMatch(/(^|\s)bg-/);
+  expect(active.className).not.toMatch(/underline/);
+});
+
 test("reveal renders children and never hides content without an observer", () => {
   const { container } = render(<Reveal>hello</Reveal>);
   expect(container.textContent).toMatch(/hello/);

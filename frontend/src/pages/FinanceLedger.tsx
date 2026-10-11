@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DatePicker } from "../components/DatePicker";
 import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
+import SelectField from "../components/SelectField";
 import {
   Badge,
   Button,
@@ -105,12 +107,12 @@ export default function LedgerPage() {
   const hasSummary = Boolean(summary?.revenue && summary?.profit);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Financial Ledger
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -128,44 +130,40 @@ export default function LedgerPage() {
           <Label htmlFor="ledger-from" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             From
           </Label>
-          <Input
+          <DatePicker
             id="ledger-from"
-            type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            aria-label="From date"
-            className="w-auto"
+            onChange={setFrom}
+            ariaLabel="From date"
+            className="w-[190px]"
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ledger-to" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             To
           </Label>
-          <Input
+          <DatePicker
             id="ledger-to"
-            type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
-            aria-label="To date"
-            className="w-auto"
+            onChange={setTo}
+            ariaLabel="To date"
+            className="w-[190px]"
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ledger-type" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Type
           </Label>
-          <select
+<SelectField
             id="ledger-type"
+            ariaLabel="Transaction type"
             value={type}
-            onChange={(e) => setType(e.target.value)}
-            aria-label="Transaction type"
-            className="min-h-11 min-w-[200px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-          >
-            <option value="">All types</option>
-            {LEDGER_TXN_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+            allLabel="All types"
+            onChange={setType}
+            tall
+            triggerClassName="min-w-[200px]"
+            options={LEDGER_TXN_TYPES.map((t) => ({ value: t, label: t }))}
+/>
         </div>
         <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
           <Label htmlFor="ledger-order" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

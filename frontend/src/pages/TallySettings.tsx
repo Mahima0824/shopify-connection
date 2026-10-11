@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { DatePicker } from "../components/DatePicker";
 import { API, api } from "../lib/api";
 import {
   TallyValidation,
@@ -275,12 +276,12 @@ export default function TallySettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Tally ERP / Prime Integration
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -302,7 +303,7 @@ export default function TallySettingsPage() {
       {/* Validation gate + workbook export */}
       <Card className="flex flex-col gap-4 p-6 border-border/80 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Validate &amp; Export</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground">Validate &amp; Export</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Validate a period first &mdash; errors block export, warnings do not
           </p>
@@ -313,24 +314,22 @@ export default function TallySettingsPage() {
             <Label htmlFor="tally-from" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               From
             </Label>
-            <Input
+            <DatePicker
               id="tally-from"
-              type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              aria-label="From date"
+              onChange={setFrom}
+              ariaLabel="From date"
             />
           </div>
           <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
             <Label htmlFor="tally-to" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               To
             </Label>
-            <Input
+            <DatePicker
               id="tally-to"
-              type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              aria-label="To date"
+              onChange={setTo}
+              ariaLabel="To date"
             />
           </div>
           <Button variant="outline" onClick={handleValidate} disabled={validating}>
@@ -416,7 +415,7 @@ export default function TallySettingsPage() {
       {/* Mapping Configuration Card */}
       <Card className="flex flex-col gap-6 p-6 border-border/80 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">Voucher Types Configuration</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground mb-4">Voucher Types Configuration</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales Voucher Name</Label>
@@ -443,7 +442,7 @@ export default function TallySettingsPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">Ledger Mappings</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground mb-4">Ledger Mappings</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales Account Ledger</Label>
@@ -470,7 +469,7 @@ export default function TallySettingsPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground mb-4">Tax Ledgers (GST)</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground mb-4">Tax Ledgers (GST)</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Output CGST Ledger</Label>
@@ -511,7 +510,7 @@ export default function TallySettingsPage() {
       {/* Export Batches History */}
       <Card className="overflow-hidden p-0 border-border/80 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
-          <h2 className="text-lg font-bold tracking-tight text-foreground">Export Batch History</h2>
+          <h2 className="text-lg font-medium tracking-tight text-foreground">Export Batch History</h2>
           <Button variant="outline" size="sm" onClick={loadBatches} disabled={batchesLoading}>
             {batchesLoading ? "Loading..." : "Refresh"}
           </Button>

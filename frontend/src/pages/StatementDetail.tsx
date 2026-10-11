@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { IconChevronLeft } from "../components/icons";
 import { api } from "../lib/api";
 import {
   Badge,
@@ -69,15 +70,15 @@ export default function StatementDetailPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <a href="/statements" className="mb-2 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            ← Back to Statements
-          </a>
+          <Link to="/statements" className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <IconChevronLeft size={14} /> Back to Statements
+          </Link>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Statement Processing Results
             </h1>
             <Badge variant="secondary" className="text-xs">

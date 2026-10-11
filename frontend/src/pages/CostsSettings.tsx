@@ -31,12 +31,12 @@ export default function CostsPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <main className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Cost Configuration
             </h1>
             <span className="inline-flex items-center rounded-md border border-border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">

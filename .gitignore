@@ -40,3 +40,5 @@ orders_export_*.csv
 
 # Session / IDE assistant logs
 session-*.md
+.agents/
+skills-lock.json

@@ -57,12 +57,12 @@ export default function LabelsPage() {
   const chosen = filtered.filter((p) => selected[p.id]);
 
   return (
-    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <main className="page-shell flex flex-col gap-6 bg-background">
       {/* Print rules live in src/styles/globals.css; .no-print/.label are
           behavioural classes there because page-break has no utility. */}
       <div className="no-print flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Labels manager</h1>
+          <h1 className="text-2xl font-medium tracking-tight text-foreground">Labels manager</h1>
           <p className="mt-1 text-sm text-muted-foreground">Select parcels, print labels, and audit reprints.</p>
         </div>
 

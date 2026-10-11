@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
+import SelectField from "./SelectField";
 import { api } from "../lib/api";
 import { Button, Card, Input, Label } from "./primitives";
-import { IconAlert } from "./icons";
+import { IconAlert, IconCheck, IconClose, IconStore } from "./icons";
 
 export type EditOrderDialogProps = {
   open: boolean;
@@ -85,7 +86,7 @@ export default function EditOrderDialog({
       <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl border-border/80 bg-background rounded-2xl">
         <div className="flex items-center justify-between border-b border-border/80 pb-4 mb-4">
           <div>
-            <h2 id="edit-order-title" className="text-xl font-bold font-heading text-foreground">
+            <h2 id="edit-order-title" className="text-xl font-medium font-heading text-foreground">
               Edit Order {order.shopify_order_name || order.internal_order_number || order.id}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -98,7 +99,7 @@ export default function EditOrderDialog({
             aria-label="Close"
             className="rounded-full size-8 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition"
           >
-            ✕
+            <IconClose size={16} />
           </button>
         </div>
 
@@ -141,28 +142,34 @@ export default function EditOrderDialog({
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Financial Status
               </Label>
-              <select
-                className={inputClass}
+              <SelectField
+                ariaLabel="Financial Status"
                 value={form.financial_status || "PAID"}
-                onChange={(e) => handleChange("financial_status", e.target.value)}
-              >
-                <option value="PAID">PAID</option>
-                <option value="PENDING">PENDING</option>
-                <option value="REFUNDED">REFUNDED</option>
-              </select>
+                includeAll={false}
+                onChange={(v) => handleChange("financial_status", v)}
+                triggerClassName={inputClass}
+                options={[
+                  { value: "PAID", label: "PAID" },
+                  { value: "PENDING", label: "PENDING" },
+                  { value: "REFUNDED", label: "REFUNDED" },
+                ]}
+              />
             </div>
             <div>
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                 Payment Mode
               </Label>
-              <select
-                className={inputClass}
+              <SelectField
+                ariaLabel="Payment Mode"
                 value={form.cod_mode || "COD"}
-                onChange={(e) => handleChange("cod_mode", e.target.value)}
-              >
-                <option value="COD">COD</option>
-                <option value="PREPAID">PREPAID</option>
-              </select>
+                includeAll={false}
+                onChange={(v) => handleChange("cod_mode", v)}
+                triggerClassName={inputClass}
+                options={[
+                  { value: "COD", label: "COD" },
+                  { value: "PREPAID", label: "PREPAID" },
+                ]}
+              />
             </div>
             <div>
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
@@ -180,11 +187,11 @@ export default function EditOrderDialog({
           </div>
 
           <div className="border-t border-border/60 pt-3 flex flex-col gap-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-primary font-heading">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-primary font-heading">
               Customer &amp; Shipping Details
             </h3>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                   Customer Name
@@ -221,7 +228,7 @@ export default function EditOrderDialog({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                   City
@@ -259,8 +266,8 @@ export default function EditOrderDialog({
           </div>
 
           <div className="border-t border-border/60 pt-3 flex flex-col gap-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-heading flex items-center gap-1.5">
-              <span>🇮🇳</span> Weight &amp; Parcel Dimensions (India Post)
+            <h3 className="text-xs font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-heading flex items-center gap-1.5">
+              <IconStore size={14} className="text-status-success" /> Weight &amp; Parcel Dimensions (India Post)
             </h3>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -322,7 +329,8 @@ export default function EditOrderDialog({
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={saving} className="font-semibold px-5">
+            <Button type="submit" size="sm" disabled={saving} className="font-semibold px-5 gap-1.5">
+              <IconCheck size={14} />
               {saving ? "Saving Changes..." : "Save Order"}
             </Button>
           </div>

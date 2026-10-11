@@ -85,10 +85,18 @@ test("ledger page sends inclusive to-date as next-day midnight (backend to is ex
   expect(m).toBeTruthy();
   const toVal = decodeURIComponent(m?.[1] ?? "");
   expect(toVal).toMatch(/T00:00:00$/);
-  // `to` sent must be exactly one day after the To date input value.
-  const toInput = (document.querySelector('input[aria-label="To date"]') as HTMLInputElement)?.value ?? "";
-  expect(toInput).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  const d = new Date(`${toInput}T00:00:00`);
+  // `to` sent must be exactly one day after the date shown in the To picker.
+  // The To control is a shadcn Calendar trigger (a button labelled "d MMM
+  // yyyy"), not a native <input type="date">, so read its rendered text.
+  const toTrigger = document.querySelector(
+    '[aria-label="To date"]'
+  ) as HTMLElement | null;
+  expect(toTrigger).toBeTruthy();
+  const shown = (toTrigger?.textContent ?? "").trim();
+  expect(shown).toMatch(/^\d{1,2}\s[A-Za-z]{3}\s\d{4}$/);
+
+  const d = new Date(shown);
+  expect(Number.isNaN(d.getTime())).toBe(false);
   d.setDate(d.getDate() + 1);
   const pad = (n: number) => String(n).padStart(2, "0");
   const expected = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00`;

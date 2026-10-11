@@ -20,8 +20,11 @@ def upgrade():
     # Backfill: legacy rows mirror existing source/event-id values.
     op.execute("UPDATE shipment_events SET status = normalized_status WHERE status IS NULL")
     op.execute("UPDATE shipment_events SET provider = source WHERE source IS NOT NULL AND source <> ''")
-    op.create_unique_constraint("uq_shipev_provider_event", "shipment_events",
-                                ["provider", "provider_event_id"])
+    # Batch mode (copy-and-move) because SQLite cannot ALTER ADD a UNIQUE
+    # constraint. No-op on Postgres.
+    with op.batch_alter_table("shipment_events") as batch_op:
+        batch_op.create_unique_constraint("uq_shipev_provider_event",
+                                         ["provider", "provider_event_id"])
     op.create_index("ix_shipev_provider", "shipment_events", ["provider", "provider_event_id"])
 
     op.create_table(
@@ -59,7 +62,8 @@ def downgrade():
     op.drop_index("ix_ssfail_biz_time", table_name="shipsagar_webhook_failures")
     op.drop_table("shipsagar_webhook_failures")
     op.drop_index("ix_shipev_provider", table_name="shipment_events")
-    op.drop_constraint("uq_shipev_provider_event", "shipment_events", type_="unique")
+    with op.batch_alter_table("shipment_events") as batch_op:
+        batch_op.drop_constraint("uq_shipev_provider_event", type_="unique")
     for col in ("sub_status", "status", "provider_event_id", "provider"):
         op.drop_column("shipment_events", col)
     op.drop_index("ix_ship_shipsagar_id", table_name="shipments")

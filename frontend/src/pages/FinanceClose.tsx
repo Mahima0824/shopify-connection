@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MonthPicker } from "../components/MonthPicker";
 import EmptyState from "../components/EmptyState";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
@@ -197,12 +198,12 @@ export default function MonthClosePage() {
     : [];
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Month-End Financial Close
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -220,13 +221,12 @@ export default function MonthClosePage() {
           <label htmlFor="close-month" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Month
           </label>
-          <Input
+          <MonthPicker
             id="close-month"
-            type="month"
             value={month}
-            onChange={(e) => handleMonthChange(e.target.value)}
-            aria-label="Close month"
-            className="w-auto"
+            onChange={handleMonthChange}
+            ariaLabel="Close month"
+            className="w-[170px]"
           />
         </div>
         {status && (

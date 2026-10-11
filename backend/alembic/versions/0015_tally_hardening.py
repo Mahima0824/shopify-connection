@@ -40,23 +40,26 @@ def upgrade():
     )
 
     # Batch lifecycle per #45 (additive; existing batches keep working).
-    for col, typ in (
-        ("batch_number", sa.String(64)),
-        ("date_from", sa.DateTime(timezone=True)),
-        ("date_to", sa.DateTime(timezone=True)),
-        ("transaction_count", sa.Integer()),
-        ("total_amount", sa.Numeric(18, 2)),
-        ("file_name", sa.String(128)),
-    ):
-        op.add_column("export_batches", sa.Column(col, typ, nullable=True))
-    op.alter_column("export_batches", "status", type_=sa.String(32),
-                    existing_type=sa.String(32))
+    with op.batch_alter_table("export_batches") as batch_op:
+        for col, typ in (
+            ("batch_number", sa.String(64)),
+            ("date_from", sa.DateTime(timezone=True)),
+            ("date_to", sa.DateTime(timezone=True)),
+            ("transaction_count", sa.Integer()),
+            ("total_amount", sa.Numeric(18, 2)),
+            ("file_name", sa.String(128)),
+        ):
+            batch_op.add_column(sa.Column(col, typ, nullable=True))
+        # No-op widening, kept so Postgres emits the same DDL as before; batch
+        # mode is required because SQLite cannot ALTER a column type.
+        batch_op.alter_column("status", type_=sa.String(32), existing_type=sa.String(32))
 
 
 def downgrade():
-    for col in ("file_name", "total_amount", "transaction_count", "date_to",
-                "date_from", "batch_number"):
-        op.drop_column("export_batches", col)
+    with op.batch_alter_table("export_batches") as batch_op:
+        for col in ("file_name", "total_amount", "transaction_count", "date_to",
+                    "date_from", "batch_number"):
+            batch_op.drop_column(col)
     op.drop_table("tally_ledger_mappings")
     op.drop_index("ix_tally_export_txn", table_name="tally_export_records")
     op.drop_table("tally_export_records")

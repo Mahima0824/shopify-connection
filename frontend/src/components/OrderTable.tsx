@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "./primitives";
 import { isAwaiting, pushStateLabel, statusTone, type OrderShipment } from "../lib/shipments";
-import { IconEdit, IconMoreVertical, IconTrash } from "./icons";
+import { IconDownload, IconEdit, IconInfo, IconMessage, IconMoreVertical, IconPackage, IconTrash } from "./icons";
 import ProductAvatar from "./ProductAvatar";
 import { downloadInvoicePdf } from "../lib/api";
 
@@ -173,7 +173,7 @@ export default function OrderTable({
                       </span>
                       {itemCount > 1 && (
                         <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-                          📦 {itemCount} Sarees
+                          <IconPackage size={11} /> {itemCount} Sarees
                         </span>
                       )}
                     </div>
@@ -286,6 +286,7 @@ export default function OrderTable({
                         }}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
                       >
+                        <IconInfo size={14} className="text-muted-foreground" />
                         View Order Details
                       </button>
                       <button
@@ -297,7 +298,8 @@ export default function OrderTable({
                         }}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50 transition-colors"
                       >
-                        📄 Download GST Invoice
+                        <IconDownload size={14} />
+                        Download GST Invoice
                       </button>
 
                       <button
@@ -309,7 +311,8 @@ export default function OrderTable({
                         }}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-bold text-[#25D366] hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
                       >
-                        💬 WhatsApp Alert
+                        <IconMessage size={14} />
+                        WhatsApp Alert
                       </button>
 
                       <button

@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "../components/primitives";
+import SelectField from "../components/SelectField";
 
 type Row = {
   shipment_id: string;
@@ -46,12 +47,12 @@ export default function OutstandingPage() {
   }, [sla]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Outstanding Shipments
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -65,17 +66,18 @@ export default function OutstandingPage() {
       </div>
 
       <Card className="p-4 sm:p-5 border-border/80 shadow-xs">
-        <select
-          className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          value={sla}
-          onChange={(e) => setSla(e.target.value)}
-          aria-label="SLA band"
-        >
-          <option value="">All bands</option>
-          <option value="NORMAL">NORMAL</option>
-          <option value="APPROACHING">APPROACHING</option>
-          <option value="BREACHED">BREACHED</option>
-        </select>
+<SelectField
+            ariaLabel="SLA band"
+            value={sla}
+            allLabel="All bands"
+            onChange={setSla}
+            triggerClassName="w-full max-w-[220px]"
+            options={[
+              { value: "NORMAL", label: "NORMAL" },
+              { value: "APPROACHING", label: "APPROACHING" },
+{ value: "BREACHED", label: "BREACHED" },
+            ]}
+          />
       </Card>
 
       {error && (

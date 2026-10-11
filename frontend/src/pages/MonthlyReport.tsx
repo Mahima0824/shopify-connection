@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
+import { DatePicker } from "../components/DatePicker";
+import { MonthPicker } from "../components/MonthPicker";
 import { API } from "../lib/api";
 import { api } from "../lib/api";
 import EmptyState from "../components/EmptyState";
+import SelectField from "../components/SelectField";
 import MetricCard from "../components/MetricCard";
 import SeverityBadge from "../components/SeverityBadge";
 import {
@@ -112,12 +115,12 @@ export default function MonthlyPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Monthly Financial Report
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -129,12 +132,11 @@ export default function MonthlyPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Input
-            type="month"
+          <MonthPicker
             value={month}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonth(e.target.value)}
-            aria-label="Month"
-            className="w-auto"
+            onChange={setMonth}
+            ariaLabel="Month"
+            className="w-[170px]"
           />
           <Button onClick={download} disabled={downloading || !data}>
             {downloading ? "Exporting..." : "Download Excel"}
@@ -156,32 +158,28 @@ export default function MonthlyPage() {
           <Label htmlFor="preset" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Period preset
           </Label>
-          <select
+          <SelectField
             id="preset"
-            aria-label="Period preset"
-            className="min-h-11 w-full max-w-[220px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            ariaLabel="Period preset"
             value={preset}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPreset(e.target.value)}
-          >
-            {REPORT_PRESETS.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+            includeAll={false}
+            onChange={setPreset}
+            triggerClassName="w-full max-w-[220px]"
+            options={REPORT_PRESETS.map((p) => ({ value: p, label: p }))}
+          />
           {preset === "custom" && (
             <div className="flex flex-wrap gap-2">
-              <Input
-                type="date"
-                aria-label="From"
-                className="w-auto"
+              <DatePicker
                 value={from}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)}
+                onChange={setFrom}
+                ariaLabel="From"
+                className="w-[170px]"
               />
-              <Input
-                type="date"
-                aria-label="To"
-                className="w-auto"
+              <DatePicker
                 value={to}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTo(e.target.value)}
+                onChange={setTo}
+                ariaLabel="To"
+                className="w-[170px]"
               />
             </div>
           )}
@@ -210,10 +208,10 @@ export default function MonthlyPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="p-5">
-            <h2 className="text-base font-bold text-foreground mb-3">GST</h2>
+            <h2 className="text-base font-medium text-foreground mb-3">GST</h2>
             {gst ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <MetricCard title="Taxable" value={inr(gst.totals?.taxable ?? 0)} />
                   <MetricCard title="CGST" value={inr(gst.totals?.cgst ?? 0)} />
                   <MetricCard title="SGST" value={inr(gst.totals?.sgst ?? 0)} />
@@ -240,10 +238,10 @@ export default function MonthlyPage() {
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-base font-bold text-foreground mb-3">Profit</h2>
+            <h2 className="text-base font-medium text-foreground mb-3">Profit</h2>
             {profit ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <MetricCard title="Gross profit" value={inr(profit.profit?.gross_profit ?? 0)} />
                   <MetricCard title="Operating profit" value={inr(profit.profit?.operating_profit ?? 0)} subtitle={profit.profit?.label ?? ""} />
                   <MetricCard title="Margin" value={`${profit.profit?.margin_pct ?? "0.00"}%`} />
@@ -277,19 +275,19 @@ export default function MonthlyPage() {
           ) : (
             <>
               <Card className="p-5">
-                <h2 className="text-base font-bold text-foreground mb-2">Orders</h2>
+                <h2 className="text-base font-medium text-foreground mb-2">Orders</h2>
                 <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
                   {JSON.stringify(data.orders, null, 2)}
                 </pre>
               </Card>
               <Card className="p-5">
-                <h2 className="text-base font-bold text-foreground mb-2">Money</h2>
+                <h2 className="text-base font-medium text-foreground mb-2">Money</h2>
                 <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
                   {JSON.stringify(data.money, null, 2)}
                 </pre>
               </Card>
               <Card className="p-5">
-                <h2 className="text-base font-bold text-foreground mb-2">
+                <h2 className="text-base font-medium text-foreground mb-2">
                   Profitability ({data.profitability?.label})
                 </h2>
                 <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
@@ -297,7 +295,7 @@ export default function MonthlyPage() {
                 </pre>
               </Card>
               <Card className="p-5">
-                <h2 className="text-base font-bold text-foreground mb-2">Exceptions</h2>
+                <h2 className="text-base font-medium text-foreground mb-2">Exceptions</h2>
                 <pre className="overflow-x-auto rounded-lg bg-muted/50 p-4 text-xs font-mono text-foreground">
                   {JSON.stringify(data.exceptions, null, 2)}
                 </pre>

@@ -238,7 +238,7 @@ export function calculateSingleCourierCharge(
     name = "India Post Speed Post";
     badgeBg = "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300";
     badgeText = "India Post";
-    logoEmoji = "🇮🇳";
+    logoEmoji = "";
 
     if (zone === "LOCAL") {
       if (billableWeightGrams <= 50) basePostage = 15;
@@ -270,7 +270,7 @@ export function calculateSingleCourierCharge(
     name = "Delhivery Surface / Express";
     badgeBg = "bg-red-500/10 border-red-500/30 text-red-800 dark:text-red-300";
     badgeText = "Delhivery";
-    logoEmoji = "🔴";
+    logoEmoji = "";
 
     docketFee = 15;
     if (zone === "LOCAL") basePostage = 35 + extraSlabs * 25;
@@ -285,7 +285,7 @@ export function calculateSingleCourierCharge(
     name = "DTDC Express / Premium";
     badgeBg = "bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300";
     badgeText = "DTDC";
-    logoEmoji = "📦";
+    logoEmoji = "";
 
     docketFee = 25;
     if (zone === "LOCAL") basePostage = 40 + extraSlabs * 25;
@@ -301,7 +301,7 @@ export function calculateSingleCourierCharge(
     name = "BlueDart Express Air / Surface";
     badgeBg = "bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300";
     badgeText = "BlueDart";
-    logoEmoji = "✈️";
+    logoEmoji = "";
 
     docketFee = 30;
     if (zone === "LOCAL") basePostage = 55 + extraSlabs * 35;

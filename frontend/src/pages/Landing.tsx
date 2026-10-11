@@ -7,7 +7,7 @@ import {
   Card,
   buttonVariants,
 } from "../components/primitives";
-import { IconTruck, IconTag, IconReceipt, IconAlert } from "../components/icons";
+import { IconTruck, IconTag, IconReceipt, IconAlert, IconArrowUpRight, IconCheck } from "../components/icons";
 import { cn } from "@/lib/utils";
 
 const features = [
@@ -146,14 +146,14 @@ export default function Landing() {
       <HeroSection />
 
       {/* Metric strip - Modern B2B SaaS Performance Grid */}
-      <section className="relative border-b border-border bg-muted/30 py-12 lg:py-16">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section className="relative border-b border-border bg-muted/30 py-section">
+        <div className="page-shell">
           <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Platform Scale &amp; Performance
               </p>
-              <h2 className="text-xl sm:text-2xl font-bold font-heading tracking-tight text-foreground mt-1">
+              <h2 className="text-xl sm:text-2xl font-medium font-heading tracking-tight text-foreground mt-1">
                 Real-time operational scale
               </h2>
             </div>
@@ -204,14 +204,14 @@ export default function Landing() {
       </section>
 
       {/* Features 3-up (Solutions) */}
-      <section id="solutions" className="py-20 lg:py-24 bg-background border-b border-border">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section id="solutions" className="py-section bg-background border-b border-border">
+        <div className="page-shell">
           <div className="mx-auto max-w-2xl text-center mb-16">
             <Reveal>
               <Badge variant="secondary" className="mb-3 px-3 py-1 text-xs uppercase tracking-wider font-semibold">
                 Reconciliation Engine
               </Badge>
-              <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+              <h2 className="text-heading-lg">
                 Everything reconciled without spreadsheets
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-relaxed">
@@ -233,7 +233,7 @@ export default function Landing() {
                         {f.badge}
                       </Badge>
                     </div>
-                    <h3 className="text-xl font-bold font-heading tracking-tight text-foreground mb-2.5">
+                    <h3 className="text-xl font-medium font-heading tracking-tight text-foreground mb-2.5">
                       {f.title}
                     </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
@@ -255,8 +255,8 @@ export default function Landing() {
       </section>
 
       {/* Product band */}
-      <section id="product" className="py-20 lg:py-28 bg-muted/20 border-b border-border">
-        <div className="mx-auto grid w-full max-w-[1280px] items-center gap-12 px-6 sm:px-8 lg:grid-cols-[6fr_6fr] max-[480px]:px-4">
+      <section id="product" className="py-section bg-muted/20 border-b border-border">
+        <div className="page-shell grid items-center gap-12 lg:grid-cols-[6fr_6fr]">
           {/* Left: Exception Queue & Resolution UI Simulator */}
           <Reveal>
             <Card className="p-6 sm:p-7 shadow-lg border-border/90 bg-card overflow-hidden">
@@ -266,7 +266,7 @@ export default function Landing() {
                     !
                   </span>
                   <div>
-                    <h3 className="font-heading font-bold text-sm text-foreground">
+                    <h3 className="font-heading font-medium text-sm text-foreground">
                       Exception Resolution Queue
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
@@ -349,7 +349,7 @@ export default function Landing() {
               <Badge variant="secondary" className="mb-3 px-3 py-1 text-xs uppercase tracking-wider font-semibold w-fit">
                 Exception Clearance
               </Badge>
-              <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+              <h2 className="text-heading-lg">
                 Zero ledger discrepancies before month-end
               </h2>
               <p className="mt-5 text-base sm:text-lg text-muted-foreground leading-relaxed">
@@ -364,7 +364,7 @@ export default function Landing() {
                 ].map((pt) => (
                   <div key={pt} className="flex items-start gap-2.5 text-sm text-foreground">
                     <span className="size-5 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
-                      ✓
+                      <IconCheck size={12} />
                     </span>
                     <span>{pt}</span>
                   </div>
@@ -372,8 +372,9 @@ export default function Landing() {
               </div>
 
               <div className="mt-8 flex flex-wrap gap-3.5">
-                <Link to="/exceptions" className={buttonVariants({ size: "lg" })}>
-                  View exceptions queue &rarr;
+                <Link to="/exceptions" className={cn(buttonVariants({ size: "lg" }), "gap-2")}>
+                  <IconArrowUpRight size={16} />
+                  View exceptions queue
                 </Link>
                 <Link to="/scan" className={buttonVariants({ variant: "outline", size: "lg" })}>
                   Open Scan Hub
@@ -385,14 +386,14 @@ export default function Landing() {
       </section>
 
       {/* Workflow band (Resources) */}
-      <section id="resources" className="py-20 lg:py-24 bg-background border-b border-border">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section id="resources" className="py-section bg-background border-b border-border">
+        <div className="page-shell">
           <div className="mx-auto max-w-2xl text-center mb-16">
             <Reveal>
               <Badge variant="secondary" className="mb-3 px-3 py-1 text-xs uppercase tracking-wider font-semibold">
                 Simple 3-Step Workflow
               </Badge>
-              <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+              <h2 className="text-heading-lg">
                 How ReconHub works
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-relaxed">
@@ -436,7 +437,7 @@ export default function Landing() {
                         {s.badge}
                       </Badge>
                     </div>
-                    <h3 className="text-xl font-bold font-heading tracking-tight text-foreground mb-2.5">
+                    <h3 className="text-xl font-medium font-heading tracking-tight text-foreground mb-2.5">
                       {s.title}
                     </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
@@ -456,14 +457,14 @@ export default function Landing() {
       </section>
 
       {/* Testimonials (Customers) */}
-      <section id="customers" className="py-20 lg:py-24 bg-muted/20 border-b border-border">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section id="customers" className="py-section bg-muted/20 border-b border-border">
+        <div className="page-shell">
           <div className="mx-auto max-w-2xl text-center mb-16">
             <Reveal>
               <Badge variant="secondary" className="mb-3 px-3 py-1 text-xs uppercase tracking-wider font-semibold">
                 Real Merchant Impact
               </Badge>
-              <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+              <h2 className="text-heading-lg">
                 Loved by operations &amp; finance teams
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-relaxed">
@@ -507,14 +508,14 @@ export default function Landing() {
       </section>
 
       {/* Pricing 3-up */}
-      <section id="pricing" className="py-20 lg:py-24 bg-background border-b border-border">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section id="pricing" className="py-section bg-background border-b border-border">
+        <div className="page-shell">
           <div className="mx-auto max-w-2xl text-center mb-16">
             <Reveal>
               <Badge variant="secondary" className="mb-3 px-3 py-1 text-xs uppercase tracking-wider font-semibold">
                 Simple Pricing
               </Badge>
-              <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+              <h2 className="text-heading-lg">
                 Transparent plans for every scale
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-relaxed">
@@ -559,7 +560,7 @@ export default function Landing() {
                         {p.features.map((f) => (
                           <li key={f} className="flex items-center gap-2.5 text-xs sm:text-sm text-foreground/90">
                             <span className="size-4 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-[10px] font-bold">
-                              ✓
+                              <IconCheck size={10} />
                             </span>
                             <span>{f}</span>
                           </li>
@@ -591,8 +592,8 @@ export default function Landing() {
       </section>
 
       {/* CTA band */}
-      <section className="py-20 lg:py-24 bg-muted/20">
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+      <section className="py-section bg-muted/20">
+        <div className="page-shell">
           <Reveal>
             <Card className="p-10 sm:p-16 text-center bg-card border-border shadow-xl relative overflow-hidden">
               <div
@@ -603,7 +604,7 @@ export default function Landing() {
                 <Badge variant="secondary" className="mb-4 px-3 py-1 text-xs uppercase tracking-wider font-semibold">
                   Instant Setup
                 </Badge>
-                <h2 className="text-3xl sm:text-4xl lg:text-[44px] font-bold font-heading tracking-tight text-foreground leading-[1.12]">
+                <h2 className="text-heading-xl text-foreground">
                   Start reconciling orders today
                 </h2>
                 <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-relaxed">

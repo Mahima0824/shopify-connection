@@ -16,6 +16,7 @@ import {
   buttonVariants,
 } from "../components/primitives";
 import { IconRefresh } from "../components/icons";
+import SelectField from "../components/SelectField";
 
 type Ship = {
   id: string;
@@ -211,12 +212,12 @@ export default function GeneralTrackingPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Order Tracking Center
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -240,7 +241,7 @@ export default function GeneralTrackingPage() {
       )}
 
       {/* KPI Band */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-t-4 border-t-primary p-5 border-border/80 shadow-xs">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Tracked</div>
           <div className="mt-1 text-3xl font-extrabold text-foreground">{counts.total}</div>
@@ -268,48 +269,59 @@ export default function GeneralTrackingPage() {
           aria-label="Search order tracking"
           className="flex-[2] min-w-[240px]"
         />
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        <SelectField
+          tall
+          ariaLabel="Carrier Filter"
           value={carrier}
-          onChange={(e) => {
-            setCarrier(e.target.value);
+          allLabel="All Carriers"
+          onChange={(v) => {
+            setCarrier(v);
             setPage(1);
           }}
-          aria-label="Carrier Filter"
-        >
-          <option value="">All Carriers</option>
-          <option value="SHIPSAGAR">ShipSagar</option>
-          <option value="INDIA_POST">India Post</option>
-          <option value="MANUAL">Manual</option>
-          {carriers.map((c) => (
-            !["SHIPSAGAR", "INDIA_POST", "MANUAL"].includes(c) && <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          options={[
+            { value: "SHIPSAGAR", label: "ShipSagar" },
+            { value: "INDIA_POST", label: "India Post" },
+            { value: "MANUAL", label: "Manual" },
+            ...carriers
+              .filter((c) => !["SHIPSAGAR", "INDIA_POST", "MANUAL"].includes(c))
+              .map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <SelectField
+          tall
+          ariaLabel="Status Filter"
           value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
+          allLabel="All Statuses"
+          onChange={(v) => {
+            setStatus(v);
             setPage(1);
           }}
-          aria-label="Status Filter"
-        >
-          <option value="">All Statuses</option>
-          {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "NDR_REATTEMPT", "DELIVERY_EXCEPTION", "RTO_INITIATED", "RTO_DELIVERED", "RETURNED", "LOST"].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          options={[
+            "BOOKED",
+            "IN_TRANSIT",
+            "AT_HUB",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "NDR_REATTEMPT",
+            "DELIVERY_EXCEPTION",
+            "RTO_INITIATED",
+            "RTO_DELIVERED",
+            "RETURNED",
+            "LOST",
+          ].map((s) => ({ value: s, label: s }))}
+        />
+        <SelectField
+          tall
+          ariaLabel="Band Filter"
           value={band}
-          onChange={(e) => setBand(e.target.value)}
-          aria-label="Band Filter"
-        >
-          <option value="">All Bands</option>
-          <option value="critical">Critical</option>
-          <option value="warn">Warning</option>
-          <option value="ok">On Track</option>
-        </select>
+          allLabel="All Bands"
+          onChange={setBand}
+          options={[
+            { value: "critical", label: "Critical" },
+            { value: "warn", label: "Warning" },
+            { value: "ok", label: "On Track" },
+          ]}
+        />
       </Card>
 
       {error && (
@@ -375,9 +387,16 @@ export default function GeneralTrackingPage() {
                       {names[s.id] || "Order"}
                     </TableCell>
                     <TableCell>
-                      <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
-                        {s.awb_number}
-                      </span>
+                      {/* A missing AWB previously rendered the styled span with
+                          its border and padding but no text, which read as an
+                          empty input box. Fall back to a muted dash. */}
+                      {s.awb_number ? (
+                        <span className="font-mono text-xs font-semibold bg-muted/50 px-2 py-0.5 rounded border border-border/70 text-foreground">
+                          {s.awb_number}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="font-mono text-[11px] font-semibold">{s.carrier_code}</Badge>

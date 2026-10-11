@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Card, Button, Badge, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/primitives";
+import SelectField from "../components/SelectField";
+import {
+  IconAlert,
+  IconArrowUpRight,
+  IconCheck,
+  IconClose,
+  IconCoin,
+  IconPhone,
+  IconRefresh,
+  IconRefund,
+  IconSpark,
+} from "../components/icons";
+import { Card, Button, Badge, Input, Textarea, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/primitives";
 import { getRtoSummary } from "../lib/api";
 import { API, api } from "../lib/api";
 
@@ -180,28 +192,31 @@ export default function CodRemittance() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">
+    <div className="page-shell space-y-8 animate-in fade-in duration-200">
       
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💵</span>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground font-heading">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <IconCoin size={18} />
+            </span>
+            <h1 className="text-2xl font-medium tracking-tight text-foreground font-heading">
               COD Remittance Reconciliation
             </h1>
-            <Badge variant="default" className="font-mono text-xs uppercase px-2.5 py-0.5 bg-emerald-600 text-white">
+            <Badge variant="secondary" className="text-xs font-semibold uppercase px-2.5 py-0.5">
               Automated Matching
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-1.5">
             Auto-match courier COD remittance transfers (Delhivery, India Post, DTDC, BlueDart) against expected order values.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition">
-            <span>📥 Upload Courier Remittance Report</span>
+          <label className="cursor-pointer inline-flex items-center gap-2 h-8 px-3 text-xs font-semibold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-colors">
+            <IconArrowUpRight size={15} />
+            Upload Courier Remittance Report
             <input
               type="file"
               accept=".csv,.xlsx"
@@ -214,15 +229,15 @@ export default function CodRemittance() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 border-emerald-500/20 bg-emerald-500/5 shadow-2xs">
+        <Card className="p-5 border-border  shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-emerald-700 dark:text-emerald-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-success">
               Total Expected COD
             </span>
-            <span className="text-base">💰</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success"><IconRefund size={16} /></span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               ₹{summary ? Number(summary.total_expected_cod || 0).toLocaleString("en-IN") : "0"}
             </span>
           </div>
@@ -231,15 +246,15 @@ export default function CodRemittance() {
           </p>
         </Card>
 
-        <Card className="p-5 border-blue-500/20 bg-blue-500/5 shadow-2xs">
+        <Card className="p-5 border-border  shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-blue-700 dark:text-blue-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-info">
               Total COD Remitted
             </span>
-            <span className="text-base">🏦</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-info/10 text-status-info"><IconRefund size={16} /></span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               ₹{summary ? Number(summary.total_remitted_cod || 0).toLocaleString("en-IN") : "0"}
             </span>
           </div>
@@ -248,15 +263,15 @@ export default function CodRemittance() {
           </p>
         </Card>
 
-        <Card className="p-5 border-amber-500/20 bg-amber-500/5 shadow-2xs">
+        <Card className="p-5 border-border  shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-amber-700 dark:text-amber-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-warning">
               Pending Remittance
             </span>
-            <span className="text-base">⏳</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-warning/10 text-status-warning"><IconRefund size={16} /></span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               ₹{summary ? Number(summary.total_pending_cod || 0).toLocaleString("en-IN") : "0"}
             </span>
           </div>
@@ -265,15 +280,15 @@ export default function CodRemittance() {
           </p>
         </Card>
 
-        <Card className="p-5 border-rose-500/20 bg-rose-500/5 shadow-2xs">
+        <Card className="p-5 border-border  shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-rose-700 dark:text-rose-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-danger">
               Shortfall / Discrepancy
             </span>
-            <span className="text-base">⚠️</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-danger/10 text-status-danger"><IconRefund size={16} /></span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-rose-600 dark:text-rose-400 tracking-tight font-mono">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-status-danger">
               ₹{summary ? Number(summary.total_discrepancy_amount || 0).toLocaleString("en-IN") : "0"}
             </span>
             <Badge variant="destructive" className="text-[10px]">
@@ -288,29 +303,29 @@ export default function CodRemittance() {
 
       {/* Upload Banner / Result Notification */}
       {uploading && (
-        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-3">
-          <span className="animate-spin text-base">🔄</span>
+        <div className="p-4 rounded-xl border border-status-success/30 bg-status-success/10 text-status-success text-xs font-bold flex items-center gap-3">
+          <span className="flex size-8 items-center justify-center rounded-lg"><IconRefresh size={16} className="animate-spin" /></span>
           <span>Parsing remittance report, executing 4-level matching engine & auto-posting ledger...</span>
         </div>
       )}
 
       {uploadError && (
-        <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center justify-between">
-          <span>⚠️ {uploadError}</span>
-          <button type="button" onClick={() => setUploadError(null)}>✕</button>
+        <div className="p-4 rounded-xl border border-status-danger/30 bg-status-danger/10 text-status-danger text-xs font-semibold flex items-center justify-between">
+          <span className="flex items-center gap-1.5"><IconAlert size={14} /> {uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} aria-label="Dismiss error"><IconClose size={14} /></button>
         </div>
       )}
 
       {uploadResult && (
-        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs font-medium space-y-2">
-          <div className="flex items-center justify-between font-bold text-emerald-800 dark:text-emerald-300">
-            <span>🎉 Report {uploadResult.filename} Processed!</span>
-            <button type="button" onClick={() => setUploadResult(null)}>✕</button>
+        <div className="p-4 rounded-xl border border-status-success/30 bg-status-success/10 text-xs font-medium space-y-2">
+          <div className="flex items-center justify-between font-bold text-status-success">
+            <span className="flex items-center gap-1.5"><IconCheck size={16} /> Report {uploadResult.filename} Processed!</span>
+            <button type="button" onClick={() => setUploadResult(null)} aria-label="Dismiss"><IconClose size={14} /></button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-muted-foreground pt-1">
             <div>Total Rows: <span className="font-bold text-foreground">{uploadResult.total_rows}</span></div>
-            <div>Matched: <span className="font-bold text-emerald-600">{uploadResult.matched_count}</span></div>
-            <div>Shortfalls: <span className="font-bold text-rose-600">{uploadResult.short_count}</span></div>
+            <div>Matched: <span className="font-bold text-status-success">{uploadResult.matched_count}</span></div>
+            <div>Shortfalls: <span className="font-bold text-status-danger">{uploadResult.short_count}</span></div>
             <div>Total Net Remitted: <span className="font-bold text-foreground">₹{uploadResult.total_net_remitted?.toLocaleString()}</span></div>
           </div>
         </div>
@@ -322,39 +337,52 @@ export default function CodRemittance() {
         {/* Table Filters */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border">
           <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-            <input
-              type="text"
+            <Input
               placeholder="Search by Order #, Customer Name, Mobile or UTR / Bank Ref..."
+              aria-label="Search COD remittance"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-              className="w-full max-w-md rounded-xl border border-border bg-background px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              className="w-full max-w-md"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <select
+            <SelectField
+              ariaLabel="Remittance status"
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground focus:outline-hidden"
-            >
-              <option value="">All Remittance Statuses</option>
-              <option value="MATCHED">Matched (Settled)</option>
-              <option value="SHORT_REMITTANCE">Short Remittance (Discrepancy)</option>
-              <option value="PENDING_REMITTANCE">Pending Remittance</option>
-              <option value="RTO_ZERO_REMITTANCE">RTO (Zero Remittance)</option>
-            </select>
+              allLabel="All Remittance Statuses"
+              onChange={(v) => {
+                setStatusFilter(v);
+                setPage(1);
+              }}
+              triggerClassName="rounded-xl px-3 py-2 text-xs font-medium"
+              options={[
+                { value: "MATCHED", label: "Matched (Settled)" },
+                { value: "SHORT_REMITTANCE", label: "Short Remittance (Discrepancy)" },
+                { value: "PENDING_REMITTANCE", label: "Pending Remittance" },
+                { value: "RTO_ZERO_REMITTANCE", label: "RTO (Zero Remittance)" },
+              ]}
+            />
 
-            <select
+            <SelectField
+              ariaLabel="Carrier filter"
               value={carrierFilter}
-              onChange={(e) => { setCarrierFilter(e.target.value); setPage(1); }}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground focus:outline-hidden"
-            >
-              <option value="">All Carriers</option>
-              <option value="DELHIVERY">Delhivery</option>
-              <option value="INDIA_POST">India Post</option>
-              <option value="DTDC">DTDC</option>
-              <option value="BLUEDART">BlueDart</option>
-            </select>
+              allLabel="All Carriers"
+              onChange={(v) => {
+                setCarrierFilter(v);
+                setPage(1);
+              }}
+              triggerClassName="rounded-xl px-3 py-2 text-xs font-medium"
+              options={[
+                { value: "DELHIVERY", label: "Delhivery" },
+                { value: "INDIA_POST", label: "India Post" },
+                { value: "DTDC", label: "DTDC" },
+                { value: "BLUEDART", label: "BlueDart" },
+              ]}
+            />
           </div>
         </div>
 
@@ -391,7 +419,10 @@ export default function CodRemittance() {
                     <TableCell>
                       <div className="text-xs">
                         <span className="font-semibold text-foreground block">{item.customer_name}</span>
-                        <span className="font-mono text-muted-foreground block text-[11px]">📞 {item.customer_mobile}</span>
+                        <span className="font-mono text-muted-foreground block text-[11px] flex items-center gap-1 mt-0.5">
+                          <IconPhone size={11} className="text-muted-foreground" />
+                          <span>{item.customer_mobile}</span>
+                        </span>
                       </div>
                     </TableCell>
 
@@ -410,7 +441,7 @@ export default function CodRemittance() {
                       ₹{item.expected_cod.toLocaleString("en-IN")}
                     </TableCell>
 
-                    <TableCell className="text-right font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    <TableCell className="text-right font-mono text-xs font-bold text-status-success">
                       ₹{item.remitted_amount.toLocaleString("en-IN")}
                       {item.fee_amount > 0 && (
                         <span className="text-[10px] text-muted-foreground block font-normal">
@@ -421,9 +452,9 @@ export default function CodRemittance() {
 
                     <TableCell className="text-right font-mono text-xs font-bold">
                       {item.difference > 0 ? (
-                        <span className="text-rose-600 dark:text-rose-400">+₹{item.difference.toLocaleString("en-IN")} Short</span>
+                        <span className="text-status-danger">+₹{item.difference.toLocaleString("en-IN")} Short</span>
                       ) : item.difference < 0 ? (
-                        <span className="text-blue-600 font-normal">₹{Math.abs(item.difference)} Over</span>
+                        <span className="text-status-info font-normal">₹{Math.abs(item.difference)} Over</span>
                       ) : (
                         <span className="text-muted-foreground font-normal">₹0.00</span>
                       )}
@@ -446,15 +477,19 @@ export default function CodRemittance() {
 
                     <TableCell className="text-right">
                       {item.difference > 1.0 ? (
-                        <button
+                        <Button
                           type="button"
+                          size="sm"
                           onClick={() => handleOpenResolve(item)}
-                          className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition shadow-2xs"
+                          className="bg-status-danger hover:bg-status-danger/90 text-white font-bold text-xs gap-1.5 h-7 px-2.5 shadow-2xs"
                         >
-                          ⚡ Resolve Shortfall
-                        </button>
+                          <IconSpark size={13} />
+                          Resolve Shortfall
+                        </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground font-medium">✓ Settled</span>
+                        <span className="text-xs text-muted-foreground font-medium flex items-center justify-end gap-1">
+                          <IconCheck size={13} className="text-status-success" /> Settled
+                        </span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -471,63 +506,75 @@ export default function CodRemittance() {
           <div className="fixed inset-0" onClick={() => setShowResolveModal(false)} aria-hidden="true" />
           <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-base font-bold text-foreground">⚡ Resolve COD Shortfall / Discrepancy</h3>
-              <button type="button" onClick={() => setShowResolveModal(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+              <h3 className="text-base font-medium text-foreground flex items-center gap-1.5">
+                <IconSpark size={16} className="text-status-danger" /> Resolve COD Shortfall / Discrepancy
+              </h3>
+              <button type="button" onClick={() => setShowResolveModal(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close modal">
+                <IconClose size={14} />
+              </button>
             </div>
 
             {feedback && (
-              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}>
+              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-status-success/10 text-status-success" : "bg-status-danger/10 text-status-danger"}`}>
                 {feedback.message}
               </div>
             )}
 
             <form onSubmit={handleResolveSubmit} className="space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-800 dark:text-rose-300">
+              <div className="p-3 rounded-xl bg-status-danger/10 border border-border text-status-danger">
                 <p className="font-bold">Order: {selectedOrder.order_name}</p>
                 <p className="mt-1">
-                  Expected COD: <span className="font-mono font-bold">₹{selectedOrder.expected_cod}</span> • Remitted: <span className="font-mono font-bold">₹{selectedOrder.remitted_amount}</span> • Shortfall: <span className="font-mono font-bold text-rose-600">₹{selectedOrder.difference}</span>
+                  Expected COD: <span className="font-mono font-bold">₹{selectedOrder.expected_cod}</span> • Remitted: <span className="font-mono font-bold">₹{selectedOrder.remitted_amount}</span> • Shortfall: <span className="font-mono font-bold text-status-danger">₹{selectedOrder.difference}</span>
                 </p>
               </div>
 
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">Resolution Action</label>
-                <select
+                <SelectField
+                  ariaLabel="Resolution Action"
                   value={resolveAction}
-                  onChange={(e) => setResolveAction(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground"
-                >
-                  <option value="ACCEPT_SHORT">Accept & Write Off Shortfall (Courier Reversal / Loss)</option>
-                  <option value="DISPUTE_COURIER">Flag Courier Dispute / Claim</option>
-                  <option value="FORCE_MATCH">Force Mark as 100% Settled</option>
-                </select>
+                  includeAll={false}
+                  onChange={setResolveAction}
+                  triggerClassName="w-full p-2.5 text-xs"
+                  options={[
+                    {
+                      value: "ACCEPT_SHORT",
+                      label: "Accept & Write Off Shortfall (Courier Reversal / Loss)",
+                    },
+                    { value: "DISPUTE_COURIER", label: "Flag Courier Dispute / Claim" },
+                    { value: "FORCE_MATCH", label: "Force Mark as 100% Settled" },
+                  ]}
+                />
               </div>
 
               {resolveAction === "ACCEPT_SHORT" && (
                 <div>
                   <label className="font-bold text-muted-foreground block mb-1">Write-off Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={writeOffAmount}
-                    onChange={(e) => setWriteOffAmount(Number(e.target.value))}
-                    className="w-full rounded-xl border border-border bg-background p-2.5 text-xs font-mono text-foreground"
-                  />
+<Input
+                  type="number"
+                  aria-label="Write-off amount"
+                  value={writeOffAmount}
+                  onChange={(e) => setWriteOffAmount(Number(e.target.value))}
+                  className="text-xs"
+                />
                 </div>
               )}
 
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">Notes / Remarks</label>
-                <textarea
+                <Textarea
+                  aria-label="Resolve notes"
                   value={resolveNotes}
                   onChange={(e) => setResolveNotes(e.target.value)}
                   placeholder="Enter notes for audit trail..."
                   rows={2}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground"
+                  className="text-xs"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowResolveModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                <Button type="submit" disabled={submitting} size="sm" className="bg-status-success hover:bg-status-success/90 text-white font-bold">
                   {submitting ? "Resolving..." : "Confirm & Save Resolution"}
                 </Button>
               </div>

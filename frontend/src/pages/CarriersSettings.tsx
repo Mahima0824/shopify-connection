@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Badge, Button, Card, Input } from "../components/primitives";
+import SelectField from "../components/SelectField";
 
 const KNOWN = ["SHIPSAGAR", "INDIA_POST", "MANUAL"];
 
@@ -50,12 +51,12 @@ export default function CarriersPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <main className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Carrier Connections
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -69,16 +70,15 @@ export default function CarriersPage() {
       </div>
 
       <Card className="flex flex-wrap items-center gap-3 p-6 border-border/80 shadow-xs">
-        <select
+        <SelectField
+          ariaLabel="Carrier"
           value={code}
-          onChange={(e) => setCode(e.target.value)}
-          aria-label="Carrier"
-          className="min-h-11 w-full max-w-[200px] rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-        >
-          {KNOWN.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
+          includeAll={false}
+          placeholder="Select carrier"
+          onChange={setCode}
+          triggerClassName="w-full max-w-[200px]"
+          options={KNOWN.map((c) => ({ value: c, label: c }))}
+        />
         <Input
           type="password"
           placeholder="API Key / Token (optional)"

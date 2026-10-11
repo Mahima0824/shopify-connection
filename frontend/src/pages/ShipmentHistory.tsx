@@ -76,7 +76,7 @@ export default function ShipmentHistoryPage() {
   const latestEvent = data?.events?.[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 bg-background min-h-screen">
+    <div className="page-shell py-6 flex flex-col gap-6 bg-background min-h-screen">
       {/* Top Breadcrumb */}
       <div>
         <Link
@@ -102,7 +102,7 @@ export default function ShipmentHistoryPage() {
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold font-heading text-foreground tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-medium font-heading text-foreground tracking-tight">
               Tracking History
             </h1>
 
@@ -199,7 +199,7 @@ export default function ShipmentHistoryPage() {
       {/* Events Timeline Card */}
       <Card className="p-6 sm:p-8 shadow-md border-border/80 bg-card rounded-2xl flex flex-col gap-6">
         <div className="flex items-center justify-between border-b border-border/70 pb-4">
-          <h2 className="text-lg font-bold font-heading text-foreground flex items-center gap-2">
+          <h2 className="text-lg font-medium font-heading text-foreground flex items-center gap-2">
             <IconBox size={18} className="text-primary" />
             <span>Checkpoint Timeline</span>
           </h2>

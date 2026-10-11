@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import SeverityBadge from "../components/SeverityBadge";
+import SelectField from "../components/SelectField";
 import { IconAlert } from "../components/icons";
 import {
   Badge,
@@ -74,12 +75,12 @@ export default function ExceptionsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl sm:text-3xl font-bold font-heading tracking-tight text-foreground">
+            <h1 className="text-2xl sm:text-3xl font-medium font-heading tracking-tight text-foreground">
               Mismatch Exceptions Queue
             </h1>
             <Badge variant="destructive" className="text-xs">
@@ -117,39 +118,35 @@ export default function ExceptionsPage() {
 
         <div className="flex flex-wrap items-center gap-4">
           {/* Severity Select Dropdown */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SEVERITY:</label>
-            <select
-              className="h-9 w-36 rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 shadow-xs"
+            <SelectField
+              ariaLabel="Severity"
               value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
-              aria-label="Severity"
-            >
-              <option value="">All Severities</option>
-              <option value="CRITICAL">CRITICAL</option>
-              <option value="HIGH">HIGH</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="LOW">LOW</option>
-            </select>
-          </div>
+              allLabel="All Severities"
+              onChange={setSeverity}
+              triggerClassName="w-36"
+              options={[
+                { value: "CRITICAL", label: "CRITICAL" },
+                { value: "HIGH", label: "HIGH" },
+                { value: "MEDIUM", label: "MEDIUM" },
+                { value: "LOW", label: "LOW" },
+              ]}
+            />
 
-          {/* Category Select Dropdown */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CATEGORY:</label>
-            <select
-              className="h-9 w-36 rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 shadow-xs"
+            {/* Category Select Dropdown */}
+            <SelectField
+              ariaLabel="Category"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Category"
-            >
-              <option value="">All Categories</option>
-              <option value="COURIER">Courier</option>
-              <option value="MONEY">Money</option>
-              <option value="RETURNS">Returns</option>
-              <option value="SLA">SLA</option>
-            </select>
+              allLabel="All Categories"
+              onChange={setCategory}
+              triggerClassName="w-36"
+              options={[
+                { value: "COURIER", label: "Courier" },
+                { value: "MONEY", label: "Money" },
+                { value: "RETURNS", label: "Returns" },
+                { value: "SLA", label: "SLA" },
+              ]}
+            />
           </div>
-        </div>
       </Card>
 
       {/* Error Alert */}
@@ -231,7 +228,7 @@ export default function ExceptionsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
         >
           <Card className="w-full max-w-lg p-6 sm:p-8 shadow-2xl border-border bg-card">
-            <h2 className="text-xl font-bold font-heading tracking-tight text-foreground mb-2">Resolve Discrepancy</h2>
+            <h2 className="text-xl font-medium font-heading tracking-tight text-foreground mb-2">Resolve Discrepancy</h2>
             <p className="text-sm text-muted-foreground mb-4">
               {resolving.order_name || resolving.order_id}: <strong className="text-foreground">{resolving.issue_code}</strong>
             </p>

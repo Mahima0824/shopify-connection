@@ -15,6 +15,7 @@ import {
   buttonVariants,
 } from "../components/primitives";
 import { IconBox, IconTag, IconAlert } from "../components/icons";
+import SelectField from "../components/SelectField";
 
 type ParcelRow = {
   id: string; parcel_code: string; barcode_value: string; status: string;
@@ -92,12 +93,12 @@ export default function ParcelsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl sm:text-3xl font-bold font-heading tracking-tight text-foreground">
+            <h1 className="text-2xl sm:text-3xl font-medium font-heading tracking-tight text-foreground">
               Parcels Directory
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -119,15 +120,17 @@ export default function ParcelsPage() {
       {/* Filter Bar */}
       <Card className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <select
-            className="h-9 w-full sm:w-[220px] rounded-lg border border-input bg-background/90 px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 shadow-xs"
+          <SelectField
+            ariaLabel="Status filter"
             value={status}
-            onChange={(e) => { setStatus(e.target.value); load(e.target.value); }}
-            aria-label="Status filter"
-          >
-            <option value="">All statuses</option>
-            {STATUSES.slice(1).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+            allLabel="All statuses"
+            onChange={(v) => {
+              setStatus(v);
+              load(v);
+            }}
+            triggerClassName="w-full sm:w-[220px]"
+            options={STATUSES.slice(1).map((s) => ({ value: s, label: s }))}
+          />
         </div>
         <span className="text-xs font-medium text-muted-foreground">
           {items.length} parcel{items.length === 1 ? "" : "s"} found

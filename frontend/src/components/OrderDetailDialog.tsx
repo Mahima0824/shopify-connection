@@ -4,6 +4,17 @@ import ProductAvatar from "./ProductAvatar";
 import { isAwaiting, pushStateLabel, type OrderShipment } from "../lib/shipments";
 import { calculateAllCourierCharges, type CourierCode } from "../lib/india-post";
 import { downloadInvoicePdf } from "../lib/api";
+import { CarrierIcon } from "./CarrierIcon";
+import {
+  IconClose,
+  IconDownload,
+  IconMessage,
+  IconPackage,
+  IconPhone,
+  IconPlus,
+  IconSpark,
+  IconTruck,
+} from "./icons";
 import WhatsAppDialog from "./WhatsAppDialog";
 
 
@@ -68,12 +79,12 @@ export default function OrderDetailDialog({
       />
       <div className="relative z-10 w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/30">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 sm:px-6 py-3 sm:py-4 bg-muted/30">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="font-mono text-base font-bold text-foreground bg-primary/10 text-primary px-3 py-1 rounded-lg border border-primary/20">
               {orderName}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted border border-border/80 text-foreground">
                 <span className={`size-2 rounded-full ${FINANCIAL_DOTS[order.financial_status?.toUpperCase()] ?? "bg-gray-400"}`} />
                 {order.financial_status || "PENDING"}
@@ -100,7 +111,7 @@ export default function OrderDetailDialog({
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             aria-label="Close dialog"
           >
-            ✕
+            <IconClose size={14} />
           </button>
         </div>
 
@@ -108,7 +119,7 @@ export default function OrderDetailDialog({
         <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-6 no-scrollbar">
           {/* Customer Details */}
           <Card className="p-4 border-border/80 bg-muted/20">
-            <h3 className="text-xs font-bold font-heading uppercase tracking-wider text-muted-foreground mb-3">
+            <h3 className="text-xs font-medium font-heading uppercase tracking-wider text-muted-foreground mb-3">
               Customer Details
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -118,7 +129,16 @@ export default function OrderDetailDialog({
               </div>
               <div>
                 <span className="text-xs text-muted-foreground block">Mobile / Phone</span>
-                <span className="font-mono font-medium text-foreground">{order.receiver_mobile ? `📞 ${order.receiver_mobile}` : "N/A"}</span>
+                <span className="font-mono font-medium text-foreground flex items-center gap-1">
+                  {order.receiver_mobile ? (
+                    <>
+                      <IconPhone size={13} className="text-muted-foreground" />
+                      <span>{order.receiver_mobile}</span>
+                    </>
+                  ) : (
+                    "N/A"
+                  )}
+                </span>
               </div>
               {order.receiver_email && (
                 <div>
@@ -141,14 +161,14 @@ export default function OrderDetailDialog({
           <Card className="p-4 border-primary/30 bg-muted/20 shadow-2xs">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-base">🚚</span>
-                <h3 className="text-xs font-bold font-heading uppercase tracking-wider text-foreground">
+                <IconTruck size={16} className="text-primary" />
+                <h3 className="text-xs font-medium font-heading uppercase tracking-wider text-foreground">
                   Estimated Courier Shipping Charges
                 </h3>
               </div>
               <Badge variant="secondary" className="bg-emerald-600 text-white font-mono text-xs font-bold px-2.5 py-0.5 flex items-center gap-1">
-                <span>⚡ Best Rate:</span>
-                <span>{multiEst.cheapestCourier.badgeText} (₹{multiEst.cheapestCourier.totalCharge.toFixed(2)})</span>
+                <IconSpark size={12} />
+                <span>Best Rate: {multiEst.cheapestCourier.badgeText} (₹{multiEst.cheapestCourier.totalCharge.toFixed(2)})</span>
               </Badge>
             </div>
 
@@ -174,7 +194,7 @@ export default function OrderDetailDialog({
                       </span>
                     )}
                     <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-sm">{est.logoEmoji}</span>
+                      <CarrierIcon code={est.code} size={15} />
                       <span className="text-xs font-bold font-heading text-foreground truncate">
                         {est.badgeText}
                       </span>
@@ -213,7 +233,7 @@ export default function OrderDetailDialog({
             <div className="space-y-1.5 text-xs text-muted-foreground">
               <div className="flex justify-between items-center font-medium text-foreground pb-1">
                 <span className="flex items-center gap-1.5 font-bold">
-                  <span>{currentEst.logoEmoji}</span>
+                  <CarrierIcon code={currentEst.code} size={15} />
                   <span>{currentEst.name}</span>
                 </span>
                 <span className="text-[11px] px-2 py-0.5 rounded-md bg-muted border border-border">
@@ -269,7 +289,10 @@ export default function OrderDetailDialog({
                   }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-xs"
                 >
-                  <span>📦 Ship via {currentEst.badgeText}</span>
+                  <span>
+                    <IconPackage size={14} className="inline mr-1" />
+                    Ship via {currentEst.badgeText}
+                  </span>
                 </Button>
               </div>
             )}
@@ -278,7 +301,7 @@ export default function OrderDetailDialog({
           {/* Shopify Ordered Products (With Product Images) */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold font-heading uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium font-heading uppercase tracking-wider text-muted-foreground">
                 Ordered Items ({items.length})
               </h3>
               <span className="text-xs text-muted-foreground">Verify item images from Shopify</span>
@@ -333,7 +356,7 @@ export default function OrderDetailDialog({
           {/* Shipment Info */}
           <Card className="p-4 border-border/80 bg-muted/20">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-bold font-heading uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium font-heading uppercase tracking-wider text-muted-foreground">
                 Shipment Information
               </h3>
               {shipment && (
@@ -352,7 +375,7 @@ export default function OrderDetailDialog({
                 <div>
                   <span className="text-xs text-muted-foreground block">Carrier / Delivery Partner</span>
                   <span className="font-semibold text-foreground flex items-center gap-1.5">
-                    <span>{currentEst.logoEmoji}</span>
+                    <CarrierIcon code={currentEst.code} size={15} />
                     <span>{currentEst.name}</span>
                   </span>
                 </div>
@@ -368,9 +391,10 @@ export default function OrderDetailDialog({
                       onClose();
                       onAddShipment(order);
                     }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 gap-1.5"
                   >
-                    + Add Shipment
+                    <IconPlus size={14} />
+                    Add Shipment
                   </Button>
                 )}
               </div>
@@ -387,26 +411,30 @@ export default function OrderDetailDialog({
         </div>
 
         {/* Footer actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-6 py-4 bg-muted/20">
-          <div className="flex items-center gap-2">
-            <button
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 sm:px-6 py-3 sm:py-4 bg-muted/20">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
               type="button"
+              size="sm"
               onClick={() => void downloadInvoicePdf(order.id, `GST_Tax_Invoice_${(order.shopify_order_name || order.internal_order_number || order.id).replace('#', '')}.pdf`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs gap-1.5"
             >
-              📄 GST Invoice (PDF)
-            </button>
+              <IconDownload size={14} />
+              GST Invoice (PDF)
+            </Button>
 
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={() => setShowWhatsApp(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-[#25D366] hover:bg-[#20bd5a] text-white shadow-xs transition cursor-pointer"
+              className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs shadow-xs gap-1.5"
             >
-              💬 WhatsApp Alert
-            </button>
+              <IconMessage size={14} />
+              WhatsApp Alert
+            </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {onAddShipment && (
               <Button
                 type="button"
@@ -418,7 +446,8 @@ export default function OrderDetailDialog({
                 }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5 shadow-xs"
               >
-                <span>📦 Ship via {currentEst.badgeText}</span>
+                <IconPackage size={14} />
+                <span>Ship via {currentEst.badgeText}</span>
               </Button>
             )}
             {onEditOrder && (

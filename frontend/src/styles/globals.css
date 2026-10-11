@@ -1,8 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/ibm-plex-sans";
-@import "@fontsource-variable/montserrat";
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -59,6 +61,17 @@
   --dm-pistachio: oklch(0.949 0.0508 155.76);
   --dm-link-cool-1: oklch(0.7308 0.016 207.09);
   --dm-link-mint: oklch(0.7453 0.0298 179.96);
+
+  /* Status tones for data semantics (bad / warning / good / neutral-info).
+     Separate from --dm-success/--dm-warning above, which DESIGN.md mapped onto
+     document colours (aloe green, shade-60) and are therefore unusable as
+     status text. These four are tuned for readable text on the light canvas:
+     measured contrast on #fff is danger 6.29:1, warning 5.02:1,
+     success 5.48:1, info 6.70:1 - all pass WCAG AA for body text. */
+  --dm-status-danger: #be123c;
+  --dm-status-warning: #b45309;
+  --dm-status-success: #047857;
+  --dm-status-info: #1d4ed8;
 }
 
 /* Alias layer.
@@ -119,33 +132,48 @@
 }
 
 @theme inline {
-  --font-sans: 'Inter', 'Plus Jakarta Sans', 'IBM Plex Sans Variable', sans-serif;
-  --font-heading: 'Montserrat', 'Montserrat Variable', sans-serif;
+  --font-sans: 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Poppins', system-ui, -apple-system, sans-serif;
   --default-font-family: var(--font-sans);
   /* DESIGN.md asks for Neue Haas Grotesk Display (commercial, not
-     installable) and Inter Variable. Inter ships here as IBM Plex Sans,
-     with Montserrat standing in for the thin display cut. */
-  --text-display-xxl: 96px;
-  --text-display-xxl--line-height: 1;
-  --text-display-xxl--letter-spacing: 2.4px;
-  --text-display-xl: 70px;
-  --text-display-xl--line-height: 1;
-  --text-display-lg: 55px;
-  --text-display-lg--line-height: 1.16;
-  --text-display-md: 48px;
-  --text-display-md--line-height: 1.14;
-  --text-heading-xl: 28px;
-  --text-heading-xl--line-height: 1.28;
-  --text-heading-lg: 24px;
+     installable) and Inter Variable. The measured reference (Zeevra) uses
+     Poppins for every role, so both slots point at Poppins; weights 400/500/
+     600/700 are bundled in styles/globals.css. */
+  /* Type scale from the measured reference. It reports four roles:
+       Heading 40/60 w500, Section heading 32/48 w500, Body 16/25.6 w400,
+       Button 20/30 w500. Names are kept from the previous scale so existing
+       utility names still resolve. */
+  --text-display-xxl: 40px;
+  --text-display-xxl--line-height: 60px;
+  --text-display-xxl--font-weight: 500;
+  --text-display-xl: 40px;
+  --text-display-xl--line-height: 60px;
+  --text-display-xl--font-weight: 500;
+  --text-display-lg: 32px;
+  --text-display-lg--line-height: 48px;
+  --text-display-lg--font-weight: 500;
+  --text-display-md: 32px;
+  --text-display-md--line-height: 48px;
+  --text-display-md--font-weight: 500;
+  --text-heading-xl: 40px;
+  --text-heading-xl--line-height: 60px;
+  --text-heading-xl--font-weight: 500;
+  --text-heading-lg: 32px;
+  --text-heading-lg--line-height: 48px;
+  --text-heading-lg--font-weight: 500;
   --text-heading-md: 20px;
-  --text-heading-sm: 18px;
-  --text-body-lg: 18px;
-  --text-body-lg--line-height: 1.56;
+  --text-heading-md--line-height: 30px;
+  --text-heading-md--font-weight: 500;
+  --text-heading-sm: 20px;
+  --text-heading-sm--line-height: 30px;
+  --text-heading-sm--font-weight: 500;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 25.6px;
   --text-body-md: 16px;
-  --text-body-md--line-height: 1.5;
-  --text-caption: 14px;
-  --text-caption--line-height: 1.49;
-  --text-micro: 13px;
+  --text-body-md--line-height: 25.6px;
+  --text-caption: 16px;
+  --text-caption--line-height: 25.6px;
+  --text-micro: 12px;
   --text-eyebrow: 12px;
   --text-eyebrow--letter-spacing: 0.72px;
   --color-sidebar-ring: var(--dm-sidebar-ring);
@@ -196,16 +224,21 @@
   --color-card: var(--dm-card);
   --color-foreground: var(--dm-foreground);
   --color-background: var(--dm-background);
-  /* Radius ladder from DESIGN.md Shapes. */
+  /* Radius ladder from the measured Zeevra reference. Its observed radii are
+     4px, 6px, 8px, 10px, 50% and 800px, with 10px dominant (104 hits) on
+     cards and 6px on buttons/inputs. Nothing larger was measured, so the top
+     of the ladder clamps to 10px rather than inventing a bigger corner. */
   --radius-xs: 4px;
-  --radius-sm: 5px;
+  --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 20px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-4xl: 28px;
+  --radius-lg: 10px;
+  --radius-xl: 10px;
+  --radius-2xl: 10px;
+  --radius-3xl: 10px;
+  --radius-4xl: 10px;
   --radius-pill: 9999px;
+  /* Decorative blob/pill shapes; the reference measures 800px here. */
+  --radius-blob: 800px;
 }
 
 @theme inline {
@@ -215,6 +248,10 @@
   --color-warning-foreground: var(--dm-warning-foreground);
   --color-neutral: var(--dm-neutral);
   --color-neutral-foreground: var(--dm-neutral-foreground);
+  --color-status-danger: var(--dm-status-danger);
+  --color-status-warning: var(--dm-status-warning);
+  --color-status-success: var(--dm-status-success);
+  --color-status-info: var(--dm-status-info);
 }
 
 /* Everything below is behavioural, not visual. All visual styling moved to
@@ -303,6 +340,41 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; }
   .reveal.is-visible { animation: none; opacity: 1; transform: none; }
+}
+
+/* Vertical section rhythm from the measured reference: every full-width
+   section measures 100px top and bottom. Declared as a utility rather than a
+   spacing token so it composes with the usual py-* responsive overrides. */
+@utility py-section {
+  padding-block: 100px;
+}
+
+@media (max-width: 767.98px) {
+  .py-section {
+    padding-block: 60px;
+  }
+}
+
+/* Single source of truth for the app's horizontal rhythm. The nav, the page
+   body and the footer all resolve to this one width, so their left and right
+   edges line up instead of drifting per page. --shell-* are theme variables
+   so a width change is one edit rather than a sweep across every page. */
+@theme inline {
+  --shell-max: 1280px;
+  --shell-gutter: 1.5rem;
+}
+
+@utility page-shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--shell-max);
+  padding-inline: var(--shell-gutter);
+}
+
+@media (max-width: 480px) {
+  .page-shell {
+    padding-inline: 1rem;
+  }
 }
 
 /* Barcode label printing: hide app chrome, keep each label whole on the page.

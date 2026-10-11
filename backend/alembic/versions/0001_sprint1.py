@@ -2,6 +2,7 @@
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0001_sprint1"
@@ -120,7 +121,7 @@ def upgrade() -> None:
         sa.Column("webhook_id", sa.String(128), nullable=False, unique=True),
         sa.Column("topic", sa.String(128), nullable=False, server_default=""),
         sa.Column("shop_domain", sa.String(255), nullable=True),
-        sa.Column("payload", JSONB(), nullable=True),
+        sa.Column("payload", JSON().with_variant(JSONB(), "postgresql"), nullable=True),
         sa.Column("processed", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Reveal from "./Reveal";
 import { Button, buttonVariants, Badge } from "./primitives";
+import { IconArrowUpRight, IconPlay } from "./icons";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -28,7 +29,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
 
   return (
     <>
-      <section className="relative overflow-hidden bg-background py-16 sm:py-20 lg:py-24 border-b border-border/60">
+      <section className="relative overflow-hidden bg-background py-section border-b border-border/60">
         {/* Subtle theme-native gradient accent */}
         <div
           className="pointer-events-none absolute -top-40 -left-40 size-[500px] rounded-full bg-primary/5 blur-[120px]"
@@ -39,7 +40,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
           aria-hidden="true"
         />
 
-        <div className="mx-auto w-full max-w-[1280px] px-6 sm:px-8 max-[480px]:px-4">
+        <div className="page-shell">
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 xl:gap-20">
             {/* Left Content Column */}
             <div className="flex flex-col justify-center">
@@ -51,7 +52,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
                   </Badge>
                 </div>
 
-                <h1 className="text-4xl sm:text-5xl lg:text-[62px] font-bold font-heading tracking-tight text-foreground leading-[1.08]">
+                <h1 className="text-heading-xl text-foreground">
                   Build, Grow
                   <br />
                   &amp; Manage Your{" "}
@@ -85,7 +86,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
                 <div className="mt-8 flex flex-wrap items-center gap-3.5 sm:gap-4">
                   <Link
                     to="/orders"
-                    className={cn(buttonVariants({ size: "lg" }), "rounded-full px-8 shadow-sm hover:shadow-md")}
+                    className={cn(buttonVariants({ size: "lg" }), "px-8 shadow-sm hover:shadow-md")}
                   >
                     Get Started
                   </Link>
@@ -93,17 +94,11 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
                   <Button
                     variant="outline"
                     size="lg"
-                    className="rounded-full px-6"
+                    className="px-6 gap-2"
                     onClick={handleOpenVideo}
                     aria-label="Play video walkthrough"
                   >
-                    <svg
-                      className="size-4 fill-current text-foreground mr-1"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
+                    <IconPlay size={16} />
                     Play Video
                   </Button>
                 </div>
@@ -184,7 +179,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
               <Reveal delay={150}>
                 {/* Left offset photo: Professional smiling at desk with notebook */}
                 <div className="w-[145px] sm:w-[210px] md:w-[250px] lg:w-[220px] xl:w-[260px] self-end mb-4 sm:mb-8 group">
-                  <div className="overflow-hidden rounded-2xl sm:rounded-3xl shadow-md border border-border/80 bg-card transition-all duration-300 group-hover:shadow-xl group-hover:border-primary/40">
+                  <div className="overflow-hidden rounded-lg shadow-md border border-border/80 bg-card transition-all duration-300 ease-linear group-hover:shadow-xl group-hover:border-primary/40">
                     <img
                       src="/images/hero-workspace.jpg"
                       alt="Business owner managing orders at desk"
@@ -198,7 +193,7 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
               <Reveal delay={250}>
                 {/* Right tall photo: Clean modern workspace setup */}
                 <div className="w-[165px] sm:w-[240px] md:w-[290px] lg:w-[260px] xl:w-[310px] group">
-                  <div className="overflow-hidden rounded-2xl sm:rounded-3xl shadow-lg border border-border/80 bg-card transition-all duration-300 group-hover:shadow-2xl group-hover:border-primary/40">
+                  <div className="overflow-hidden rounded-lg shadow-lg border border-border/80 bg-card transition-all duration-300 ease-linear group-hover:shadow-2xl group-hover:border-primary/40">
                     <img
                       src="/images/hero-desk.jpg"
                       alt="Minimalist workspace setup for fulfillment"
@@ -239,9 +234,10 @@ export default function HeroSection({ onVideoClick }: HeroSectionProps) {
               <Link
                 to="/orders"
                 onClick={() => setIsVideoModalOpen(false)}
-                className={buttonVariants({ size: "sm" })}
+                className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
               >
-                Explore Live Orders Table &rarr;
+                <IconArrowUpRight size={14} />
+                Explore Live Orders Table
               </Link>
               <Link
                 to="/scan/dispatch"

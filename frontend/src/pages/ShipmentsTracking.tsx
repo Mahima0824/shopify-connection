@@ -15,6 +15,7 @@ import {
   TableRow,
   buttonVariants,
 } from "../components/primitives";
+import SelectField from "../components/SelectField";
 
 type Ship = {
   id: string;
@@ -127,12 +128,12 @@ export default function TrackingPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+            <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
               Tracking Command Center
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -168,37 +169,46 @@ export default function TrackingPage() {
           aria-label="Search shipments"
           className="flex-[2] min-w-[220px]"
         />
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        <SelectField
+          tall
+          ariaLabel="Carrier"
           value={carrier}
-          onChange={(e) => setCarrier(e.target.value)}
-          aria-label="Carrier"
-        >
-          <option value="">All carriers</option>
-          {carriers.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          allLabel="All carriers"
+          onChange={setCarrier}
+          options={carriers.map((c) => ({ value: c, label: c }))}
+        />
+        <SelectField
+          tall
+          ariaLabel="Status"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Status"
-        >
-          <option value="">All statuses</option>
-          {["BOOKED", "IN_TRANSIT", "AT_HUB", "OUT_FOR_DELIVERY", "DELIVERED", "NDR_REATTEMPT", "DELIVERY_EXCEPTION", "RTO_INITIATED", "RTO_DELIVERED", "RETURNED", "LOST"].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          className="min-h-11 flex-1 min-w-[140px] rounded-md border border-input bg-background px-3.5 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          allLabel="All statuses"
+          onChange={setStatus}
+          options={[
+            "BOOKED",
+            "IN_TRANSIT",
+            "AT_HUB",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "NDR_REATTEMPT",
+            "DELIVERY_EXCEPTION",
+            "RTO_INITIATED",
+            "RTO_DELIVERED",
+            "RETURNED",
+            "LOST",
+          ].map((s) => ({ value: s, label: s }))}
+        />
+        <SelectField
+          tall
+          ariaLabel="Exception band"
           value={band}
-          onChange={(e) => setBand(e.target.value)}
-          aria-label="Exception band"
-        >
-          <option value="">All bands</option>
-          <option value="critical">Critical</option>
-          <option value="warn">Warning</option>
-          <option value="ok">On track</option>
-        </select>
+          allLabel="All bands"
+          onChange={setBand}
+          options={[
+            { value: "critical", label: "Critical" },
+            { value: "warn", label: "Warning" },
+            { value: "ok", label: "On track" },
+          ]}
+        />
       </Card>
 
       {error && (

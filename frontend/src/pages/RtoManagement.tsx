@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from "react";
+import SelectField from "../components/SelectField";
 import { Link } from "react-router-dom";
-import { Card, Button, Badge, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/primitives";
+import { Card, Button, Badge, Checkbox, Input, Textarea, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/primitives";
 import ProductAvatar from "../components/ProductAvatar";
+import { EmptyPanel } from "../components/EmptyState";
+import {
+  IconAlert,
+  IconBox,
+  IconClose,
+  IconCoin,
+  IconDownload,
+  IconMessage,
+  IconRefresh,
+  IconRefund,
+  IconReturn,
+} from "../components/icons";
 import WhatsAppDialog from "../components/WhatsAppDialog";
 import { getRtoSummary, getRtoShipments, processRtoRecord, reconcileRtoCod } from "../lib/api";
 
@@ -17,10 +30,10 @@ const RTO_REASONS = [
 ];
 
 const ITEM_CONDITIONS = [
-  { code: "GOOD", label: "Good (Restockable to Inventory)", color: "text-emerald-600 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" },
-  { code: "DAMAGED", label: "Damaged (Scrap / Claim)", color: "text-rose-600 border-rose-500 bg-rose-50 dark:bg-rose-950/40" },
-  { code: "OPENED", label: "Opened / Tampered Box", color: "text-amber-600 border-amber-500 bg-amber-50 dark:bg-amber-950/40" },
-  { code: "WRONG_ITEM", label: "Wrong Item Returned", color: "text-purple-600 border-purple-500 bg-purple-50 dark:bg-purple-950/40" },
+  { code: "GOOD", label: "Good (Restockable to Inventory)", color: "text-status-success border-status-success bg-status-success/5" },
+  { code: "DAMAGED", label: "Damaged (Scrap / Claim)", color: "text-status-danger border-status-danger bg-status-danger/5" },
+  { code: "OPENED", label: "Opened / Tampered Box", color: "text-status-warning border-status-warning bg-status-warning/5" },
+  { code: "WRONG_ITEM", label: "Wrong Item Returned", color: "text-status-info border-status-info bg-status-info/5" },
 ];
 
 export default function RtoManagement() {
@@ -137,46 +150,53 @@ export default function RtoManagement() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">
+    <div className="page-shell space-y-8 animate-in fade-in duration-200">
       
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">📦</span>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground font-heading">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <IconReturn size={18} />
+            </span>
+            <h1 className="text-2xl font-medium tracking-tight text-foreground font-heading">
               RTO (Return-To-Origin) Management
             </h1>
-            <Badge variant="destructive" className="font-mono text-xs uppercase px-2.5 py-0.5">
+            <Badge variant="destructive" className="text-xs font-semibold uppercase px-2.5 py-0.5">
               High Impact
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Track returned shipments, log reasons, restock inventory, reconcile COD amounts & minimize revenue loss.
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Track returned shipments, log reasons, restock inventory, reconcile COD amounts &amp; minimize revenue loss.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={fetchData} size="sm">
-            🔄 Refresh RTO Pipeline
+          <Button type="button" variant="outline" onClick={fetchData} size="sm" className="gap-1.5">
+            <IconRefresh size={15} />
+            Refresh RTO Pipeline
           </Button>
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
+      {/* Summary KPI Cards. The tone lives on the icon chip and the label; the
+          card itself stays on the neutral surface so the four read as one set
+          rather than four competing colour blocks. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 border-rose-500/20 bg-rose-500/5 shadow-2xs">
+        <Card className="p-5 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-rose-700 dark:text-rose-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-danger">
               RTO Rate %
             </span>
-            <span className="text-base">📉</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-danger/10 text-status-danger">
+              <IconRefund size={16} />
+            </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               {summary ? `${summary.rto_rate_pct}%` : "0%"}
             </span>
-            <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+            <span className="text-xs text-status-danger font-medium">
               {summary?.total_rto_orders || 0} of {summary?.total_orders || 0} Orders
             </span>
           </div>
@@ -185,15 +205,17 @@ export default function RtoManagement() {
           </p>
         </Card>
 
-        <Card className="p-5 border-amber-500/20 bg-amber-500/5 shadow-2xs">
+        <Card className="p-5 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-amber-700 dark:text-amber-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-warning">
               COD Value at Risk
             </span>
-            <span className="text-base">💰</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-warning/10 text-status-warning">
+              <IconCoin size={16} />
+            </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               ₹{summary ? Number(summary.cod_rto_value || 0).toLocaleString("en-IN") : "0"}
             </span>
           </div>
@@ -202,33 +224,37 @@ export default function RtoManagement() {
           </p>
         </Card>
 
-        <Card className="p-5 border-emerald-500/20 bg-emerald-500/5 shadow-2xs">
+        <Card className="p-5 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-emerald-700 dark:text-emerald-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-success">
               Restocked to Stock
             </span>
-            <span className="text-base">🏬</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
+              <IconBox size={16} />
+            </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               {summary?.restocked_count || 0}
             </span>
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Units</span>
+            <span className="text-xs text-status-success font-medium">Units</span>
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
             Good condition items automatically returned to product inventory
           </p>
         </Card>
 
-        <Card className="p-5 border-blue-500/20 bg-blue-500/5 shadow-2xs">
+        <Card className="p-5 border-border">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold font-heading uppercase text-blue-700 dark:text-blue-300">
+            <span className="text-xs font-bold font-heading uppercase text-status-info">
               Damaged / Scrapped
             </span>
-            <span className="text-base">⚠️</span>
+            <span className="flex size-8 items-center justify-center rounded-lg bg-status-info/10 text-status-info">
+              <IconAlert size={16} />
+            </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="tabular-nums text-3xl font-semibold tracking-tight text-foreground">
               {summary?.damaged_count || 0}
             </span>
             <span className="text-xs text-muted-foreground font-medium">Units</span>
@@ -244,61 +270,79 @@ export default function RtoManagement() {
         
         {/* RTO Reasons Distribution */}
         <Card className="p-5 border-border">
-          <h3 className="text-sm font-bold font-heading uppercase tracking-wider text-foreground mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-medium font-heading uppercase tracking-wider text-foreground mb-4 flex items-center justify-between">
             <span>Primary RTO Reasons</span>
             <span className="text-xs font-normal text-muted-foreground">Breakdown by %</span>
           </h3>
 
           <div className="space-y-3">
-            {summary?.reason_breakdown?.map((r: any, idx: number) => (
-              <div key={idx} className="space-y-1">
-                <div className="flex justify-between text-xs font-medium text-foreground">
-                  <span>{r.reason}</span>
-                  <span className="font-mono text-muted-foreground">{r.count} orders ({r.percentage}%)</span>
+            {summary?.reason_breakdown?.length ? (
+              summary.reason_breakdown.map((r: any, idx: number) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium text-foreground">
+                    <span>{r.reason}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {r.count} orders ({r.percentage}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-status-danger h-full rounded-full transition-all"
+                      style={{ width: `${Math.min(100, r.percentage * 1.5)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-rose-500 h-full rounded-full transition-all"
-                    style={{ width: `${Math.min(100, r.percentage * 1.5)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              /* Without this the card rendered as a bare titled box, which read
+                 as a broken panel rather than "no data yet". */
+              <EmptyPanel
+                title="No RTO reasons yet"
+                hint="Reason breakdowns appear once returned shipments are logged."
+              />
+            )}
           </div>
         </Card>
 
         {/* Courier-wise RTO Comparison */}
         <Card className="p-5 border-border">
-          <h3 className="text-sm font-bold font-heading uppercase tracking-wider text-foreground mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-medium font-heading uppercase tracking-wider text-foreground mb-4 flex items-center justify-between">
             <span>Carrier RTO Performance</span>
             <span className="text-xs font-normal text-muted-foreground">Courier Comparison</span>
           </h3>
 
           <div className="space-y-3">
-            {summary?.carrier_breakdown?.map((c: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
-                    {c.carrier_code}
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-semibold text-foreground">{c.carrier_name}</h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      {c.rto_count} RTO / {c.total_shipments} Total Shipments
-                    </p>
+            {summary?.carrier_breakdown?.length ? (
+              summary.carrier_breakdown.map((c: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+                      {c.carrier_code}
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-semibold text-foreground truncate">{c.carrier_name}</h4>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {c.rto_count} RTO / {c.total_shipments} Total Shipments
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
+                    <Badge
+                      variant={c.rto_rate > 20 ? "destructive" : c.rto_rate > 10 ? "secondary" : "outline"}
+                      className="text-xs font-semibold tabular-nums"
+                    >
+                      {c.rto_rate}% RTO Rate
+                    </Badge>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <Badge
-                    variant={c.rto_rate > 20 ? "destructive" : c.rto_rate > 10 ? "secondary" : "default"}
-                    className="font-mono text-xs font-bold"
-                  >
-                    {c.rto_rate}% RTO Rate
-                  </Badge>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <EmptyPanel
+                title="No carrier data yet"
+                hint="Courier comparison appears once RTO shipments are recorded."
+              />
+            )}
           </div>
         </Card>
       </div>
@@ -309,27 +353,35 @@ export default function RtoManagement() {
         {/* Table Filters */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border">
           <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-            <input
-              type="text"
+            <Input
               placeholder="Search by Order #, Customer Name, Mobile or City..."
+              aria-label="Search RTO shipments"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-              className="w-full max-w-md rounded-xl border border-border bg-background px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              className="w-full max-w-md"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <select
+            <SelectField
+              ariaLabel="Carrier filter"
               value={carrierFilter}
-              onChange={(e) => { setCarrierFilter(e.target.value); setPage(1); }}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground focus:outline-hidden"
-            >
-              <option value="">All Carriers</option>
-              <option value="DELHIVERY">Delhivery</option>
-              <option value="INDIA_POST">India Post</option>
-              <option value="DTDC">DTDC</option>
-              <option value="BLUEDART">BlueDart</option>
-            </select>
+              allLabel="All Carriers"
+              onChange={(v) => {
+                setCarrierFilter(v);
+                setPage(1);
+              }}
+              triggerClassName="rounded-xl px-3 py-2 text-xs font-medium"
+              options={[
+                { value: "DELHIVERY", label: "Delhivery" },
+                { value: "INDIA_POST", label: "India Post" },
+                { value: "DTDC", label: "DTDC" },
+                { value: "BLUEDART", label: "BlueDart" },
+              ]}
+            />
           </div>
         </div>
 
@@ -373,7 +425,7 @@ export default function RtoManagement() {
                     <TableCell>
                       <div className="text-xs">
                         <span className="font-semibold text-foreground block">{item.customer_name}</span>
-                        <span className="font-mono text-muted-foreground block">📞 {item.customer_mobile}</span>
+                        <span className="font-mono text-muted-foreground block">{item.customer_mobile}</span>
                         <span className="text-muted-foreground block text-[11px]">{item.city}, {item.pincode}</span>
                       </div>
                     </TableCell>
@@ -385,7 +437,7 @@ export default function RtoManagement() {
                       </div>
                     </TableCell>
 
-                    <TableCell className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
+                    <TableCell className="font-mono text-xs font-bold text-status-danger">
                       ₹{item.cod_value.toLocaleString("en-IN")}
                       <span className="text-[10px] font-normal text-muted-foreground block">{item.cod_mode}</span>
                     </TableCell>
@@ -403,27 +455,34 @@ export default function RtoManagement() {
 
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
+                        <Button
                           type="button"
+                          size="sm"
                           onClick={() => handleOpenProcess(item)}
-                          className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-2xs"
+                          className="h-7 px-2.5 text-xs font-bold bg-status-success hover:bg-status-success/90 text-white shadow-2xs gap-1"
                         >
-                          📥 Process RTO
-                        </button>
-                        <button
+                          <IconDownload size={13} />
+                          Process RTO
+                        </Button>
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleOpenCodReconcile(item)}
-                          className="px-2 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted text-foreground transition"
+                          className="h-7 px-2 text-xs font-semibold gap-1"
                         >
-                          💰 Reconcile
-                        </button>
-                        <button
+                          <IconCoin size={13} />
+                          Reconcile
+                        </Button>
+                        <Button
                           type="button"
+                          size="sm"
                           onClick={() => { setSelectedOrder(item); setShowWhatsAppModal(true); }}
-                          className="px-2 py-1.5 rounded-lg text-xs font-bold bg-[#25D366] hover:bg-[#20bd5a] text-white transition shadow-2xs"
+                          className="h-7 px-2 text-xs font-bold bg-[#25D366] hover:bg-[#20bd5a] text-white shadow-2xs gap-1"
+                          aria-label="WhatsApp Notification"
                         >
-                          💬
-                        </button>
+                          <IconMessage size={13} />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -440,14 +499,17 @@ export default function RtoManagement() {
           <div className="fixed inset-0" onClick={() => setShowProcessModal(false)} aria-hidden="true" />
           <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden p-6 space-y-5 animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <span>📥 Process RTO Return Receipt</span>
+              <h3 className="text-base font-medium text-foreground flex items-center gap-2">
+                <IconDownload size={16} className="text-status-success" />
+                <span>Process RTO Return Receipt</span>
               </h3>
-              <button type="button" onClick={() => setShowProcessModal(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+              <button type="button" onClick={() => setShowProcessModal(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close modal">
+                <IconClose size={14} />
+              </button>
             </div>
 
             {feedback && (
-              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}>
+              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-status-success/10 text-status-success" : "bg-status-danger/10 text-status-danger"}`}>
                 {feedback.message}
               </div>
             )}
@@ -455,15 +517,14 @@ export default function RtoManagement() {
             <form onSubmit={handleProcessSubmit} className="space-y-4 text-xs">
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">RTO Reason</label>
-                <select
+                <SelectField
+                  ariaLabel="RTO Reason"
                   value={rtoReason}
-                  onChange={(e) => setRtoReason(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground"
-                >
-                  {RTO_REASONS.map((r, idx) => (
-                    <option key={idx} value={r}>{r}</option>
-                  ))}
-                </select>
+                  includeAll={false}
+                  onChange={setRtoReason}
+                  triggerClassName="w-full p-2.5 text-xs"
+                  options={RTO_REASONS.map((r) => ({ value: r, label: r }))}
+                />
               </div>
 
               <div>
@@ -485,15 +546,13 @@ export default function RtoManagement() {
               </div>
 
               {itemCondition === "GOOD" && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="restock"
-                    checked={restockInventory}
-                    onChange={(e) => setRestockInventory(e.target.checked)}
-                    className="rounded text-emerald-600 focus:ring-emerald-500 size-4"
-                  />
-                  <label htmlFor="restock" className="font-bold text-emerald-800 dark:text-emerald-300 cursor-pointer">
+                <div className="p-3 rounded-xl bg-status-success/10 border border-status-success/20 flex items-center gap-2">
+<Checkbox
+                  id="restock"
+                  checked={restockInventory}
+                  onCheckedChange={(v) => setRestockInventory(v === true)}
+                />
+                  <label htmlFor="restock" className="font-bold text-status-success cursor-pointer">
                     Automatically Restock Item into Inventory (+1 Stock)
                   </label>
                 </div>
@@ -501,29 +560,31 @@ export default function RtoManagement() {
 
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">Reverse Shipping / Freight Charge (₹)</label>
-                <input
+                <Input
                   type="number"
+                  aria-label="Reverse shipping charge"
                   value={reverseFreight}
                   onChange={(e) => setReverseFreight(Number(e.target.value))}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs font-mono text-foreground"
+                  className="text-xs"
                   placeholder="120"
                 />
               </div>
 
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">Inspector Notes</label>
-                <textarea
+                <Textarea
+                  aria-label="Inspector notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Enter any warehouse inspection remarks..."
                   rows={2}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground"
+                  className="text-xs"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowProcessModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                <Button type="submit" disabled={submitting} size="sm" className="bg-status-success hover:bg-status-success/90 text-white font-bold">
                   {submitting ? "Processing..." : "Confirm & Save RTO Receipt"}
                 </Button>
               </div>
@@ -538,34 +599,37 @@ export default function RtoManagement() {
           <div className="fixed inset-0" onClick={() => setShowCodModal(false)} aria-hidden="true" />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card text-card-foreground shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-base font-bold text-foreground">💰 Reconcile RTO COD Remittance</h3>
-              <button type="button" onClick={() => setShowCodModal(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+              <h3 className="text-base font-medium text-foreground">Reconcile RTO COD Remittance</h3>
+              <button type="button" onClick={() => setShowCodModal(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close modal">
+                <IconClose size={14} />
+              </button>
             </div>
 
             {feedback && (
-              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}>
+              <div className={`p-3 rounded-xl text-xs font-semibold ${feedback.type === "success" ? "bg-status-success/10 text-status-success" : "bg-status-danger/10 text-status-danger"}`}>
                 {feedback.message}
               </div>
             )}
 
             <form onSubmit={handleCodSubmit} className="space-y-4 text-xs">
               <p className="text-muted-foreground">
-                This action sets expected COD collected for order <span className="font-bold text-foreground">{selectedOrder.order_name}</span> to <span className="font-mono font-bold text-rose-600">₹0.00</span> and records reverse freight charges in ledger.
+                This action sets expected COD collected for order <span className="font-bold text-foreground">{selectedOrder.order_name}</span> to <span className="font-mono font-bold text-status-danger">₹0.00</span> and records reverse freight charges in ledger.
               </p>
 
               <div>
                 <label className="font-bold text-muted-foreground block mb-1">Reverse Shipping Charge (₹)</label>
-                <input
+                <Input
                   type="number"
+                  aria-label="Reverse shipping charge"
                   value={reverseFreight}
                   onChange={(e) => setReverseFreight(Number(e.target.value))}
-                  className="w-full rounded-xl border border-border bg-background p-2.5 font-mono text-foreground"
+                  className="text-xs"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowCodModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting} size="sm" className="bg-rose-600 hover:bg-rose-700 text-white font-bold">
+                <Button type="submit" disabled={submitting} size="sm" className="bg-status-danger hover:bg-status-danger/90 text-white font-bold">
                   {submitting ? "Reconciling..." : "Confirm COD Zeroing"}
                 </Button>
               </div>

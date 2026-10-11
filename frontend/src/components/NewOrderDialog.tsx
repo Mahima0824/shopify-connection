@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+import SelectField from "./SelectField";
+import { Button, Input } from "./primitives";
 import { api, pushShipment } from "../lib/api";
 import { INDIA_POST_HELP, newOrderDefaults, validateNewOrder } from "../lib/india-post";
-import { IconAlert, IconBox, IconTag, IconTruck } from "./icons";
+import { IconAlert, IconBox, IconCheck, IconClose, IconCoin, IconMapPin, IconPackage, IconTag, IconTruck, IconUpload } from "./icons";
 
 import ProductAvatar from "./ProductAvatar";
 
@@ -187,7 +189,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-medium text-slate-900 flex items-center gap-2">
               <IconBox size={20} /> Create New Order
               <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
                 India Post
@@ -205,7 +207,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
             onClick={onClose}
             aria-label="Close dialog"
           >
-            ✕
+            <IconClose size={16} />
           </button>
         </div>
 
@@ -233,27 +235,27 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender Name</label>
-                    <input className={inputClass} value={String(form.sender_name ?? "")} onChange={onChange("sender_name")} />
+                    <Input aria-label="sender_name" value={String(form.sender_name ?? "")} onChange={onChange("sender_name")} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender Mobile</label>
-                    <input className={inputClass} value={String(form.sender_mobile ?? "")} onChange={onChange("sender_mobile")} />
+                    <Input aria-label="sender_mobile" value={String(form.sender_mobile ?? "")} onChange={onChange("sender_mobile")} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender City</label>
-                    <input className={inputClass} value={String(form.sender_city ?? "")} onChange={onChange("sender_city")} />
+                    <Input aria-label="sender_city" value={String(form.sender_city ?? "")} onChange={onChange("sender_city")} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender State</label>
-                    <input className={inputClass} value={String(form.sender_state ?? "")} onChange={onChange("sender_state")} />
+                    <Input aria-label="sender_state" value={String(form.sender_state ?? "")} onChange={onChange("sender_state")} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender Pincode</label>
-                    <input className={inputClass} value={String(form.sender_pincode ?? "")} onChange={onChange("sender_pincode")} />
+                    <Input aria-label="sender_pincode" value={String(form.sender_pincode ?? "")} onChange={onChange("sender_pincode")} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Sender Address Line 1</label>
-                    <input className={inputClass} value={String(form.sender_add1 ?? "")} onChange={onChange("sender_add1")} />
+                    <Input aria-label="sender_add1" value={String(form.sender_add1 ?? "")} onChange={onChange("sender_add1")} />
                   </div>
                 </div>
               ) : (
@@ -268,7 +270,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
             <div className="border border-emerald-500/30 rounded-xl p-5 bg-emerald-50/40 flex flex-col gap-3 shadow-xs">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-3">
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  🛍️ Select Shopify Product (Catalog)
+                  <IconPackage size={16} /> Select Shopify Product (Catalog)
                 </span>
                 {selectedProduct && (
                   <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
@@ -336,7 +338,9 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                           </div>
                         </div>
                         {isSelected && (
-                          <span className="text-emerald-700 font-bold text-xs shrink-0">✓</span>
+                          <span className="text-emerald-700 font-bold text-xs shrink-0 flex items-center">
+                            <IconCheck size={14} />
+                          </span>
                         )}
                       </div>
                     );
@@ -359,7 +363,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                   <label className="text-xs font-semibold text-slate-700">
                     Receiver Name <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     className={inputClass}
                     placeholder="e.g. KIRAN PATEL"
                     value={String(form.receiver_name ?? "")}
@@ -373,7 +377,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                   <label className="text-xs font-semibold text-slate-700">
                     Receiver Mobile <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     className={inputClass}
                     placeholder="10-digit mobile"
                     value={String(form.receiver_mobile ?? "")}
@@ -388,7 +392,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                 <label className="text-xs font-semibold text-slate-700">
                   Address Line 1 <span className="text-red-500">*</span>
                 </label>
-                <input
+                <Input
                   className={inputClass}
                   placeholder="House / Flat No, Building, Street Address"
                   value={String(form.receiver_add1 ?? "")}
@@ -402,7 +406,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                   <label className="text-xs font-semibold text-slate-700">
                     City <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     className={inputClass}
                     placeholder="City name"
                     value={String(form.receiver_city ?? "")}
@@ -413,7 +417,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-700">State</label>
-                  <input
+                  <Input
                     className={inputClass}
                     placeholder="State name"
                     value={String(form.receiver_state ?? "")}
@@ -426,7 +430,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                 <label className="text-xs font-semibold text-slate-700">
                   Pincode <span className="text-red-500">*</span>
                 </label>
-                <input
+                <Input
                   className={inputClass}
                   placeholder="6-digit pincode"
                   value={String(form.receiver_pincode ?? "")}
@@ -437,8 +441,8 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
               </div>
 
               {form.receiver_pincode ? (
-                <div className="bg-sky-50 text-sky-900 border border-sky-200 px-3 py-2 rounded-lg text-xs font-medium">
-                  📍 DROP OFF PINCODE: <strong>{String(form.receiver_pincode)}</strong>
+                <div className="bg-sky-50 text-sky-900 border border-sky-200 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5">
+                  <IconMapPin size={13} /> DROP OFF PINCODE: <strong>{String(form.receiver_pincode)}</strong>
                 </div>
               ) : null}
             </div>
@@ -456,7 +460,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                   <label className="text-xs font-semibold text-slate-700">
                     Weight (Grams) <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     className={inputClass}
                     type="number"
                     placeholder="e.g. 930"
@@ -469,7 +473,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-700">Shape</label>
-                  <input
+                  <Input
                     className={inputClass}
                     value={String(form.shape ?? "")}
                     onChange={onChange("shape")}
@@ -480,21 +484,21 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-700">Dimensions (L × B × H cm)</label>
                 <div className="grid grid-cols-3 gap-3">
-                  <input
+                  <Input
                     className={inputClass}
                     type="number"
                     placeholder="Length"
                     value={String(form.length_cm ?? "")}
                     onChange={onChange("length_cm", true)}
                   />
-                  <input
+                  <Input
                     className={inputClass}
                     type="number"
                     placeholder="Breadth"
                     value={String(form.breadth_cm ?? "")}
                     onChange={onChange("breadth_cm", true)}
                   />
-                  <input
+                  <Input
                     className={inputClass}
                     type="number"
                     placeholder="Height"
@@ -506,7 +510,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-700">Barcode No (Optional)</label>
-                <input
+                <Input
                   className={inputClass}
                   placeholder="e.g. EG123456789IN"
                   value={String(form.barcode_no ?? "")}
@@ -520,26 +524,29 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
             <div className="border border-slate-200 rounded-xl p-5 bg-white flex flex-col gap-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  💳 COD & Payment Details
+                  <IconCoin size={16} /> COD & Payment Details
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-700">Payment Mode</label>
-                  <select
-                    className={inputClass}
+                  <SelectField
+                    ariaLabel="Payment Mode"
                     value={String(form.cod_mode ?? "")}
-                    onChange={onChange("cod_mode")}
-                  >
-                    <option value="COD">COD (Cash on Delivery)</option>
-                    <option value="PREPAID">PREPAID</option>
-                  </select>
+                    includeAll={false}
+                    onChange={(v) => onChange("cod_mode")(v as any)}
+                    triggerClassName={inputClass}
+                    options={[
+                      { value: "COD", label: "COD (Cash on Delivery)" },
+                      { value: "PREPAID", label: "PREPAID" },
+                    ]}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-700">COD Collectible Amount (₹)</label>
-                  <input
+                  <Input
                     className={inputClass}
                     type="number"
                     placeholder="e.g. 1499"
@@ -602,7 +609,7 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
                   <label htmlFor="tracking-no" className="text-xs font-semibold text-slate-700">
                     Tracking Number (Optional)
                   </label>
-                  <input
+                  <Input
                     id="tracking-no"
                     className={inputClass}
                     placeholder="e.g. EG123456789IN"
@@ -628,41 +635,47 @@ export default function NewOrderDialog({ open, onClose, onSaved }: NewOrderDialo
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
           {step === "form" ? (
             <>
-              <button
+              <Button
                 type="button"
-                className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-100 transition"
+                variant="outline"
+                size="sm"
                 onClick={onClose}
                 disabled={submitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
+                size="sm"
                 form="new-order-form"
-                className="px-5 py-2 bg-emerald-700 text-white rounded-lg text-sm font-semibold hover:bg-emerald-800 transition shadow-sm disabled:opacity-60"
+                className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
                 disabled={submitting}
               >
+                <IconCheck size={14} />
                 {submitting ? "Saving Order…" : "Save & Create Order"}
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button
+              <Button
                 type="button"
-                className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-100 transition disabled:opacity-60"
+                variant="outline"
+                size="sm"
                 onClick={handleSkipTracking}
                 disabled={trackingSubmitting}
               >
                 Skip for now
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
+                size="sm"
                 form="tracking-step-form"
-                className="px-5 py-2 bg-emerald-700 text-white rounded-lg text-sm font-semibold hover:bg-emerald-800 transition shadow-sm disabled:opacity-60"
+                className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
                 disabled={trackingSubmitting}
               >
+                <IconUpload size={14} />
                 {trackingSubmitting ? "Pushing…" : "Save & push shipment"}
-              </button>
+              </Button>
             </>
           )}
         </div>

@@ -36,7 +36,7 @@ const cols: { title: string; links: { label: string; href: string }[] }[] = [
 export default function Footer() {
   return (
     <footer className="border-t border-border/80 bg-background/95 backdrop-blur-sm pt-14 pb-8 text-foreground transition-colors">
-      <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-10 px-6 sm:grid-cols-2 md:grid-cols-[2fr_repeat(4,1fr)] max-[480px]:px-4">
+      <div className="page-shell grid grid-cols-1 gap-10 sm:grid-cols-2 md:grid-cols-[2fr_repeat(4,1fr)]">
         {/* Brand Column */}
         <div className="flex flex-col gap-3">
           <Link
@@ -82,7 +82,7 @@ export default function Footer() {
       </div>
 
       {/* Bottom Bar */}
-      <div className="mx-auto mt-12 flex w-full max-w-[1280px] flex-wrap items-center justify-between gap-4 border-t border-border/80 px-6 pt-6 text-xs text-muted-foreground max-[480px]:px-4">
+      <div className="page-shell mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border/80 pt-6 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
           <span>© 2026 ReconHub. All rights reserved.</span>
           <span>·</span>

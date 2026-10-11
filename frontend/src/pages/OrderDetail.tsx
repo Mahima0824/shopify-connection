@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import Timeline, { TNode } from "../components/Timeline";
-import { IconAlert } from "../components/icons";
+import { IconAlert, IconChevronLeft } from "../components/icons";
 import {
   Badge,
   Button,
@@ -60,9 +60,9 @@ export default function OrderDetailPage() {
 
   if (error) {
     return (
-      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 bg-background px-6 py-6 max-[480px]:px-4">
-        <Link to="/orders" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-          ← Back to Orders Directory
+      <div className="page-shell flex flex-col gap-4 bg-background py-6">
+        <Link to="/orders" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <IconChevronLeft size={14} /> Back to Orders Directory
         </Link>
         <div role="alert" className="flex items-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-sm text-destructive">
           <IconAlert size={16} /> {error}
@@ -73,7 +73,7 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="mx-auto w-full max-w-[1000px] bg-background px-6 py-12 text-center text-muted-foreground max-[480px]:px-4">
+      <div className="page-shell bg-background py-12 text-center text-muted-foreground">
         Loading Order Details...
       </div>
     );
@@ -82,16 +82,16 @@ export default function OrderDetailPage() {
   const finStatus = order.financial_status || "PENDING";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 bg-background px-6 py-6 max-[480px]:px-4">
+    <div className="page-shell flex flex-col gap-6 bg-background py-6">
       {/* Back Link & Header */}
       <div className="border-b border-border pb-6">
-        <Link to="/orders" className="mb-3 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-          ← Back to Orders Directory
+        <Link to="/orders" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+          <IconChevronLeft size={14} /> Back to Orders Directory
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="font-heading font-bold tracking-tight text-2xl sm:text-3xl text-foreground">
+              <h1 className="font-heading font-medium tracking-tight text-2xl sm:text-3xl text-foreground">
                 Order {order.shopify_order_name || order.internal_order_number || order.id}
               </h1>
               <Badge variant="secondary" className="text-xs">
@@ -132,14 +132,14 @@ export default function OrderDetailPage() {
 
       {/* Order Timeline Section */}
       <Card className="p-6 border-border/80 shadow-xs">
-        <h2 className="mb-5 text-xl font-bold tracking-tight text-foreground font-heading">Order Lifecycle Timeline</h2>
+        <h2 className="mb-5 text-xl font-medium tracking-tight text-foreground font-heading">Order Lifecycle Timeline</h2>
         <Timeline items={timeline} />
       </Card>
 
       {/* Courier & Money Section */}
       {shipments.length > 0 && (
         <Card className="p-6 border-border/80 shadow-xs">
-          <h2 className="mb-4 text-xl font-bold tracking-tight text-foreground font-heading">Courier &amp; Money</h2>
+          <h2 className="mb-4 text-xl font-medium tracking-tight text-foreground font-heading">Courier &amp; Money</h2>
           <div className="flex flex-col gap-3">
             {shipments.map((s) => (
               <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 p-3.5 hover:bg-muted/30 transition-colors">
@@ -164,7 +164,7 @@ export default function OrderDetailPage() {
       {/* Delete Order Action Card */}
       <Card className="p-6 border-destructive/30 bg-destructive/5 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-destructive font-heading">Delete Order</h2>
+          <h2 className="text-base font-medium text-destructive font-heading">Delete Order</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Permanently remove this order and all associated shipment records from the system.
           </p>
