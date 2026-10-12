@@ -561,6 +561,14 @@ export type PushShipmentResult = ShipmentRow & {
   order_no: string;
   pushed: boolean;
   message: string;
+  whatsapp?: {
+    success: boolean;
+    status: string;
+    wa_me_url?: string | null;
+    phone_number?: string | null;
+    message_text?: string | null;
+    error_message?: string | null;
+  };
 };
 
 export type ShipmentSyncResult = {

@@ -40,6 +40,22 @@ def normalize_phone_number(raw_phone: Optional[str]) -> Optional[str]:
     return digits
 
 
+def get_carrier_display_name(carrier_code: Optional[str]) -> str:
+    """Format courier code into clean, recognizable brand name."""
+    if not carrier_code:
+        return "Courier Partner"
+    code = str(carrier_code).strip().upper()
+    if code in ("IP", "INDIA_POST", "SPEED_POST"):
+        return "India Post (Speed Post)"
+    elif "DELHIVERY" in code or code == "DL":
+        return "Delhivery"
+    elif "DTDC" in code:
+        return "DTDC Express"
+    elif "BLUEDART" in code or code == "BD":
+        return "Blue Dart Express"
+    return code.replace("_", " ").title()
+
+
 def get_carrier_tracking_url(
     carrier_code: Optional[str],
     awb_number: Optional[str],
@@ -101,21 +117,31 @@ def build_order_dispatched_message(
     customer_name = getattr(order, "receiver_name", None) or "Valued Customer"
     order_name = order.shopify_order_name or order.internal_order_number or f"#{order.id[:8]}"
 
-    carrier = carrier_name or (shipment.carrier_code if shipment else None) or "Courier Service"
-    carrier_display = carrier.replace("_", " ").title()
+    raw_carrier = carrier_name or (shipment.carrier_code if shipment else None) or "Courier Service"
+    carrier_display = get_carrier_display_name(raw_carrier)
 
     awb = awb_number or (shipment.awb_number if shipment else None) or "N/A"
     
     raw_url = tracking_url or (shipment.tracking_url if shipment else None)
-    resolved_url = get_carrier_tracking_url(carrier, awb, raw_url)
+    resolved_url = get_carrier_tracking_url(raw_carrier, awb, raw_url)
+
+    payment_info = ""
+    cod_mode = (getattr(order, "cod_mode", "") or "PREPAID").upper()
+    total_amt = float(getattr(order, "total_amount", 0) or 0)
+    if cod_mode == "COD":
+        payment_info = f"💰 *Payment Mode:* Cash on Delivery (₹{total_amt:,.2f})\n"
+    else:
+        payment_info = f"💳 *Payment Mode:* Prepaid\n"
 
     return (
         f"📦 *Order Dispatched!*\n\n"
         f"Hi {customer_name},\n"
-        f"Great news! Your order *{order_name}* has been shipped and is on its way.\n\n"
-        f"🚚 *Carrier:* {carrier_display}\n"
+        f"Great news! Your order *{order_name}* has been shipped and is on its way. 🚀\n\n"
+        f"🚚 *Courier Partner:* {carrier_display}\n"
         f"📍 *Tracking ID (AWB):* {awb}\n"
-        f"🔗 *Track Package:* {resolved_url}\n\n"
+        f"🔗 *Live Tracking Link:* {resolved_url}\n"
+        f"{payment_info}\n"
+        f"You can track your package anytime using the link above.\n"
         f"Thank you for shopping with us! 🙏"
     )
 

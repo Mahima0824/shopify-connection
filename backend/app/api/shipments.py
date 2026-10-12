@@ -1,3 +1,4 @@
+import logging
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -7,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
 from app.services import shipment_service
+
+logger = logging.getLogger("app.api.shipments")
 
 router = APIRouter(prefix="/api/v1/shipments", tags=["shipments"])
 
@@ -148,6 +151,33 @@ def _sdict(s, order=None) -> dict:
     }
 
 
+def _trigger_whatsapp_dispatch(db, order, shipment, courier_code, tracking_no) -> dict:
+    """Helper to dispatch WhatsApp tracking alert to customer without breaking shipment flow."""
+    if not order or not getattr(order, "receiver_mobile", None):
+        return {}
+    try:
+        from app.services import whatsapp_service
+        res = whatsapp_service.send_order_dispatched_whatsapp(
+            db=db,
+            order=order,
+            shipment=shipment,
+            carrier_name=courier_code,
+            awb_number=tracking_no
+        )
+        if isinstance(res, dict):
+            return {
+                "success": bool(res.get("success")),
+                "status": res.get("status"),
+                "wa_me_url": res.get("wa_me_url"),
+                "phone_number": res.get("phone_number"),
+                "message_text": res.get("message_text"),
+                "error_message": res.get("error_message"),
+            }
+    except Exception as exc:
+        logger.warning(f"Could not trigger WhatsApp dispatch alert: {exc}")
+    return {}
+
+
 class ShipmentIn(BaseModel):
     parcel_id: str | None = None
     barcode: str | None = None
@@ -171,6 +201,7 @@ def create_shipment(body: ShipmentIn, db: Session = Depends(get_db), u: dict = D
     from datetime import datetime, timezone
     from app.models.parcel import Parcel
     from app.models.shipment import Shipment
+    from app.models.order import Order
     if u.get("role") not in ("ADMIN", "WAREHOUSE"):
         raise HTTPException(403, "Warehouse role required")
     bid = u.get("business_id")
@@ -185,17 +216,22 @@ def create_shipment(body: ShipmentIn, db: Session = Depends(get_db), u: dict = D
     awb = (body.awb_number or "").strip()
     if not awb:
         raise HTTPException(400, "awb_number is required")
+    carrier = (body.carrier_code or "MANUAL").upper()
     s = Shipment(business_id=bid, order_id=p.order_id, parcel_id=p.id,
-                 carrier_code=(body.carrier_code or "MANUAL").upper(), awb_number=awb,
+                 carrier_code=carrier, awb_number=awb,
                  tracking_status="BOOKED", shipped_at=datetime.now(timezone.utc))
     db.add(s)
+    o = db.query(Order).filter_by(id=p.order_id).first()
+    if o is not None:
+        o.operational_status = "DISPATCHED"
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(400, "AWB already linked")
     db.refresh(s)
-    return {"success": True, "data": _sdict(s)}
+    wa_dict = _trigger_whatsapp_dispatch(db, o, s, carrier, awb) if o else {}
+    return {"success": True, "data": {**_sdict(s), "whatsapp": wa_dict}}
 
 
 @router.post("/push")
@@ -342,28 +378,36 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
 
     if not ss.is_configured():
         shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
+        order.operational_status = "DISPATCHED"
+        wa_dict = _trigger_whatsapp_dispatch(db, order, shipment, courier_code, tracking_no)
         db.commit()
         db.refresh(shipment)
         return {"success": True, "data": {**_sdict(shipment),
                                           "order_no": order_no,
                                           "pushed": False,
-                                          "message": ss.SHIPSAGAR_NOT_CONFIGURED_MESSAGE}}
+                                          "message": ss.SHIPSAGAR_NOT_CONFIGURED_MESSAGE,
+                                          "whatsapp": wa_dict}}
     try:
         result = ss.push_shipment(tracking_no=tracking_no,
                                   courier_code=courier_code, order=order)
     except ss.ShipsagarError as exc:
         if exc.code == "SHIPSAGAR_NOT_CONFIGURED":
             shipment.shipsagar_tracking_id = f"SS-STUB-{courier_code}-{tracking_no}"
+            order.operational_status = "DISPATCHED"
+            wa_dict = _trigger_whatsapp_dispatch(db, order, shipment, courier_code, tracking_no)
             db.commit()
             db.refresh(shipment)
             return {"success": True, "data": {**_sdict(shipment),
                                               "order_no": order_no,
                                               "pushed": False,
-                                              "message": exc.message}}
+                                              "message": exc.message,
+                                              "whatsapp": wa_dict}}
         ss.schedule_retry(db, business_id=bid, operation="register_tracking",
                           shipment_id=shipment.id,
                           error=f"{exc.code}: {exc.message}",
                           payload={"courier": courier_code, "tracking_number": tracking_no})
+        order.operational_status = "DISPATCHED"
+        wa_dict = _trigger_whatsapp_dispatch(db, order, shipment, courier_code, tracking_no)
         db.commit()
         db.refresh(shipment)
         # The AWB is committed on this path, so the caller must be able to see
@@ -376,7 +420,8 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
         # registration from here.
         return _err(502, exc.code, exc.message,
                     data={**_sdict(shipment), "order_no": order_no,
-                          "pushed": False, "message": exc.message})
+                          "pushed": False, "message": exc.message,
+                          "whatsapp": wa_dict})
     shipment.shipsagar_tracking_id = f"SS-{tracking_no}"
     pushed = bool(result.get("ok"))
     message = result.get("message", "")
@@ -391,12 +436,15 @@ def push_shipment(body: PushShipmentIn, db: Session = Depends(get_db),
                            tracking_number=tracking_no,
                            tracking_id=shipment.shipsagar_tracking_id,
                            message=message)
+    order.operational_status = "DISPATCHED"
+    wa_dict = _trigger_whatsapp_dispatch(db, order, shipment, courier_code, tracking_no)
     db.commit()
     db.refresh(shipment)
     return {"success": True, "data": {**_sdict(shipment),
                                       "order_no": order_no,
                                       "pushed": pushed,
-                                      "message": message}}
+                                      "message": message,
+                                      "whatsapp": wa_dict}}
 
 
 @router.get("")

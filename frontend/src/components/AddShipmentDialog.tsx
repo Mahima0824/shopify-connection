@@ -59,6 +59,8 @@ export default function AddShipmentDialog({
   const [submitting, setSubmitting] = useState(false);
   const [stockInfo, setStockInfo] = useState<OrderStockVerification | null>(null);
   const [loadingStock, setLoadingStock] = useState(false);
+  const [whatsappResult, setWhatsappResult] = useState<PushShipmentResult["whatsapp"] | null>(null);
+  const [showWaPreview, setShowWaPreview] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +72,8 @@ export default function AddShipmentDialog({
     setSubmitError(null);
     setSubmitting(false);
     setStockInfo(null);
+    setWhatsappResult(null);
+    setShowWaPreview(false);
     void getShipmentCouriers().then((rows) => {
       if (rows.length > 0) {
         const priorityCodes = ["IP", "DELHIVERY", "BLUEDART", "DTDC"];
@@ -125,6 +129,9 @@ export default function AddShipmentDialog({
         courier_code: courier,
       });
       setTrackingNo("");
+      if (result.whatsapp) {
+        setWhatsappResult(result.whatsapp);
+      }
       if (!result.pushed) {
         setNotice(result.message || "ShipSagar did not accept this shipment.");
       }
@@ -232,6 +239,32 @@ export default function AddShipmentDialog({
             </div>
           )}
 
+          {/* WhatsApp Dispatch Notification Banner */}
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 p-3 text-xs flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">💬</span>
+                <span className="font-bold text-emerald-900 text-xs">
+                  WhatsApp Customer Notification
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWaPreview(!showWaPreview)}
+                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+              >
+                {showWaPreview ? "Hide Preview" : "Preview Message"}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-snug">
+              Customer <span className="font-semibold text-slate-900">{customerName}</span> {customerMobile ? <span className="font-mono text-emerald-800">(+{customerMobile})</span> : ""} will receive direct WhatsApp notification with courier name, tracking ID and live tracking link on dispatch.
+            </p>
+            {showWaPreview && (
+              <div className="bg-[#0b141a] text-[#e9edef] rounded-xl p-3.5 font-sans text-xs whitespace-pre-wrap leading-relaxed border border-[#233138] shadow-inner mt-1">
+                {`📦 *Order Dispatched!*\n\nHi ${customerName},\nGreat news! Your order *${orderLabel || "Order"}* has been shipped and is on its way. 🚀\n\n🚚 *Courier Partner:* ${couriers.find((c) => c.courier_code === courier)?.courier_name || courier}\n📍 *Tracking ID (AWB):* ${trackingNo || "EG..."}\n🔗 *Live Tracking Link:* https://www.delhivery.com/track/package/${trackingNo || ""}\n${order?.cod_mode === "COD" ? `💰 *Payment Mode:* Cash on Delivery (₹${Number(order?.total_amount || 0).toLocaleString()})\n` : "💳 *Payment Mode:* Prepaid\n"}\nYou can track your package anytime using the link above.\nThank you for shopping with us! 🙏`}
+              </div>
+            )}
+          </div>
 
           <form
             id="add-shipment-form"
@@ -239,6 +272,45 @@ export default function AddShipmentDialog({
             noValidate
             className="flex flex-col gap-5"
           >
+            {whatsappResult && (
+              <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">💬</span>
+                    <span className="text-xs font-bold text-emerald-900">
+                      WhatsApp Dispatch Notification
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold">
+                    {whatsappResult.status}
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-800">
+                  {whatsappResult.status === "SENT"
+                    ? `Direct WhatsApp message has been sent to customer (+${whatsappResult.phone_number}) via Meta API!`
+                    : `Dispatch notification prepared for +${whatsappResult.phone_number || customerMobile || "customer"}. You can open WhatsApp directly with pre-filled message:`}
+                </p>
+                {whatsappResult.wa_me_url && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <a
+                      href={whatsappResult.wa_me_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs shadow-xs transition"
+                    >
+                      <span>📲 Open in WhatsApp Web / App</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition"
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {submitError && (
               <div
                 role="alert"

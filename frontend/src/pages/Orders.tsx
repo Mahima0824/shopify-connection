@@ -6,6 +6,7 @@ import AddShipmentDialog from "../components/AddShipmentDialog";
 import EditOrderDialog from "../components/EditOrderDialog";
 import OrderDetailDialog from "../components/OrderDetailDialog";
 import OrderTable from "../components/OrderTable";
+import WhatsAppDialog from "../components/WhatsAppDialog";
 import ImportResult, { ImportSummary } from "../components/ImportResult";
 import { Button, Card, Checkbox, Input, Label, Badge } from "../components/primitives";
 import {
@@ -32,6 +33,7 @@ export default function OrdersPage() {
   const [addShipmentCourier, setAddShipmentCourier] = useState<string>("IP");
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
+  const [whatsAppOrder, setWhatsAppOrder] = useState<any | null>(null);
   const [codMode, setCodMode] = useState("");
   const [datePreset, setDatePreset] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
@@ -593,6 +595,7 @@ export default function OrdersPage() {
               onEditOrder={(o) => setEditOrder(o)}
               onDeleteOrder={handleDeleteOrder}
               onViewOrder={(o) => setViewOrder(o)}
+              onWhatsApp={(o) => setWhatsAppOrder(o)}
             />
 
             {/* On-Demand Item Pagination Bar */}
@@ -702,6 +705,14 @@ export default function OrdersPage() {
           fetchOrders(true);
         }}
       />
+
+      {whatsAppOrder && (
+        <WhatsAppDialog
+          open={!!whatsAppOrder}
+          order={whatsAppOrder}
+          onClose={() => setWhatsAppOrder(null)}
+        />
+      )}
     </div>
   );
 }
