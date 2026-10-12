@@ -6,6 +6,7 @@ import AddShipmentDialog from "../components/AddShipmentDialog";
 import EditOrderDialog from "../components/EditOrderDialog";
 import OrderDetailDialog from "../components/OrderDetailDialog";
 import OrderTable from "../components/OrderTable";
+import WhatsAppDialog from "../components/WhatsAppDialog";
 import ImportResult, { ImportSummary } from "../components/ImportResult";
 import DateRangePicker from "../components/DateRangePicker";
 import SelectField from "../components/SelectField";
@@ -90,6 +91,7 @@ export default function OrdersPage() {
   const [addShipmentCourier, setAddShipmentCourier] = useState<string>("IP");
   const [editOrder, setEditOrder] = useState<any | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
+  const [whatsAppOrder, setWhatsAppOrder] = useState<any | null>(null);
   const [codMode, setCodMode] = useState("");
   /* The date filter defaults to Today so the list opens on the current day's
      orders rather than the whole history. */
@@ -602,6 +604,7 @@ export default function OrdersPage() {
               onEditOrder={(o) => setEditOrder(o)}
               onDeleteOrder={handleDeleteOrder}
               onViewOrder={(o) => setViewOrder(o)}
+              onWhatsApp={(o) => setWhatsAppOrder(o)}
             />
 
             {/* On-Demand Item Pagination Bar */}
@@ -710,6 +713,14 @@ export default function OrdersPage() {
           fetchOrders(true);
         }}
       />
+
+      {whatsAppOrder && (
+        <WhatsAppDialog
+          open={!!whatsAppOrder}
+          order={whatsAppOrder}
+          onClose={() => setWhatsAppOrder(null)}
+        />
+      )}
     </div>
   );
 }

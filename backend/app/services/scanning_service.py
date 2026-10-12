@@ -52,5 +52,11 @@ def dispatch_parcel(db, business_id: str, barcode: str, user_id: str, device_id=
         from app.services.reconciliation_service import reconcile_order
         reconcile_order(db, o.id)
     except Exception: pass
+    try:
+        from app.models.shipment import Shipment
+        from app.services import whatsapp_service
+        s = db.query(Shipment).filter_by(parcel_id=p.id).first()
+        whatsapp_service.send_order_dispatched_whatsapp(db=db, order=o, shipment=s)
+    except Exception: pass
     return {"parcel": {"id": p.id, "barcode_value": p.barcode_value, "status": p.status},
             "order": {"id": o.id, "shopify_order_name": o.shopify_order_name, "operational_status": o.operational_status}}
